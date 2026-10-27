@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.outbox.OutboxEventMapper">
+    <insert id="insertShipmentAutoConfirm">
+        INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
+                                   status, attempts, next_attempt_at)
+        VALUES ('SHIPMENT_AUTO_CONFIRM', 'SHIPMENT', #{shipmentId},
+                JSON_OBJECT('shipmentId', #{shipmentId}), 'PENDING', 0, #{now})
+    </insert>
+
+    <insert id="insertSearchProductRefresh">
+        INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
+                                   status, attempts, next_attempt_at)
+        VALUES ('SEARCH_PRODUCT_REFRESH', 'PRODUCT', #{productId},
+                JSON_OBJECT('productId', #{productId}), 'PENDING', 0, NOW())
+    </insert>
+
+    <insert id="insertSearchShopRefresh">
+        INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
+                                   status, attempts, next_attempt_at)
+        VALUES ('SEARCH_SHOP_REFRESH', 'SHOP', #{shopId},
+                JSON_OBJECT('shopId', #{shopId}), 'PENDING', 0, NOW())
+    </insert>
+
+    <insert id="insertSearchBrandRefresh">
+        INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
+                                   status, attempts, next_attempt_at)
+        VALUES ('SEARCH_BRAND_REFRESH', 'BRAND', #{brandId},
+                JSON_OBJECT('brandId', #{brandId}), 'PENDING', 0, NOW())
+    </insert>
+
+    <insert id="insertSearchCategoryRefresh">
+        INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
+                                   status, attempts, next_attempt_at)
+        VALUES ('SEARCH_CATEGORY_REFRESH', 'CATEGORY', #{categoryId},
+                JSON_OBJECT('categoryId', #{categoryId}), 'PENDING', 0, NOW())
+    </insert>
+
+    <select id="selectPendingShipmentEvents" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$ShipmentConfirmEvent">
+        SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events
+        WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING'
+          AND next_attempt_at &lt;= #{now}
+          AND (claim_until IS NULL OR claim_until &lt;= #{now})
+        ORDER BY id LIMIT #{limit}
+    </select>
+    <select id="oldestShipmentPendingSeconds" resultType="long">
+        SELECT TIMESTAMPDIFF(SECOND, MIN(created_at), #{now}) FROM outbox_events
+        WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING'
+    </select>
+
+    <select id="selectShipmentEvent" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$ShipmentConfirmEvent">
+        SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events
+        WHERE id = #{eventId} AND event_type = 'SHIPMENT_AUTO_CONFIRM'
+    </select>
+
+    <!-- 租约到期后可由其他实例重新认领；后续状态更新还必须匹配本次 token。 -->
+    <update id="claimShipmentEvent">
+        UPDATE outbox_events SET claim_token = #{token}, claim_until = #{until}
+        WHERE id = #{eventId} AND event_type = 'SHIPMENT_AUTO_CONFIRM'
+          AND status = 'PENDING' AND next_attempt_at &lt;= #{now}
+          AND (claim_until IS NULL OR claim_until &lt;= #{now})
+    </update>
+
+    <update id="markPublished">
+        UPDATE outbox_events SET status = 'PUBLISHED', published_at = #{now}, attempts = attempts + 1,
+                                 claim_token = NULL, claim_until = NULL
+        WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
+    </update>
+
+    <update id="markRetry">
+        UPDATE outbox_events SET attempts = attempts + 1, next_attempt_at = #{nextAttemptAt},
+                                 claim_token = NULL, claim_until = NULL
+        WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
+    </update>
+
+    <update id="markDead">
+        UPDATE outbox_events SET status = 'DEAD', attempts = attempts + 1,
+                                 claim_token = NULL, claim_until = NULL
+        WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
+    </update>
+
+    <select id="selectPendingSearchEvent" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$SearchEvent">
+        SELECT id, event_type AS eventType, aggregate_type AS aggregateType,
+               aggregate_id AS aggregateId, attempts,
+               CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.lastProductId')) AS UNSIGNED) AS lastProductId
+        FROM outbox_events
+        WHERE event_type IN ('SEARCH_PRODUCT_REFRESH', 'SEARCH_SHOP_REFRESH',
+                             'SEARCH_BRAND_REFRESH', 'SEARCH_CATEGORY_REFRESH')
+          AND status = 'PENDING' AND next_attempt_at &lt;= #{now}
+          AND (claim_until IS NULL OR claim_until &lt;= #{now})
+        ORDER BY id LIMIT 1
+    </select>
+
+    <update id="claimSearchEvent">
+        UPDATE outbox_events SET claim_token = #{token}, claim_until = #{until}
+        WHERE id = #{eventId} AND event_type IN
+          ('SEARCH_PRODUCT_REFRESH', 'SEARCH_SHOP_REFRESH', 'SEARCH_BRAND_REFRESH', 'SEARCH_CATEGORY_REFRESH')
+          AND status = 'PENDING' AND next_attempt_at &lt;= #{now}
+          AND (claim_until IS NULL OR claim_until &lt;= #{now})
+    </update>
+
+    <!-- 只有本次租约持有者可推进扇出游标，成功批次可在下一轮继续。 -->
+    <update id="checkpointSearchEvent">
+        UPDATE outbox_events
+        SET payload = JSON_SET(payload, '$.lastProductId', #{lastProductId}),
+            next_attempt_at = NOW(), claim_token = NULL, claim_until = NULL
+        WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
+    </update>
+
+    <select id="selectSearchBacklog" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$SearchBacklog">
+        SELECT COUNT(CASE WHEN status = 'PENDING' THEN 1 END) AS pending,
+               COUNT(CASE WHEN status = 'DEAD' THEN 1 END) AS dead,
+               TIMESTAMPDIFF(SECOND, MIN(CASE WHEN status = 'PENDING' THEN created_at END), NOW())
+                   AS oldestPendingSeconds
+        FROM outbox_events
+        WHERE event_type IN ('SEARCH_PRODUCT_REFRESH', 'SEARCH_SHOP_REFRESH',
+                             'SEARCH_BRAND_REFRESH', 'SEARCH_CATEGORY_REFRESH')
+          AND status IN ('PENDING', 'DEAD')
+    </select>
+</mapper>

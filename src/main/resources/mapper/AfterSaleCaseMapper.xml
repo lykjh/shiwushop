@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.after_sale.AfterSaleCaseMapper">
+    <select id="selectBuyerIds" resultType="long">
+        SELECT id FROM after_sale_cases
+        WHERE order_id=#{orderId} AND id &lt; #{beforeId}
+        ORDER BY id DESC LIMIT #{limit}
+    </select>
+
+    <select id="selectMerchantIds" resultType="long">
+        SELECT sale.id FROM after_sale_cases sale
+        JOIN orders order_head ON order_head.id=sale.order_id
+        WHERE order_head.shop_id=#{shopId} AND sale.id &lt; #{beforeId}
+        <if test="status != null">AND sale.status=#{status}</if>
+        ORDER BY sale.id DESC LIMIT #{limit}
+    </select>
+
+    <update id="review">
+        UPDATE after_sale_cases SET status=#{next}, reviewed_by_user_id=#{reviewer},
+            reviewed_at=#{now}, review_reason=#{reason}, finished_at=#{finishedAt}
+        WHERE id=#{id} AND status='REQUESTED'
+    </update>
+
+    <update id="markRefunded">
+        UPDATE after_sale_cases SET status='REFUNDED', finished_at=#{now}
+        WHERE id=#{id} AND status='REFUNDING'
+    </update>
+</mapper>

@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "shop.shipment.rabbit-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable RabbitMQ shipment messaging."
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.review.ProductReviewMapper">
+    <!-- 仅已成功退款的件数扣减评价资格；锁订单明细以串行化同一明细的创建请求。 -->
+    <select id="selectEligibilityForUpdate" resultType="com.shiwushop.vo.query.review.ReviewEligibility" flushCache="true">
+        SELECT item.id AS orderItemId, item.order_id AS orderId, orders.user_id AS buyerUserId,
+               sku.product_id AS productId, item.quantity, orders.status AS orderStatus,
+               shipment.status AS shipmentStatus,
+               (SELECT COALESCE(SUM(refunded.quantity), 0)
+                FROM after_sale_items refunded
+                JOIN after_sale_cases sale ON sale.id = refunded.case_id
+                WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED') AS refundedQuantity
+        FROM order_items item
+        JOIN orders ON orders.id = item.order_id
+        JOIN skus sku ON sku.id = item.sku_id
+        LEFT JOIN shipments shipment ON shipment.order_id = orders.id
+        WHERE item.id = #{orderItemId}
+        FOR UPDATE
+    </select>
+
+    <select id="selectIdByOrderItemId" resultType="long">
+        SELECT id FROM product_reviews WHERE order_item_id = #{orderItemId}
+    </select>
+
+    <insert id="insertReview" parameterType="com.shiwushop.entity.review.ProductReview" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_reviews (order_item_id, product_id, buyer_user_id, rating, content, counted_in_summary)
+        VALUES (#{orderItemId}, #{productId}, #{buyerUserId}, #{rating}, #{content}, #{countedInSummary})
+    </insert>
+
+    <insert id="insertImage">
+        INSERT INTO product_review_images (review_id, media_id, phase, position)
+        VALUES (#{reviewId}, #{mediaId}, #{phase}, #{position})
+    </insert>
+
+    <select id="selectForUpdate" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+        SELECT id, order_item_id AS orderItemId, product_id AS productId, buyer_user_id AS buyerUserId,
+               rating, follow_up_at AS followUpAt, deleted_at AS deletedAt, hidden_at AS hiddenAt,
+               counted_in_summary AS countedInSummary
+        FROM product_reviews WHERE id = #{reviewId} FOR UPDATE
+    </select>
+
+    <select id="selectForUpdateByOrderItemId" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+        SELECT id, order_item_id AS orderItemId, product_id AS productId, rating,
+               counted_in_summary AS countedInSummary
+        FROM product_reviews WHERE order_item_id = #{orderItemId} FOR UPDATE
+    </select>
+
+    <select id="refundedQuantityForUpdate" resultType="long" flushCache="true">
+        SELECT COALESCE(SUM(refunded.quantity), 0)
+        FROM after_sale_items refunded
+        JOIN after_sale_cases sale ON sale.id = refunded.case_id
+        WHERE refunded.order_item_id = #{orderItemId} AND sale.status = 'REFUNDED'
+        FOR UPDATE
+    </select>
+
+    <update id="excludeFromSummary">
+        UPDATE product_reviews SET counted_in_summary = 0
+        WHERE id = #{reviewId} AND counted_in_summary = 1
+    </update>
+
+    <insert id="addToSummary">
+        INSERT INTO product_review_summaries (product_id, review_count, rating_sum)
+        VALUES (#{productId}, 1, #{rating})
+        ON DUPLICATE KEY UPDATE review_count = review_count + 1, rating_sum = rating_sum + #{rating}
+    </insert>
+
+    <update id="removeFromSummary">
+        UPDATE product_review_summaries
+        SET review_count = review_count - 1, rating_sum = rating_sum - #{rating}
+        WHERE product_id = #{productId} AND review_count > 0 AND rating_sum >= #{rating}
+    </update>
+
+    <update id="addFollowUp">
+        UPDATE product_reviews SET follow_up = #{content}, follow_up_at = NOW()
+        WHERE id = #{reviewId} AND follow_up_at IS NULL AND deleted_at IS NULL AND hidden_at IS NULL
+    </update>
+
+    <update id="softDelete">
+        UPDATE product_reviews SET deleted_at = NOW(), counted_in_summary = 0
+        WHERE id = #{reviewId} AND deleted_at IS NULL
+    </update>
+
+    <select id="isPublicReview" resultType="boolean" flushCache="true">
+        SELECT EXISTS (
+            SELECT 1 FROM product_reviews review
+            JOIN order_items item ON item.id = review.order_item_id
+            JOIN products product ON product.id = review.product_id
+            JOIN shops shop ON shop.id = product.shop_id
+            WHERE review.id = #{reviewId} AND review.deleted_at IS NULL AND review.hidden_at IS NULL
+              AND product.status = 'ON_SALE' AND shop.enabled = 1
+              AND item.quantity &gt; (
+                  SELECT COALESCE(SUM(refunded.quantity), 0)
+                  FROM after_sale_items refunded
+                  JOIN after_sale_cases sale ON sale.id = refunded.case_id
+                  WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED'
+              )
+        )
+    </select>
+
+    <insert id="insertReport">
+        INSERT INTO product_review_reports (review_id, reporter_user_id, reason)
+        VALUES (#{reviewId}, #{reporterId}, #{reason})
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <select id="selectPendingReports" resultType="com.shiwushop.vo.review.PendingReviewReportVO" flushCache="true">
+        SELECT report.id, report.review_id AS reviewId, review.rating, review.content,
+               review.follow_up AS followUp, report.reason, report.created_at AS createdAt
+        FROM product_review_reports report
+        JOIN product_reviews review ON review.id = report.review_id
+        WHERE report.status = 'OPEN'
+          <if test="afterId != null">AND report.id &lt; #{afterId}</if>
+        ORDER BY report.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectReport" resultType="com.shiwushop.vo.query.review.ReviewReportRow" flushCache="true">
+        SELECT id, review_id AS reviewId, status FROM product_review_reports WHERE id = #{reportId}
+    </select>
+
+    <select id="selectReportForUpdate" resultType="com.shiwushop.vo.query.review.ReviewReportRow" flushCache="true">
+        SELECT id, review_id AS reviewId, status FROM product_review_reports
+        WHERE id = #{reportId} FOR UPDATE
+    </select>
+
+    <update id="resolveReport">
+        UPDATE product_review_reports
+        SET status = 'RESOLVED', decision = #{decision}, handled_by_user_id = #{adminId}, handled_at = NOW()
+        WHERE id = #{reportId} AND status = 'OPEN'
+    </update>
+
+    <update id="hideReview">
+        UPDATE product_reviews SET hidden_at = COALESCE(hidden_at, NOW()), counted_in_summary = 0
+        WHERE id = #{reviewId}
+    </update>
+
+    <insert id="insertModerationAudit">
+        INSERT INTO product_review_moderation_audit (review_id, report_id, admin_user_id, decision, reason)
+        VALUES (#{reviewId}, #{reportId}, #{adminId}, #{decision}, #{reason})
+    </insert>
+
+    <select id="isPublicProduct" resultType="boolean" flushCache="true">
+        SELECT EXISTS (
+            SELECT 1 FROM products product
+            JOIN shops shop ON shop.id = product.shop_id
+            WHERE product.id = #{productId} AND product.status = 'ON_SALE' AND shop.enabled = 1
+        )
+    </select>
+
+    <select id="selectPublicPage" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+        SELECT review.id, review.rating, review.content, review.follow_up AS followUp,
+               review.created_at AS createdAt, review.follow_up_at AS followUpAt
+        FROM product_reviews review
+        JOIN order_items item ON item.id = review.order_item_id
+        WHERE review.product_id = #{productId}
+          AND review.deleted_at IS NULL AND review.hidden_at IS NULL
+          AND item.quantity &gt; (
+              SELECT COALESCE(SUM(refunded.quantity), 0)
+              FROM after_sale_items refunded
+              JOIN after_sale_cases sale ON sale.id = refunded.case_id
+              WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED'
+          )
+          <if test="afterId != null">AND review.id &lt; #{afterId}</if>
+        ORDER BY review.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectPublicImages" resultType="com.shiwushop.vo.query.review.ReviewImageRow">
+        SELECT review_id AS reviewId, media_id AS mediaId, phase
+        FROM product_review_images
+        WHERE review_id IN
+        <foreach collection="reviewIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY review_id DESC, phase, position
+    </select>
+
+    <select id="selectSummary" resultType="com.shiwushop.vo.review.ReviewSummaryVO" flushCache="true">
+        SELECT COALESCE(summary.review_count, 0) AS reviewCount,
+               CASE WHEN COALESCE(summary.review_count, 0) = 0 THEN 0
+                    ELSE ROUND(summary.rating_sum / summary.review_count, 2) END AS averageRating
+        FROM products product
+        LEFT JOIN product_review_summaries summary ON summary.product_id = product.id
+        WHERE product.id = #{productId}
+    </select>
+</mapper>

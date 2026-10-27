@@ -1,0 +1,30 @@
+services:
+  app:
+    image: shiwushop-app:1.1
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/shiwushop?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: shiwushop
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?missing}
+      SPRING_DATA_REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?missing}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: shiwushop
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?missing}
+      SPRING_RABBITMQ_VIRTUAL_HOST: shiwushop
+      SHOP_PRIVACY_KEY_V1_BASE64: ${SHOP_PRIVACY_KEY_V1_BASE64:?missing}
+      SHOP_MEDIA_ROOT: /app/media
+      SHOP_SHIPMENT_RABBIT_ENABLED: "true"
+      SHOP_ALIPAY_GATEWAY_URL: ${SHOP_ALIPAY_GATEWAY_URL:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      SHOP_SEARCH_DISCOVERY_ENABLED: "false"
+      SHOP_SEARCH_WORKER_ENABLED: "false"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,metrics"
+      SHOP_LOG_FILE: /app/logs/shiwushop.log
+      SHOP_METHOD_LOG_ENABLED: ${SHOP_METHOD_LOG_ENABLED:-false}
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    ports:
+      - "127.0.0.1:8080:8080"

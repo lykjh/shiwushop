@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.payment.PaymentAttemptMapper">
+    <update id="markSuccess">
+        UPDATE payment_attempts SET status = 'SUCCESS', alipay_trade_no = #{tradeNo}, paid_at = #{paidAt}
+        WHERE id = #{id} AND status = 'PENDING'
+    </update>
+
+    <update id="markClosed">
+        UPDATE payment_attempts SET status = 'CLOSED', closed_at = NOW()
+        WHERE id = #{id} AND status = 'PENDING'
+    </update>
+</mapper>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.shipment.ShipmentMapper">
+    <select id="selectByOrderId" resultType="com.shiwushop.entity.shipment.Shipment">
+        SELECT * FROM shipments WHERE order_id = #{orderId}
+    </select>
+
+    <select id="selectByOrderIdForUpdate" resultType="com.shiwushop.entity.shipment.Shipment">
+        SELECT * FROM shipments WHERE order_id = #{orderId} FOR UPDATE
+    </select>
+
+    <update id="confirm">
+        UPDATE shipments SET status = 'CONFIRMED', confirm_source = #{source}, confirmed_at = #{now}
+        WHERE id = #{shipmentId} AND status = 'SHIPPED'
+    </update>
+
+    <select id="selectDueIds" resultType="long">
+        SELECT shipment.id FROM shipments shipment
+        JOIN orders order_head ON order_head.id = shipment.order_id
+        WHERE shipment.status = 'SHIPPED' AND shipment.auto_confirm_at &lt;= #{now}
+          AND (SELECT COALESCE(SUM(attempt.amount), 0)
+               FROM after_sale_cases sale
+               JOIN refund_attempts attempt ON attempt.case_id = sale.id AND attempt.status = 'SUCCESS'
+               WHERE sale.order_id = shipment.order_id) &lt; order_head.total_amount
+        ORDER BY shipment.auto_confirm_at, shipment.id LIMIT #{limit}
+    </select>
+    <select id="oldestDueSeconds" resultType="long">
+        SELECT TIMESTAMPDIFF(SECOND, shipment.auto_confirm_at, #{now}) FROM shipments shipment
+        JOIN orders order_head ON order_head.id = shipment.order_id
+        WHERE shipment.status = 'SHIPPED' AND shipment.auto_confirm_at &lt;= #{now}
+          AND (SELECT COALESCE(SUM(attempt.amount), 0)
+               FROM after_sale_cases sale
+               JOIN refund_attempts attempt ON attempt.case_id = sale.id AND attempt.status = 'SUCCESS'
+               WHERE sale.order_id = shipment.order_id) &lt; order_head.total_amount
+        ORDER BY shipment.auto_confirm_at, shipment.id LIMIT 1
+    </select>
+
+    <select id="refundedAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(attempt.amount), 0)
+        FROM after_sale_cases sale
+        JOIN refund_attempts attempt ON attempt.case_id = sale.id AND attempt.status = 'SUCCESS'
+        WHERE sale.order_id = #{orderId}
+    </select>
+
+    <select id="unresolvedAfterSaleCount" resultType="int">
+        SELECT COUNT(*) FROM after_sale_cases
+        WHERE order_id=#{orderId}
+          AND status IN ('REQUESTED','WAITING_RETURN','WAITING_RECEIPT','REFUNDING')
+    </select>
+</mapper>

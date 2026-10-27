@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.shop.ShopMapper">
+    <sql id="visibleCategories">
+        WITH RECURSIVE visible_categories AS (
+            SELECT id FROM categories
+            WHERE visible = 1
+              AND ((#{categoryId} IS NULL AND parent_id IS NULL) OR id = #{categoryId})
+            UNION ALL
+            SELECT child.id FROM categories child
+            JOIN visible_categories parent ON child.parent_id = parent.id
+            WHERE child.visible = 1
+        )
+    </sql>
+
+    <sql id="publicShops">
+        FROM shops s
+        WHERE s.enabled = 1 AND EXISTS (
+            SELECT 1 FROM visible_categories c
+            STRAIGHT_JOIN products p FORCE INDEX (idx_products_shop_status_category)
+                ON p.shop_id = s.id AND p.status = 'ON_SALE' AND p.category_id = c.id
+        )
+    </sql>
+
+    <select id="selectPublicPage" resultType="com.shiwushop.vo.shop.ShopPublicVO">
+        <include refid="visibleCategories"/>
+        SELECT s.id, s.name, s.logo_media_id AS logoMediaId, s.description
+        <include refid="publicShops"/>
+        ORDER BY s.id
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPublic" resultType="long">
+        <include refid="visibleCategories"/>
+        SELECT COUNT(*)
+        <include refid="publicShops"/>
+    </select>
+
+    <select id="selectPublicCategories" resultType="com.shiwushop.vo.category.CategoryPathItemVO">
+        WITH RECURSIVE visible_categories AS (
+            SELECT id FROM categories WHERE visible = 1 AND parent_id IS NULL
+            UNION ALL
+            SELECT child.id FROM categories child
+            JOIN visible_categories parent ON child.parent_id = parent.id
+            WHERE child.visible = 1
+        )
+        SELECT DISTINCT c.id, category.name
+        FROM visible_categories c
+        JOIN categories category ON category.id = c.id
+        JOIN products p ON p.category_id = c.id AND p.status = 'ON_SALE'
+        WHERE p.shop_id = #{shopId}
+        ORDER BY c.id
+    </select>
+</mapper>

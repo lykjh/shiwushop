@@ -1,0 +1,11 @@
+/target/
+/.idea/
+/local-data/
+/logs/*.log*
+/artifacts/
+/.env
+/.env.*
+/privateKey.txt
+*.pem
+*.p12
+__pycache__/

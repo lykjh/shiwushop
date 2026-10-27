@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.product.ProductMapper">
+    <sql id="visibleCategories">
+        WITH RECURSIVE visible_categories AS (
+            SELECT id FROM categories
+            WHERE visible = 1
+              AND ((#{categoryId} IS NULL AND parent_id IS NULL) OR id = #{categoryId})
+            UNION ALL
+            SELECT child.id FROM categories child
+            JOIN visible_categories parent ON child.parent_id = parent.id
+            WHERE child.visible = 1
+        )
+    </sql>
+
+    <sql id="pageColumns">
+        SELECT p.id, p.name, cover.media_id AS coverMediaId,
+               b.id AS brandId, b.name AS brandName,
+               s.id AS shopId, s.name AS shopName,
+               COALESCE((SELECT MIN(sku.price) FROM skus sku
+                   WHERE sku.product_id = p.id AND sku.stock > 0
+                     AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
+                     AND (#{maxPrice} IS NULL OR sku.price &lt;= #{maxPrice})),
+                   (SELECT MIN(sku.price) FROM skus sku WHERE sku.product_id = p.id)) AS startingPrice,
+               COALESCE(sales.sold_count, 0) AS soldCount,
+               NOT EXISTS (SELECT 1 FROM skus sku WHERE sku.product_id = p.id AND sku.stock > 0) AS soldOut
+    </sql>
+
+    <sql id="pageJoins">
+        LEFT JOIN product_brands pb ON pb.product_id = p.id
+        LEFT JOIN product_images cover ON cover.product_id = p.id AND cover.is_cover = 1
+        LEFT JOIN brands b ON b.id = pb.brand_id
+        LEFT JOIN product_sales_stats sales ON sales.product_id = p.id
+    </sql>
+
+    <sql id="pageWhere">
+        WHERE p.status = 'ON_SALE'
+          AND (#{brandId} IS NULL OR pb.brand_id = #{brandId})
+          AND (#{shopId} IS NULL OR p.shop_id = #{shopId})
+          AND (SELECT sku.id FROM skus sku WHERE sku.product_id = p.id
+              AND ((#{minPrice} IS NULL AND #{maxPrice} IS NULL)
+                OR (sku.stock > 0
+                  AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
+                  AND (#{maxPrice} IS NULL OR sku.price &lt;= #{maxPrice})))
+              LIMIT 1) IS NOT NULL
+    </sql>
+
+    <sql id="primaryPageFrom">
+        FROM products p FORCE INDEX (PRIMARY)
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
+        <include refid="pageJoins"/>
+        <include refid="pageWhere"/>
+    </sql>
+
+    <sql id="filteredPageFrom">
+        FROM products p
+        JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        JOIN visible_categories c ON c.id = p.category_id
+        <include refid="pageJoins"/>
+        <include refid="pageWhere"/>
+    </sql>
+
+    <sql id="brandPageFrom">
+        FROM product_brands pb FORCE INDEX (fk_product_brands_brand_id)
+        STRAIGHT_JOIN products p ON p.id = pb.product_id
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
+        LEFT JOIN product_images cover ON cover.product_id = p.id AND cover.is_cover = 1
+        LEFT JOIN brands b ON b.id = pb.brand_id
+        LEFT JOIN product_sales_stats sales ON sales.product_id = p.id
+        <include refid="pageWhere"/>
+    </sql>
+
+    <!-- 旧公开列表按 ID 游标翻页，不使用深页 OFFSET；发现接口另走搜索索引。 -->
+    <select id="selectPublicPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+        <include refid="visibleCategories"/>
+        <include refid="pageColumns"/>
+        <include refid="primaryPageFrom"/>
+        AND (#{afterId} IS NULL OR p.id &lt; #{afterId})
+        ORDER BY p.id DESC LIMIT #{limit}
+    </select>
+
+    <!-- 店铺筛选先缩到该店的上架商品，再按 ID 游标倒序读取，避免扫描其他店铺。 -->
+    <select id="selectPublicShopPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+        <include refid="visibleCategories"/>
+        <include refid="pageColumns"/>
+        FROM products p FORCE INDEX (idx_products_shop_status_id)
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
+        <include refid="pageJoins"/>
+        <include refid="pageWhere"/>
+        AND p.shop_id = #{shopId}
+        AND (#{afterId} IS NULL OR p.id &lt; #{afterId})
+        ORDER BY p.id DESC LIMIT #{limit}
+    </select>
+
+    <select id="selectPublicFilteredPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+        <include refid="visibleCategories"/>
+        <include refid="pageColumns"/>
+        <include refid="filteredPageFrom"/>
+        AND (#{afterId} IS NULL OR p.id &lt; #{afterId})
+        ORDER BY p.id DESC LIMIT #{limit}
+    </select>
+
+    <select id="selectPublicBrandPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+        <include refid="visibleCategories"/>
+        <include refid="pageColumns"/>
+        <include refid="brandPageFrom"/>
+        AND (#{afterId} IS NULL OR pb.product_id &lt; #{afterId})
+        ORDER BY pb.product_id DESC LIMIT #{limit}
+    </select>
+
+    <!-- 搜索结果展示前再次从数据库核对上下架、店铺状态、筛选条件和当前价格。 -->
+    <select id="selectPublicCardsByIds" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+        <include refid="visibleCategories"/>
+        <include refid="pageColumns"/>
+        <include refid="filteredPageFrom"/>
+        AND p.id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+</mapper>

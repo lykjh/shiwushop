@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.brand.BrandMapper">
+    <select id="selectPublicByCategory" resultType="com.shiwushop.vo.brand.BrandPublicVO">
+        WITH RECURSIVE visible_categories AS (
+            SELECT id FROM categories WHERE id = #{categoryId} AND visible = 1
+            UNION ALL
+            SELECT child.id FROM categories child
+            JOIN visible_categories parent ON child.parent_id = parent.id
+            WHERE child.visible = 1
+        )
+        SELECT DISTINCT b.id, b.name, b.logo_media_id AS logoMediaId
+        FROM visible_categories c
+        JOIN products p ON p.category_id = c.id AND p.status = 'ON_SALE'
+        JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        JOIN product_brands pb ON pb.product_id = p.id
+        JOIN brands b ON b.id = pb.brand_id
+        ORDER BY b.id
+    </select>
+</mapper>

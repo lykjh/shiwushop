@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.media.MediaAssetMapper">
+    <select id="selectReadyOwnedForUpdate" resultType="long">
+        SELECT id FROM media_assets
+        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId} AND status = 'READY'
+        FOR UPDATE
+    </select>
+
+    <insert id="insert" parameterType="com.shiwushop.entity.media.MediaAsset" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO media_assets
+        (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status)
+        VALUES (#{uploadedByUserId}, #{storageKey}, #{mimeType}, #{byteSize},
+                #{width}, #{height}, #{sha256}, #{status})
+    </insert>
+
+    <select id="selectReady" resultType="com.shiwushop.entity.media.MediaAsset">
+        SELECT id, uploaded_by_user_id AS uploadedByUserId, storage_key AS storageKey,
+               mime_type AS mimeType, byte_size AS byteSize, width, height, status
+        FROM media_assets WHERE id = #{mediaId} AND status = 'READY'
+    </select>
+
+    <select id="isPubliclyReferenced" resultType="boolean" flushCache="true">
+        SELECT EXISTS (
+            SELECT 1 FROM product_images pi
+            JOIN products p ON p.id = pi.product_id
+            JOIN shops s ON s.id = p.shop_id
+            WHERE pi.media_id = #{mediaId} AND p.status = 'ON_SALE' AND s.enabled = 1
+            UNION ALL
+            SELECT 1 FROM shops WHERE logo_media_id = #{mediaId} AND enabled = 1
+            UNION ALL
+            SELECT 1 FROM brands WHERE logo_media_id = #{mediaId} AND enabled = 1
+            UNION ALL
+            SELECT 1 FROM product_review_images image
+            JOIN product_reviews review ON review.id = image.review_id
+            JOIN order_items item ON item.id = review.order_item_id
+            JOIN products product ON product.id = review.product_id
+            JOIN shops shop ON shop.id = product.shop_id
+            WHERE image.media_id = #{mediaId} AND review.deleted_at IS NULL AND review.hidden_at IS NULL
+              AND product.status = 'ON_SALE' AND shop.enabled = 1
+              AND item.quantity &gt; (
+                  SELECT COALESCE(SUM(refunded.quantity), 0)
+                  FROM after_sale_items refunded
+                  JOIN after_sale_cases sale ON sale.id = refunded.case_id
+                  WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED'
+              )
+        )
+    </select>
+</mapper>

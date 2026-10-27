@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.payment.RefundAttemptMapper">
+    <select id="successfulAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(attempt.amount), 0)
+        FROM refund_attempts attempt
+        JOIN after_sale_cases sale ON sale.id=attempt.case_id
+        WHERE sale.order_id=#{orderId} AND attempt.status='SUCCESS'
+    </select>
+
+    <select id="unresolvedIds" resultType="long">
+        SELECT id FROM refund_attempts
+        WHERE status IN ('PENDING','UNKNOWN')
+          AND requested_at &lt;= #{before} AND updated_at &lt;= #{before}
+          AND (reconcile_claim_until IS NULL OR reconcile_claim_until &lt;= NOW(3))
+        ORDER BY updated_at, id LIMIT #{limit}
+    </select>
+    <select id="oldestUnresolvedSeconds" resultType="long">
+        SELECT TIMESTAMPDIFF(SECOND, MIN(updated_at), #{now}) FROM refund_attempts
+        WHERE status IN ('PENDING','UNKNOWN')
+          AND requested_at &lt;= #{before} AND updated_at &lt;= #{before}
+    </select>
+</mapper>

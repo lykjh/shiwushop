@@ -1,0 +1,159 @@
+spring:
+  profiles:
+    active: verifyCode
+  config:
+    import: optional:file:./local-data/application-local.yml
+  application:
+    name: shiwushop
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/shiwushop?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  session:
+    data:
+      redis:
+        namespace: shiwushop:session
+  rabbitmq:
+    connection-timeout: 3s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+logging:
+  file:
+    name: ${SHOP_LOG_FILE:./logs/shiwushop.log}
+  pattern:
+    level: "%5p [requestId=%X{requestId:-}]"
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 1GB
+
+management:
+  health:
+    rabbit:
+      enabled: ${SHOP_SHIPMENT_RABBIT_ENABLED:false}
+
+shop:
+  logging:
+    method-enabled: ${SHOP_METHOD_LOG_ENABLED:false}
+  search:
+    url: ${SHOP_SEARCH_URL:http://127.0.0.1:19200}
+    discovery-enabled: ${SHOP_SEARCH_DISCOVERY_ENABLED:false}
+    worker-enabled: ${SHOP_SEARCH_WORKER_ENABLED:false}
+    worker-scan-delay-ms: ${SHOP_SEARCH_WORKER_SCAN_DELAY_MS:2000}
+    cursor-secret: ${SHOP_SEARCH_CURSOR_SECRET:}
+  media:
+    root: ${SHOP_MEDIA_ROOT:./local-data/media}
+  public-cache:
+    ttl-seconds: ${SHOP_PUBLIC_CACHE_TTL_SECONDS:5}
+    # 租约默认 30 秒，需用生产首页回源 p99 核对并调整为其 2～3 倍。
+    lock-seconds: ${SHOP_PUBLIC_CACHE_LOCK_SECONDS:30}
+    wait-millis: ${SHOP_PUBLIC_CACHE_WAIT_MILLIS:1000}
+  security:
+    captcha:
+      # 单会话短时可重试；出口桶只保护总体图片处理量。
+      session-tokens-per-second: 1
+      session-burst: 5
+      ip-tokens-per-second: 30
+      ip-burst: 100
+      # 校验入口独立配置；先保持现有额度，按真实校验耗时再定容量。
+      valid-session-tokens-per-second: 1
+      valid-session-burst: 5
+      valid-ip-tokens-per-second: 30
+      valid-ip-burst: 100
+      verify-failure-limit: 10
+      verify-failure-window-ms: 300000
+      generate-max-concurrent: 4
+      generate-wait-ms: 200
+    login:
+      key-prefix: shiwushop:rate:login
+      # 只保护入口容量；失败次数与滑块规则由 auth-risk 独立处理。
+      tokens-per-second: 20
+      burst: 100
+    register:
+      key-prefix: shiwushop:rate:register
+      # 令牌桶只保护注册入口的瞬时流量，不限制同一出口的注册人数。
+      tokens-per-second: 20
+      burst: 100
+    auth-risk:
+      account-failures: 5
+      session-failures: 5
+      session-block-failures: 30
+      # 同一 Session 五分钟内第六次注册开始要求滑块。
+      session-register-attempts: 5
+      # 每个出口与浏览器类别最多保留 256 个最近活动 Session 的注册尝试。
+      max-tracked-sessions-per-exit: 256
+      # 同一设备信号跨 Session 连续成功注册五次后，下一次要求滑块。
+      device-register-successes: 5
+      # 共享出口仅在当前设备也重复注册时参与挑战，避免其他设备跟随触发。
+      ip-ua-register-successes: 30
+      ip-ua-register-requests-per-minute: 12
+      ip-ua-failures: 60
+      ip-ua-requests-per-minute: 120
+      ip-ua-failure-ratio: 0.5
+  shipment:
+    rabbit-enabled: ${SHOP_SHIPMENT_RABBIT_ENABLED:false}
+    scan-delay-ms: 30000
+    scan-budget-ms: ${SHOP_SHIPMENT_SCAN_BUDGET_MS:20000}
+  privacy:
+    key-v1-base64: ${SHOP_PRIVACY_KEY_V1_BASE64:}
+  payment:
+    expiry-scan-delay-ms: 30000
+    refund-scan-delay-ms: 60000
+    scan-budget-ms: ${SHOP_PAYMENT_SCAN_BUDGET_MS:20000}
+  alipay:
+    connect-timeout-ms: ${SHOP_ALIPAY_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SHOP_ALIPAY_READ_TIMEOUT_MS:5000}
+    app-id: ${SHOP_ALIPAY_APP_ID:}
+    seller-id: ${SHOP_ALIPAY_SELLER_ID:}
+    public-key: ${SHOP_ALIPAY_PUBLIC_KEY:}
+    private-key-path: ${SHOP_ALIPAY_PRIVATE_KEY_PATH:}
+    notify-url: ${SHOP_ALIPAY_NOTIFY_URL:}
+    gateway-url: ${SHOP_ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+
+server:
+  tomcat:
+    max-swallow-size: 16MB
+  servlet:
+    session:
+      timeout: 30m
+      persistent: false
+      tracking-modes: cookie
+      cookie:
+        name: MALLSESSION
+        path: /
+        http-only: true
+        same-site: lax
+        secure: ${SHOP_SESSION_COOKIE_SECURE:false}
+---
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+  data:
+    redis:
+      cluster:
+        nodes: 127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005,127.0.0.1:7006
+        max-redirects: 3

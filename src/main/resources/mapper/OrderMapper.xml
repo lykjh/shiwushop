@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.order.OrderMapper">
+    <sql id="summaryColumns">
+        SELECT o.id, o.shop_id AS shopId, s.name AS shopName,
+               o.total_amount AS totalAmount, o.status,
+               (SELECT COUNT(*) FROM order_items item WHERE item.order_id = o.id) AS itemCount
+    </sql>
+
+    <select id="selectBuyerSlice" resultType="com.shiwushop.vo.order.OrderSummaryVO">
+        <include refid="summaryColumns"/>
+        FROM orders o
+        LEFT JOIN shops s ON s.id = o.shop_id
+        WHERE o.user_id = #{userId}
+        <if test="beforeId != null">
+            AND (o.created_at &lt; #{beforeCreatedAt}
+                 OR (o.created_at = #{beforeCreatedAt} AND o.id &lt; #{beforeId}))
+        </if>
+        ORDER BY o.created_at DESC, o.id DESC LIMIT #{limit}
+    </select>
+
+    <select id="selectMerchantSlice" resultType="com.shiwushop.vo.order.OrderSummaryVO">
+        <include refid="summaryColumns"/>
+        FROM orders o
+        JOIN shops s ON s.id = o.shop_id
+        WHERE o.shop_id = #{shopId}
+        <if test="beforeId != null">
+            AND (o.created_at &lt; #{beforeCreatedAt}
+                 OR (o.created_at = #{beforeCreatedAt} AND o.id &lt; #{beforeId}))
+        </if>
+        ORDER BY o.created_at DESC, o.id DESC LIMIT #{limit}
+    </select>
+
+    <select id="selectExpiredIds" resultType="long">
+        SELECT id FROM orders WHERE status = 'UNPAID'
+          AND pay_expires_at IS NOT NULL AND pay_expires_at &lt;= #{now}
+          AND (expiry_claim_until IS NULL OR expiry_claim_until &lt;= NOW(3))
+        ORDER BY pay_expires_at, id LIMIT #{limit}
+    </select>
+    <select id="oldestExpiredSeconds" resultType="long">
+        SELECT TIMESTAMPDIFF(SECOND, MIN(pay_expires_at), #{now}) FROM orders
+        WHERE status = 'UNPAID' AND pay_expires_at IS NOT NULL AND pay_expires_at &lt;= #{now}
+    </select>
+</mapper>

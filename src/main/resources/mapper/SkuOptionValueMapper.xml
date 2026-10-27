@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shiwushop.mapper.product.SkuOptionValueMapper">
+    <select id="selectValueIds" resultType="long">
+        SELECT link.option_value_id
+        FROM sku_option_values link
+        JOIN product_option_values value ON value.id = link.option_value_id
+        JOIN product_options option_item ON option_item.id = value.option_id
+        WHERE link.sku_id = #{skuId}
+        ORDER BY option_item.sort_order, option_item.id
+    </select>
+
+    <select id="selectSkuValues" resultType="com.shiwushop.vo.query.product.SkuOptionValueRow">
+        SELECT link.sku_id AS skuId, link.option_value_id AS valueId, value.value_name AS valueName
+        FROM sku_option_values link
+        JOIN product_option_values value ON value.id = link.option_value_id
+        JOIN product_options option_item ON option_item.id = value.option_id
+        WHERE link.sku_id IN
+        <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">#{skuId}</foreach>
+        ORDER BY link.sku_id, option_item.sort_order, option_item.id
+    </select>
+</mapper>
