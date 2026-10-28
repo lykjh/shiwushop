@@ -66,6 +66,8 @@ shop:
     cursor-secret: ${SHOP_SEARCH_CURSOR_SECRET:}
   media:
     root: ${SHOP_MEDIA_ROOT:./local-data/media}
+    cleanup-delay-ms: ${SHOP_MEDIA_CLEANUP_DELAY_MS:86400000}
+    orphan-retention-hours: ${SHOP_MEDIA_ORPHAN_RETENTION_HOURS:24}
   public-cache:
     ttl-seconds: ${SHOP_PUBLIC_CACHE_TTL_SECONDS:5}
     # 租约默认 30 秒，需用生产首页回源 p99 核对并调整为其 2～3 倍。

@@ -37,3 +37,11 @@
 - 切片测试 `MediaControllerSliceTests`：1 项通过；原始输出 `logs/M02-small-targeted.log`。
 - 集成测试 `MediaSecurityTests`：隔离 MySQL 8 和 Redis 7 上 3 项通过；原始输出 `logs/M02-small-integration.log`。
 - 完整 `mvn verify`：使用隔离库 `shiwushop_m02_small`，276 项中 270 项通过、6 项按条件跳过，0 失败、0 错误，JAR 打包成功；原始输出 `logs/M02-small-verify-final.log`。日志保存在本机，不提交到 Git。
+
+## M03 图片残留文件清理
+
+2026-10-28 在 `codex/m03-media-orphan-cleanup` 分支验证，设计与边界见 [M03_MEDIA_CLEANUP.md](M03_MEDIA_CLEANUP.md)。
+
+- 单元测试 `MediaOrphanCleanupTests`：2 项通过，覆盖过期无记录文件、临时文件、有效记录、新文件及数据库异常时的保留行为；原始输出 `logs/M03-unit.log`。
+- 控制器切片 `MediaControllerSliceTests` 与图片集成 `MediaSecurityTests`：隔离 MySQL 8／Redis 7 上共 5 项通过，含清理器与真实数据库记录的核对；原始输出 `logs/M03-integration.log`。
+- 完整 `mvn verify`：隔离库 `shiwushop_m02_small`，279 项中 273 项通过、6 项按条件跳过，0 失败、0 错误，JAR 打包成功；原始输出 `logs/M03-verify.log`。日志保存在本机，不提交到 Git。
