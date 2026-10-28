@@ -20,8 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
@@ -54,9 +56,34 @@ class DiscoveryServiceTests {
         DiscoveryPage first = service.list(query, null, null);
         assertEquals(List.of(20L), first.items().stream().map(item -> item.id()).toList());
         assertTrue(first.hasMore());
+        verify(search, never()).closePit(anyString());
         DiscoveryPage second = service.list(query, first.nextCursor(), null);
         assertEquals(List.of(0L), second.items().stream().map(item -> item.id()).toList());
         assertFalse(second.hasMore());
+        verify(search).closePit("pit");
+    }
+
+    @Test
+    void closesRenewedPitAfterLastPage() {
+        when(search.openPit()).thenReturn("opened-pit");
+        when(search.search(org.mockito.ArgumentMatchers.anyMap()))
+                .thenReturn(json.readTree("{\"pit_id\":\"renewed-pit\",\"hits\":{\"hits\":[]}}"));
+
+        DiscoveryPage page = service.list(new DiscoveryQuery(null, null, null, null, null, null, 20), null, null);
+
+        assertFalse(page.hasMore());
+        verify(search).closePit("renewed-pit");
+    }
+
+    @Test
+    void closesLatestPitWhenSearchResponseIsInvalid() {
+        when(search.openPit()).thenReturn("opened-pit");
+        when(search.search(org.mockito.ArgumentMatchers.anyMap()))
+                .thenReturn(json.readTree("{\"pit_id\":\"renewed-pit\",\"hits\":{}}"));
+
+        assertEquals(503, assertThrows(BusinessException.class, () -> service.list(
+                new DiscoveryQuery(null, null, null, null, null, null, 20), null, null)).getCode());
+        verify(search).closePit("renewed-pit");
     }
 
     @Test

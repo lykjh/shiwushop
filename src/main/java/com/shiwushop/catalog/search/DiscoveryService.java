@@ -58,49 +58,56 @@ public class DiscoveryService {
         // 游标绑定筛选条件和访问身份，PIT 固定本轮滚动加载的索引视图。
         DiscoveryCursor.State state = cursor == null ? null : cursors.decode(cursor, fingerprint, userId);
         String pit = state == null ? search.openPit() : state.pit();
-        List<Object> position = state == null ? null : state.sort();
-        List<PublicProductVO> cards = new ArrayList<>();
-        List<Object> lastReturnedSort = null;
-        boolean hasMore = false;
-        boolean exhausted = false;
-        int scanned = 0;
-        int fetchSize = Math.min(100, Math.max(20, query.size() * 2));
-        while (!exhausted && scanned < 1000) {
-            Map<String, Object> body = request(query, pit, position, fetchSize);
-            JsonNode result = search.search(body);
-            String renewedPit = result.path("pit_id").asText();
-            if (!renewedPit.isBlank()) pit = renewedPit;
-            JsonNode hits = result.path("hits").path("hits");
-            if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
-            List<Long> ids = new ArrayList<>();
-            for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
-            Map<Long, PublicProductRow> current = new HashMap<>();
-            if (!ids.isEmpty()) {
-                for (PublicProductRow row : products.selectPublicCardsByIds(ids, query.categoryId(),
-                        query.brandId(), query.shopId(), query.minPrice(), query.maxPrice())) {
-                    current.put(row.getId(), row);
+        boolean keepPit = false;
+        try {
+            List<Object> position = state == null ? null : state.sort();
+            List<PublicProductVO> cards = new ArrayList<>();
+            List<Object> lastReturnedSort = null;
+            boolean hasMore = false;
+            boolean exhausted = false;
+            int scanned = 0;
+            int fetchSize = Math.min(100, Math.max(20, query.size() * 2));
+            while (!exhausted && scanned < 1000) {
+                Map<String, Object> body = request(query, pit, position, fetchSize);
+                JsonNode result = search.search(body);
+                String renewedPit = result.path("pit_id").asText();
+                if (!renewedPit.isBlank()) pit = renewedPit;
+                JsonNode hits = result.path("hits").path("hits");
+                if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+                List<Long> ids = new ArrayList<>();
+                for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
+                Map<Long, PublicProductRow> current = new HashMap<>();
+                if (!ids.isEmpty()) {
+                    for (PublicProductRow row : products.selectPublicCardsByIds(ids, query.categoryId(),
+                            query.brandId(), query.shopId(), query.minPrice(), query.maxPrice())) {
+                        current.put(row.getId(), row);
+                    }
                 }
-            }
-            // 已失效的索引命中会被过滤；继续扫描候选以尽量补足这一批。
-            for (JsonNode hit : hits) {
-                scanned++;
-                position = json.readValue(hit.path("sort").toString(), List.class);
-                PublicProductRow row = current.get(hit.path("_source").path("id").asLong());
-                if (row == null) continue;
-                if (cards.size() == query.size()) {
-                    hasMore = true;
-                    break;
+                // 已失效的索引命中会被过滤；继续扫描候选以尽量补足这一批。
+                for (JsonNode hit : hits) {
+                    scanned++;
+                    position = json.readValue(hit.path("sort").toString(), List.class);
+                    PublicProductRow row = current.get(hit.path("_source").path("id").asLong());
+                    if (row == null) continue;
+                    if (cards.size() == query.size()) {
+                        hasMore = true;
+                        break;
+                    }
+                    cards.add(toCard(row));
+                    lastReturnedSort = position;
                 }
-                cards.add(toCard(row));
-                lastReturnedSort = position;
+                if (hasMore) break;
+                exhausted = hits.size() < fetchSize;
             }
-            if (hasMore) break;
-            exhausted = hits.size() < fetchSize;
+            if (!hasMore && !exhausted) throw new BusinessException(503, "搜索索引与商品数据差异过大，请稍后重试");
+            String next = hasMore ? cursors.encode(new DiscoveryCursor.State(pit, lastReturnedSort,
+                    fingerprint, userId, Instant.now().plusSeconds(120).getEpochSecond())) : null;
+            keepPit = hasMore;
+            return new DiscoveryPage(cards, hasMore, next);
+        } finally {
+            // 只有下一页游标会继续使用 PIT；异常或末页立即释放最新 ID。
+            if (!keepPit) search.closePit(pit);
         }
-        if (!hasMore && !exhausted) throw new BusinessException(503, "搜索索引与商品数据差异过大，请稍后重试");
-        String next = hasMore ? cursors.encode(new DiscoveryCursor.State(pit, lastReturnedSort,
-                fingerprint, userId, Instant.now().plusSeconds(120).getEpochSecond())) : null;
-        return new DiscoveryPage(cards, hasMore, next);
     }
 
     /** 已显示的卡片重新核对数据库，供前端回滚到列表时刷新价格和可见状态。 */
