@@ -45,3 +45,11 @@
 - 单元测试 `MediaOrphanCleanupTests`：2 项通过，覆盖过期无记录文件、临时文件、有效记录、新文件及数据库异常时的保留行为；原始输出 `logs/M03-unit.log`。
 - 控制器切片 `MediaControllerSliceTests` 与图片集成 `MediaSecurityTests`：隔离 MySQL 8／Redis 7 上共 5 项通过，含清理器与真实数据库记录的核对；原始输出 `logs/M03-integration.log`。
 - 完整 `mvn verify`：隔离库 `shiwushop_m02_small`，279 项中 273 项通过、6 项按条件跳过，0 失败、0 错误，JAR 打包成功；原始输出 `logs/M03-verify.log`。日志保存在本机，不提交到 Git。
+
+## RabbitMQ 真实链路补测
+
+2026-10-28 使用本机隔离 MySQL 8、Redis 7 和专用 RabbitMQ 容器及虚拟主机，启用 `shipment.rabbit.live`、`fault.live`、`manual-replay.live`、`backlog.live`、`dual.live`，实际执行此前按条件跳过的 6 项：**6 通过，0 失败，0 错误，0 跳过**。包含死信、人工重放、双消费者重复消息、两分钟积压和 broker 重启恢复。原始输出保存在本机 `logs/RABBIT-live-six-final.log`，不提交到 Git。
+
+首次补测发现双消费者用例在数据库时间尚未到期时发送消息；MySQL 将发货时间舍入到下一秒，消费记录已写入而运单仍待确认。测试现等待数据库读回的到期时间再投递。积压用例同时等待消费者完全停止及消息全部入队，避免异步时序造成误报。生产代码未修改。
+
+常规 `mvn verify` 再次运行 279 项，0 失败、0 错误、6 项按 live 开关跳过，JAR 打包成功；原始输出 `logs/RABBIT-default-verify.log`。上述 live 补测已单独执行这 6 项。

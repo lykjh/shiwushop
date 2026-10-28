@@ -152,9 +152,12 @@ class ShipmentRabbitLiveTests {
                 shipmentMapper.selectById(shipmentId).getShippedAt(), shipmentId);
         listeners.stop();
         try {
+            assertEquals(0, workQueueConsumers());
             for (int i = 0; i < 100; i++) {
                 rabbit.convertAndSend(ShipmentMessagingConfig.EXCHANGE, ShipmentMessagingConfig.WORK_ROUTING, eventId.toString());
             }
+            long queuedDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (System.nanoTime() < queuedDeadline && workQueueDepth() < 100) Thread.sleep(50);
             assertEquals(100, workQueueDepth());
             Thread.sleep(120_000);
             assertEquals(100, workQueueDepth());
@@ -187,6 +190,11 @@ class ShipmentRabbitLiveTests {
                 Long.class, shipmentId);
         jdbc.update("UPDATE shipments SET auto_confirm_at=? WHERE id=?",
                 shipmentMapper.selectById(shipmentId).getShippedAt(), shipmentId);
+        // MySQL may round shippedAt into the next second; consume only after the stored deadline.
+        LocalDateTime storedDueAt = shipmentMapper.selectById(shipmentId).getAutoConfirmAt();
+        long dueDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (storedDueAt.isAfter(LocalDateTime.now(clock)) && System.nanoTime() < dueDeadline) Thread.sleep(50);
+        assertTrue(!storedDueAt.isAfter(LocalDateTime.now(clock)));
         for (int i = 0; i < 50; i++) {
             rabbit.convertAndSend(ShipmentMessagingConfig.EXCHANGE, ShipmentMessagingConfig.WORK_ROUTING, eventId.toString());
         }
