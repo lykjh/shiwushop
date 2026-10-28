@@ -68,3 +68,11 @@
 2026-10-28 在 `codex/shop-owner-race-tests` 分支用隔离的本机 MySQL 8.0.29 与 Redis，先复跑 `ShopOwnerSkuRaceTests`：1 项通过，旧店主在转让提交后更新 SKU 被拒绝；原始输出 `logs/owner-race-sku.log`。
 
 显式运行 `mvn -B '-Dtest=ShopOwnerOtherWriteRaceRepro' '-Dspring.profiles.active=test' '-Dspring.config.import=optional:file:./target/no-local.yml' test`。用例在三项真实服务调用完成店铺归属校验后暂停，提交店主转让，再放行写入。结果：旧店主新增商品成功（数据库新增 1 行）、发货成功（新增 1 行）、售后审核成功（状态 `REQUESTED` 变为 `REFUNDING`）。用例要求三项都拒绝，因此报告 1 项失败、内部 6 个断言失败；原始输出 `logs/owner-race-other-write.log`。测试在 `finally` 清理创建的数据，类名使用 `Repro`，不纳入普通 `mvn verify` 扫描。其余同样使用普通归属读取的商家写入方法尚未逐项执行并发交错测试。
+
+## 店主转让与商家写入修复
+
+2026-10-28 在 `codex/fix-owner-write-races` 分支将商品创建、修改、规格替换、SKU 创建和上下架、商家发货、售后审核、退货签收、发起退款及退款同步共 10 条写入路径改为在事务中先锁定店铺归属，再锁商品或订单。店主转让也先锁店铺。退款渠道调用继续在数据库事务外执行；事务内已受理的退款尝试继续由原有幂等状态结算。店铺资料修改仍由含 `owner_user_id` 条件的更新 SQL 保护。
+
+- 并发测试 `ShopOwnerOtherWriteRaceTests`：10 条路径均在转让提交后返回 404，原有商品 1 行、发货 0 行、售后状态仍为 `REQUESTED`。`ShopOwnerSkuRaceTests` 验证已获授权的 SKU 更新先完成、转让随后完成。两项均通过，原始输出 `logs/owner-fix-race-tests.log`。
+- 商品、SKU、物流、售后、店铺相关 40 项测试全部通过，原始输出 `logs/owner-fix-module-tests.log`。
+- 完整 `mvn verify`：284 项中 277 项通过、1 项失败、6 项按条件跳过。唯一失败是本轮开始前已有未提交改动的 `MerchantSkuUpdateTests` 所要求的 `MERCHANT_ADJUST` 库存流水；现有 SKU 更新路径尚未写入该流水。原始输出 `logs/owner-fix-full-verify.log`。

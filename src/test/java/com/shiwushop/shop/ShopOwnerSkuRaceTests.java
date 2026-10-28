@@ -15,7 +15,6 @@ import com.shiwushop.service.ProductService;
 import com.shiwushop.service.ShopService;
 import com.shiwushop.service.UserService;
 import com.shiwushop.common.auth.CaptchaProofStore;
-import com.shiwushop.common.BusinessException;
 import com.shiwushop.test.TestRegistration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,12 +26,10 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doAnswer;
 
 @SpringBootTest
@@ -48,7 +45,7 @@ class ShopOwnerSkuRaceTests {
     @Autowired private JdbcTemplate jdbc;
 
     @Test
-    void oldOwnerCannotUpdateSkuAfterOwnershipTransfer() throws Exception {
+    void transferWaitsForAlreadyAuthorizedSkuUpdate() throws Exception {
         Long oldOwner = user("MERCHANT");
         Long newOwner = user("USER");
         Shop shop = new Shop();
@@ -82,18 +79,23 @@ class ShopOwnerSkuRaceTests {
             assertTrue(proceed.await(10, TimeUnit.SECONDS));
             return sku;
         }).when(skus).selectForUpdate(sku.getId());
-        try (var workers = Executors.newSingleThreadExecutor()) {
+        try (var workers = Executors.newFixedThreadPool(2)) {
             MerchantSkuUpdateDTO update = new MerchantSkuUpdateDTO();
             update.setPrice(new BigDecimal("12.00"));
             update.setStock(4);
             var pending = workers.submit(() -> products.updateMerchantSku(oldOwner, product.getId(), sku.getId(), update));
             assertTrue(checkedOwner.await(10, TimeUnit.SECONDS));
-            shops.changeOwner(shop.getId(), newOwner);
+            CountDownLatch transferStarted = new CountDownLatch(1);
+            var transfer = workers.submit(() -> {
+                transferStarted.countDown();
+                return shops.changeOwner(shop.getId(), newOwner);
+            });
+            assertTrue(transferStarted.await(10, TimeUnit.SECONDS));
             proceed.countDown();
-            ExecutionException rejected = assertThrows(ExecutionException.class,
-                    () -> pending.get(10, TimeUnit.SECONDS));
-            assertEquals(404, ((BusinessException) rejected.getCause()).getCode());
-            assertEquals(new BigDecimal("10.00"), skus.selectById(sku.getId()).getPrice());
+            pending.get(10, TimeUnit.SECONDS);
+            transfer.get(10, TimeUnit.SECONDS);
+            assertEquals(newOwner, shopMapper.selectById(shop.getId()).getOwnerUserId());
+            assertEquals(new BigDecimal("12.00"), skus.selectById(sku.getId()).getPrice());
         } finally {
             proceed.countDown();
             jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='PRODUCT' AND aggregate_id=?", product.getId());

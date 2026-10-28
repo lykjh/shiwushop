@@ -41,7 +41,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     public ShipmentVO ship(Long userId, Long shopId, Long orderId, ShipmentCreateDTO request) {
         requirePositive(shopId);
         requirePositive(orderId);
-        merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireOwnedForUpdate(userId, shopId, "店铺不存在");
         String carrier = clean(request == null ? null : request.carrierName(), 80);
         String trackingNo = clean(request == null ? null : request.trackingNo(), 100);
 

@@ -228,7 +228,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 : text(request.reason(), 500);
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
-            merchantOrder(merchantId, shopId, found.getOrderId());
+            merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
             orders.selectForUpdate(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
             if (sale.getStatus() != AfterSaleStatus.REQUESTED) throw new BusinessException(409, "售后申请已审核");
@@ -281,7 +281,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (request == null || request.restockable() == null) throw new BusinessException(400, "请确认商品是否可重新销售");
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
-            merchantOrder(merchantId, shopId, found.getOrderId());
+            merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
             orders.selectForUpdate(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
             if (sale.getStatus() != AfterSaleStatus.WAITING_RECEIPT)
@@ -324,24 +324,27 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
     @Override
     public AfterSaleVO syncRefund(Long merchantId, Long shopId, Long caseId) {
-        AfterSaleCase sale = requireCase(caseId);
-        Order order = merchantOrder(merchantId, shopId, sale.getOrderId());
-        if (sale.getStatus() == AfterSaleStatus.REFUNDED) return view(caseId);
-        RefundAttempt attempt = refunds.selectLatest(caseId);
-        if (attempt == null || sale.getStatus() != AfterSaleStatus.REFUNDING)
-            throw new BusinessException(409, "尚未发起退款");
-        if (attempt.getStatus() == RefundAttemptStatus.SUCCESS) return view(caseId);
-        if (attempt.getStatus() == RefundAttemptStatus.FAILED)
-            throw new BusinessException(409, "退款记录已标记失败，需要人工核查");
-        if (!LocalDateTime.now(clock).isBefore(attempt.getRequestedAt().plusSeconds(10))) {
-            queryAndSettle(new RefundContext(attempt, paidAttempt(order), false));
-        }
+        RefundContext context = tx().execute(status -> {
+            AfterSaleCase sale = requireCase(caseId);
+            Order order = merchantOrderForUpdate(merchantId, shopId, sale.getOrderId());
+            if (sale.getStatus() == AfterSaleStatus.REFUNDED) return null;
+            RefundAttempt attempt = refunds.selectLatest(caseId);
+            if (attempt == null || sale.getStatus() != AfterSaleStatus.REFUNDING)
+                throw new BusinessException(409, "尚未发起退款");
+            if (attempt.getStatus() == RefundAttemptStatus.SUCCESS) return null;
+            if (attempt.getStatus() == RefundAttemptStatus.FAILED)
+                throw new BusinessException(409, "退款记录已标记失败，需要人工核查");
+            return LocalDateTime.now(clock).isBefore(attempt.getRequestedAt().plusSeconds(10))
+                    ? null : new RefundContext(attempt, paidAttempt(order), false);
+        });
+        // 渠道查询在事务外执行；已受理的退款核对继续由幂等状态保护。
+        if (context != null) queryAndSettle(context);
         return view(caseId);
     }
 
     private RefundContext prepareRefund(Long merchantId, Long shopId, Long caseId) {
         AfterSaleCase found = requireCase(caseId);
-        merchantOrder(merchantId, shopId, found.getOrderId());
+        merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
         Order order = orders.selectForUpdate(found.getOrderId());
         AfterSaleCase sale = cases.selectForUpdate(caseId);
         if (sale.getStatus() == AfterSaleStatus.REFUNDED) return null;
@@ -553,8 +556,17 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     }
 
     private Order merchantOrder(Long merchantId, Long shopId, Long orderId) {
+        return merchantOrder(merchantId, shopId, orderId, false);
+    }
+
+    private Order merchantOrderForUpdate(Long merchantId, Long shopId, Long orderId) {
+        return merchantOrder(merchantId, shopId, orderId, true);
+    }
+
+    private Order merchantOrder(Long merchantId, Long shopId, Long orderId, boolean lock) {
         requireId(shopId);
-        merchantAccess.requireOwned(merchantId, shopId, "店铺不存在");
+        if (lock) merchantAccess.requireOwnedForUpdate(merchantId, shopId, "店铺不存在");
+        else merchantAccess.requireOwned(merchantId, shopId, "店铺不存在");
         Order order = orders.selectById(orderId);
         if (order == null || !shopId.equals(order.getShopId())) throw new BusinessException(404, "订单不存在");
         return order;

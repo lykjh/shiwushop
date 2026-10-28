@@ -93,11 +93,19 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private OwnedProduct requireOwnedProduct(Long userId, Long productId, boolean lock) {
-        Product product = lock ? productMapper.selectForUpdate(productId) : productMapper.selectById(productId);
+        Product product = productMapper.selectById(productId);
         if (product == null || product.getShopId() == null) {
             throw new BusinessException(404, "商品不存在");
         }
-        Shop shop = merchantShopAccess.requireOwned(userId, product.getShopId(), "商品不存在");
+        Shop shop = lock
+                ? merchantShopAccess.requireOwnedForUpdate(userId, product.getShopId(), "商品不存在")
+                : merchantShopAccess.requireOwned(userId, product.getShopId(), "商品不存在");
+        if (lock) {
+            product = productMapper.selectForUpdate(productId);
+            if (product == null || !shop.getId().equals(product.getShopId())) {
+                throw new BusinessException(404, "商品不存在");
+            }
+        }
         return new OwnedProduct(product, shop);
     }
 
@@ -256,7 +264,7 @@ public class ProductServiceImpl implements ProductService {
     public MerchantProductVO createDraft(Long userId, MerchantProductCreateDTO dto) {
         SessionUser.requireId(userId);
 
-        Shop shop = merchantShopAccess.requireOwned(userId, dto.getShopId(), "店铺不存在");
+        Shop shop = merchantShopAccess.requireOwnedForUpdate(userId, dto.getShopId(), "店铺不存在");
 
         validateCategoryAndBrand(dto.getCategoryId(), dto.getBrandId());
 
@@ -491,15 +499,12 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "ID必须大于0");
         }
 
-        OwnedProduct owned = requireOwnedProduct(userId, productId, false);
+        requireOwnedProduct(userId, productId, true);
 
         Sku sku = skuMapper.selectForUpdate(skuId);
         if (sku == null || !productId.equals(sku.getProductId())) {
             throw new BusinessException(404, "SKU不存在");
         }
-
-        // SKU 锁之后重查并锁住店铺，避免转让完成后旧店主继续写入。
-        merchantShopAccess.requireOwnedForUpdate(userId, owned.shop().getId(), "商品不存在");
 
         skuMapper.update(null, new LambdaUpdateWrapper<Sku>()
                 .eq(Sku::getId, skuId)

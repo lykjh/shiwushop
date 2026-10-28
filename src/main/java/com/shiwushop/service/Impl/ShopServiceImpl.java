@@ -88,7 +88,7 @@ public class ShopServiceImpl implements ShopService {
     @Transactional
     public ShopVO changeOwner(Long shopId, Long newOwnerId) {
 
-        Shop shop = shopMapper.selectById(shopId);
+        Shop shop = shopMapper.selectForUpdate(shopId);
         if (shop == null) {
             throw new BusinessException(404, "店铺不存在");
         }

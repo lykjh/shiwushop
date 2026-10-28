@@ -5,15 +5,24 @@ import com.shiwushop.common.auth.CaptchaProofStore;
 import com.shiwushop.common.auth.MerchantShopAccess;
 import com.shiwushop.common.privacy.PrivacyCipher;
 import com.shiwushop.dto.after_sale.AfterSaleReviewDTO;
+import com.shiwushop.dto.after_sale.ReturnReceiptDTO;
 import com.shiwushop.dto.product.MerchantProductCreateDTO;
+import com.shiwushop.dto.product.MerchantProductUpdateDTO;
+import com.shiwushop.dto.product.ProductOptionSaveDTO;
+import com.shiwushop.dto.product.ProductOptionsUpdateDTO;
+import com.shiwushop.dto.product.ProductStatusUpdateDTO;
+import com.shiwushop.dto.sku.MerchantSkuCreateDTO;
 import com.shiwushop.dto.shipment.ShipmentCreateDTO;
 import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.entity.category.Category;
 import com.shiwushop.entity.order.Order;
+import com.shiwushop.entity.product.Product;
 import com.shiwushop.entity.shop.Shop;
 import com.shiwushop.entity.status.OrderStatus;
+import com.shiwushop.entity.status.ProductStatus;
 import com.shiwushop.mapper.category.CategoryMapper;
 import com.shiwushop.mapper.order.OrderMapper;
+import com.shiwushop.mapper.product.ProductMapper;
 import com.shiwushop.mapper.shop.ShopMapper;
 import com.shiwushop.service.AfterSaleService;
 import com.shiwushop.service.ProductService;
@@ -30,6 +39,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -43,9 +56,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
-// 显式运行的缺陷复现；修复前不进入普通 Maven 测试扫描。
-@SpringBootTest
-class ShopOwnerOtherWriteRaceRepro {
+@SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=20")
+class ShopOwnerOtherWriteRaceTests {
     @Autowired private CaptchaProofStore proofs;
     @Autowired private UserService users;
     @Autowired private ShopService shops;
@@ -55,12 +67,13 @@ class ShopOwnerOtherWriteRaceRepro {
     @Autowired private ShopMapper shopMapper;
     @Autowired private CategoryMapper categoryMapper;
     @Autowired private OrderMapper orderMapper;
+    @Autowired private ProductMapper productMapper;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PrivacyCipher cipher;
     @MockitoSpyBean private MerchantShopAccess merchantAccess;
 
     @Test
-    void transferredShopRejectsThreeInFlightMerchantWrites() throws Exception {
+    void transferredShopRejectsAllInFlightMerchantWrites() throws Exception {
         Long oldOwner = user("MERCHANT");
         Long newOwner = user("USER");
         Long buyer = user("USER");
@@ -71,6 +84,12 @@ class ShopOwnerOtherWriteRaceRepro {
         shopMapper.insert(shop);
         Category root = category(null, 1);
         Category child = category(root.getId(), 2);
+        Product existing = new Product();
+        existing.setShopId(shop.getId());
+        existing.setCategoryId(child.getId());
+        existing.setName("转让前商品-" + UUID.randomUUID());
+        existing.setStatus(ProductStatus.DRAFT);
+        productMapper.insert(existing);
         Order shipmentOrder = order(shop.getId(), buyer);
         Order afterSaleOrder = order(shop.getId(), buyer);
         jdbc.update("INSERT INTO after_sale_cases (order_id,type,status,reason,refund_amount,requested_at) "
@@ -78,47 +97,77 @@ class ShopOwnerOtherWriteRaceRepro {
         Long caseId = jdbc.queryForObject("SELECT id FROM after_sale_cases WHERE order_id=?", Long.class,
                 afterSaleOrder.getId());
 
-        CountDownLatch checkedOwner = new CountDownLatch(3);
+        CountDownLatch checkedOwner = new CountDownLatch(10);
         CountDownLatch proceed = new CountDownLatch(1);
         doAnswer(call -> {
-            Shop checked = (Shop) call.callRealMethod();
             checkedOwner.countDown();
             assertTrue(proceed.await(10, TimeUnit.SECONDS));
-            return checked;
-        }).when(merchantAccess).requireOwned(eq(oldOwner), eq(shop.getId()), anyString());
+            return call.callRealMethod();
+        }).when(merchantAccess).requireOwnedForUpdate(eq(oldOwner), eq(shop.getId()), anyString());
 
-        try (var workers = Executors.newFixedThreadPool(3)) {
+        try (var workers = Executors.newFixedThreadPool(10)) {
             MerchantProductCreateDTO draft = new MerchantProductCreateDTO();
             draft.setShopId(shop.getId());
             draft.setCategoryId(child.getId());
             draft.setName("转让后创建-" + UUID.randomUUID());
-            Future<?> product = workers.submit(() -> products.createDraft(oldOwner, draft));
-            Future<?> shipment = workers.submit(() -> shipments.ship(oldOwner, shop.getId(),
-                    shipmentOrder.getId(), new ShipmentCreateDTO("顺丰", "RACE-1")));
-            Future<?> review = workers.submit(() -> afterSales.review(oldOwner, shop.getId(),
-                    caseId, new AfterSaleReviewDTO(true, null)));
+            MerchantProductUpdateDTO update = new MerchantProductUpdateDTO();
+            update.setCategoryId(child.getId());
+            update.setName("转让后修改");
+            ProductOptionSaveDTO option = new ProductOptionSaveDTO();
+            option.setName("颜色");
+            option.setValues(List.of("红色"));
+            ProductOptionsUpdateDTO options = new ProductOptionsUpdateDTO();
+            options.setOptions(List.of(option));
+            MerchantSkuCreateDTO sku = new MerchantSkuCreateDTO();
+            sku.setOptionValueIds(List.of(1L));
+            sku.setPrice(new BigDecimal("10.00"));
+            sku.setStock(1);
+            ProductStatusUpdateDTO status = new ProductStatusUpdateDTO();
+            status.setStatus("OFF_SALE");
+            Map<String, Callable<?>> actions = new LinkedHashMap<>();
+            actions.put("createDraft", () -> products.createDraft(oldOwner, draft));
+            actions.put("updateProduct", () -> products.updateMerchantProduct(oldOwner, existing.getId(), update));
+            actions.put("replaceOptions", () -> products.replaceOptions(oldOwner, existing.getId(), options));
+            actions.put("createSku", () -> products.createMerchantSku(oldOwner, existing.getId(), sku));
+            actions.put("updateStatus", () -> products.updateMerchantProductStatus(oldOwner, existing.getId(), status));
+            actions.put("ship", () -> shipments.ship(oldOwner, shop.getId(), shipmentOrder.getId(),
+                    new ShipmentCreateDTO("顺丰", "RACE-1")));
+            actions.put("review", () -> afterSales.review(oldOwner, shop.getId(), caseId,
+                    new AfterSaleReviewDTO(true, null)));
+            actions.put("receiveReturn", () -> afterSales.receiveReturn(oldOwner, shop.getId(), caseId,
+                    new ReturnReceiptDTO(false)));
+            actions.put("refund", () -> afterSales.refund(oldOwner, shop.getId(), caseId));
+            actions.put("syncRefund", () -> afterSales.syncRefund(oldOwner, shop.getId(), caseId));
+            Map<String, Future<?>> pending = new LinkedHashMap<>();
+            actions.forEach((name, action) -> pending.put(name, workers.submit(action)));
             try {
-                assertTrue(checkedOwner.await(10, TimeUnit.SECONDS), "三个请求都应停在归属校验后");
+                assertTrue(checkedOwner.await(10, TimeUnit.SECONDS), "十个请求都应停在店铺行锁前");
                 shops.changeOwner(shop.getId(), newOwner);
             } finally {
                 proceed.countDown();
             }
-            String productResult = outcome(product);
-            String shipmentResult = outcome(shipment);
-            String reviewResult = outcome(review);
+            Map<String, String> results = new LinkedHashMap<>();
+            pending.forEach((name, future) -> {
+                try {
+                    results.put(name, outcome(future));
+                } catch (Exception error) {
+                    throw new AssertionError(name, error);
+                }
+            });
             int createdProducts = jdbc.queryForObject("SELECT COUNT(*) FROM products WHERE shop_id=?",
                     Integer.class, shop.getId());
             int createdShipments = jdbc.queryForObject("SELECT COUNT(*) FROM shipments WHERE order_id=?",
                     Integer.class, shipmentOrder.getId());
             String saleStatus = jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?",
                     String.class, caseId);
-            System.out.printf("转让后旧店主写入：商品=%s/%d，发货=%s/%d，售后审核=%s/%s%n",
-                    productResult, createdProducts, shipmentResult, createdShipments, reviewResult, saleStatus);
+            System.out.printf("转让后旧店主写入：%s；商品=%d，发货=%d，售后=%s%n",
+                    results, createdProducts, createdShipments, saleStatus);
             assertAll(
-                    () -> assertEquals("REJECTED_404", productResult, "商品创建"),
-                    () -> assertEquals("REJECTED_404", shipmentResult, "商家发货"),
-                    () -> assertEquals("REJECTED_404", reviewResult, "售后审核"),
-                    () -> assertEquals(0, createdProducts, "转让后新增商品行数"),
+                    results.entrySet().stream()
+                            .map(entry -> (org.junit.jupiter.api.function.Executable) () ->
+                                    assertEquals("REJECTED_404", entry.getValue(), entry.getKey())));
+            assertAll(
+                    () -> assertEquals(1, createdProducts, "转让后商品行数"),
                     () -> assertEquals(0, createdShipments, "转让后新增发货行数"),
                     () -> assertEquals("REQUESTED", saleStatus, "转让后售后状态"));
         } finally {
@@ -129,6 +178,16 @@ class ShopOwnerOtherWriteRaceRepro {
             jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id IN "
                     + "(SELECT id FROM shipments WHERE order_id=?)", shipmentOrder.getId());
             jdbc.update("DELETE FROM shipments WHERE order_id=?", shipmentOrder.getId());
+            jdbc.update("DELETE FROM refund_attempts WHERE case_id=?", caseId);
+            jdbc.update("DELETE FROM return_shipments WHERE case_id=?", caseId);
+            jdbc.update("DELETE FROM after_sale_items WHERE case_id=?", caseId);
+            jdbc.update("DELETE FROM sku_option_values WHERE sku_id IN (SELECT id FROM skus WHERE product_id IN "
+                    + "(SELECT id FROM products WHERE shop_id=?))", shop.getId());
+            jdbc.update("DELETE FROM skus WHERE product_id IN (SELECT id FROM products WHERE shop_id=?)", shop.getId());
+            jdbc.update("DELETE FROM product_option_values WHERE option_id IN (SELECT id FROM product_options "
+                    + "WHERE product_id IN (SELECT id FROM products WHERE shop_id=?))", shop.getId());
+            jdbc.update("DELETE FROM product_options WHERE product_id IN (SELECT id FROM products WHERE shop_id=?)",
+                    shop.getId());
             jdbc.update("DELETE FROM after_sale_cases WHERE id=?", caseId);
             jdbc.update("DELETE FROM products WHERE shop_id=?", shop.getId());
             jdbc.update("DELETE FROM orders WHERE shop_id=?", shop.getId());
