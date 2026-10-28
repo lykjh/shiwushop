@@ -32,6 +32,7 @@ MySQL 容器自动创建测试库。手工安装数据库时先执行 [`create_d
 ## 文档
 
 - [API 路由概览](docs/API.md)
+- [现有功能需求](docs/REQUIREMENTS.md)
 - [部署说明](docs/DEPLOYMENT.md)
 - [本地验证记录](docs/VERIFICATION.md)
 - [搜索事件运行说明](deploy/search-worker.md)
