@@ -62,3 +62,9 @@
 - 集成测试：本机独立 MySQL 8.0.29 与 Redis 绑定 `127.0.0.1:13306/16379`，`CategoryMoveRaceTests` 和 `ShopOwnerSkuRaceTests` 共 2 项通过；原始输出 `logs/race-integration.log`。
 - 完整 `mvn verify`：283 项中 276 项通过、1 项失败、6 项按条件跳过。唯一失败是本轮开始前已有未提交改动的 `MerchantSkuUpdateTests` 新增的 `MERCHANT_ADJUST` 库存流水断言；SKU 更新实现尚未写该流水。首次运行另有本地 MySQL 连接数耗尽，调高这个隔离实例的连接上限后重跑，剩余失败仅此一项。原始输出 `logs/race-full-verify.log` 与 `logs/race-full-verify-retry.log`。
 - 本次只修改 SKU 更新路径的店主转让竞态；其他商家写入路径仍需逐一检查归属校验与事务写入间的时序。
+
+## 店主转让与其他商家写入的并发复现
+
+2026-10-28 在 `codex/shop-owner-race-tests` 分支用隔离的本机 MySQL 8.0.29 与 Redis，先复跑 `ShopOwnerSkuRaceTests`：1 项通过，旧店主在转让提交后更新 SKU 被拒绝；原始输出 `logs/owner-race-sku.log`。
+
+显式运行 `mvn -B '-Dtest=ShopOwnerOtherWriteRaceRepro' '-Dspring.profiles.active=test' '-Dspring.config.import=optional:file:./target/no-local.yml' test`。用例在三项真实服务调用完成店铺归属校验后暂停，提交店主转让，再放行写入。结果：旧店主新增商品成功（数据库新增 1 行）、发货成功（新增 1 行）、售后审核成功（状态 `REQUESTED` 变为 `REFUNDING`）。用例要求三项都拒绝，因此报告 1 项失败、内部 6 个断言失败；原始输出 `logs/owner-race-other-write.log`。测试在 `finally` 清理创建的数据，类名使用 `Repro`，不纳入普通 `mvn verify` 扫描。其余同样使用普通归属读取的商家写入方法尚未逐项执行并发交错测试。
