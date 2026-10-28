@@ -15,3 +15,16 @@
 - 定向单元、HTTP 假服务与控制器切片测试：`mvn -B '-Dtest=DiscoveryServiceTests,SearchGatewayTests,DiscoveryControllerTests' test`，11 项通过；日志保存在本机 `logs/S02-targeted-tests.log`。
 - 隔离 MySQL 8／Redis 7 的全套测试：`mvn -B '-Dspring.profiles.active=test' '-Dspring.config.import=optional:file:./target/no-local.yml' test`，272 项中 266 项通过、6 项按条件跳过，0 失败、0 错误；日志保存在本机 `logs/S02-full-tests.log`。测试连接参数按 README 指向 `127.0.0.1:13306` 和 `127.0.0.1:16379`。
 - 测试覆盖末页释放、异常释放、下一页保留、响应更新 PIT ID、DELETE 请求体和删除失败不影响调用方。未连接真实 OpenSearch；真实集群的 PIT 活跃量与删除失败日志仍需在启用发现功能后核对。中途离开的浏览继续由两分钟 `keep_alive` 回收。
+
+## M01 图片读取
+
+2026-10-28 在独立分支 `codex/m01-media-streaming` 验证：
+
+- 单元测试 `MediaReadUnitTests`：确认公开图片经过可见性检查后返回文件资源。
+- Controller 切片测试 `MediaControllerSliceTests`：确认公开图片返回 `no-cache`、ETag，并在匹配时返回无正文的 304。
+- 集成测试 `MediaSecurityTests`、`ReviewCreateTests`：使用隔离 MySQL、Redis 和真实图片，确认私有图片为 `no-store`，公开图片可重验证，商品下架、解除图片引用及评价隐藏后，旧 ETag 请求返回 404。
+- 完整测试集运行 271 项，0 失败、0 错误、6 跳过；原始输出见 `logs/M01-full-tests.log`。新增撤销场景的定向测试输出见 `logs/M01-media-final-tests.log`。运行日志保存在本地，不提交到 Git。
+
+## S02 与 M01 合并验证
+
+2026-10-28 将两个独立分支合入集成分支，使用隔离 MySQL 8 和 Redis 7 运行完整测试集：274 项，0 失败、0 错误、6 跳过，构建成功。原始输出保存在本机 `logs/merge-S02-M01-full-tests.log`；该运行日志不提交到 Git。

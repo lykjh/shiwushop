@@ -6,6 +6,7 @@ import com.shiwushop.service.MediaService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
+import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,12 +29,13 @@ public class MediaController {
     }
 
     @GetMapping("/{mediaId}")
-    public ResponseEntity<byte[]> read(@PathVariable Long mediaId, HttpServletRequest request) {
+    public ResponseEntity<Resource> read(@PathVariable Long mediaId, HttpServletRequest request) {
         MediaService.ImageFile image = service.read(mediaId, SessionUser.currentId(request));
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
+                .cacheControl(image.owned() ? CacheControl.noStore() : CacheControl.noCache())
+                .eTag(image.etag())
                 .contentType(MediaType.parseMediaType(image.mimeType()))
-                .body(image.bytes());
+                .body(image.resource());
     }
 
     public record Uploaded(Long id) {}

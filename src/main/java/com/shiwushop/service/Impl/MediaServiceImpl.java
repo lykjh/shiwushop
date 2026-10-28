@@ -7,6 +7,7 @@ import com.shiwushop.mapper.media.MediaAssetMapper;
 import com.shiwushop.service.MediaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -106,9 +107,12 @@ public class MediaServiceImpl implements MediaService {
         Path path = root.resolve(asset.getStorageKey()).normalize();
         if (!path.getParent().equals(root)) throw new BusinessException(503, "图片暂时无法读取");
         try {
-            if (Files.isSymbolicLink(path) || Files.size(path) > MAX_BYTES)
+            long size = Files.size(path);
+            if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)
+                    || size == 0 || size > MAX_BYTES)
                 throw new BusinessException(503, "图片暂时无法读取");
-            return new ImageFile(Files.readAllBytes(path), asset.getMimeType(), owner);
+            // 文件名由上传时生成且不再修改，可作为条件请求的版本标识。
+            return new ImageFile(new FileSystemResource(path), asset.getMimeType(), owner, asset.getStorageKey());
         } catch (IOException e) {
             throw new BusinessException(503, "图片暂时无法读取", e);
         }
