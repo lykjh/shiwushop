@@ -28,3 +28,12 @@
 ## S02 与 M01 合并验证
 
 2026-10-28 将两个独立分支合入集成分支，使用隔离 MySQL 8 和 Redis 7 运行完整测试集：274 项，0 失败、0 错误、6 跳过，构建成功。原始输出保存在本机 `logs/merge-S02-M01-full-tests.log`；该运行日志不提交到 Git。
+
+## M02 图片上传小范围内存修复
+
+2026-10-28 在 `codex/m02-upload-streaming` 分支验证，设计依据与剩余边界见 [M02_UPLOAD_STREAMING.md](M02_UPLOAD_STREAMING.md)。只替换上传服务的原图读取方式；接口、数据库和部署配置均未变化。
+
+- 单元测试 `MediaUploadUnitTests`：2 项通过，覆盖流式读取、实际字节上限、哈希与临时文件清理；原始输出 `logs/M02-small-unit-final.log`。
+- 切片测试 `MediaControllerSliceTests`：1 项通过；原始输出 `logs/M02-small-targeted.log`。
+- 集成测试 `MediaSecurityTests`：隔离 MySQL 8 和 Redis 7 上 3 项通过；原始输出 `logs/M02-small-integration.log`。
+- 完整 `mvn verify`：使用隔离库 `shiwushop_m02_small`，276 项中 270 项通过、6 项按条件跳过，0 失败、0 错误，JAR 打包成功；原始输出 `logs/M02-small-verify-final.log`。日志保存在本机，不提交到 Git。

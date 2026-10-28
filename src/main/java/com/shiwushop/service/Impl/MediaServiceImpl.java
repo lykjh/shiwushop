@@ -16,8 +16,9 @@ import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -45,17 +46,29 @@ public class MediaServiceImpl implements MediaService {
         if (file == null || file.isEmpty()) throw new BusinessException(400, "图片不能为空");
         if (file.getSize() > MAX_BYTES) throw new BusinessException(413, "图片不能超过 10 MiB");
         if (!uploadSlots.tryAcquire()) throw new BusinessException(429, "图片处理繁忙，请稍后重试");
+        Path originalFile = null;
         Path temporary = null;
         Path destination = null;
         boolean saved = false;
         try {
-            byte[] original = file.getBytes();
-            if (original.length == 0 || original.length > MAX_BYTES)
-                throw new BusinessException(413, "图片不能超过 10 MiB");
-            // 以实际解码结果为准并重新编码，避免信任文件名、Content-Type 或原始文件内容。
-            DecodedImage decoded = decode(original);
             Path root = Path.of(storageRoot).toAbsolutePath().normalize();
             Files.createDirectories(root);
+            originalFile = Files.createTempFile(root, "source-", ".tmp");
+            MessageDigest digest = sha256();
+            long originalSize = 0;
+            try (InputStream input = file.getInputStream(); OutputStream output = Files.newOutputStream(originalFile)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    originalSize += read;
+                    if (originalSize > MAX_BYTES) throw new BusinessException(413, "图片不能超过 10 MiB");
+                    digest.update(buffer, 0, read);
+                    output.write(buffer, 0, read);
+                }
+            }
+            if (originalSize == 0) throw new BusinessException(400, "图片不能为空");
+            // 以实际解码结果为准并重新编码，避免信任文件名、Content-Type 或原始文件内容。
+            DecodedImage decoded = decode(originalFile);
             temporary = Files.createTempFile(root, "upload-", ".tmp");
             if (!ImageIO.write(decoded.image(), decoded.format(), temporary.toFile()))
                 throw new BusinessException(400, "图片格式不支持");
@@ -70,10 +83,10 @@ public class MediaServiceImpl implements MediaService {
             asset.setUploadedByUserId(userId);
             asset.setStorageKey(key);
             asset.setMimeType(decoded.mimeType());
-            asset.setByteSize((long) original.length);
+            asset.setByteSize(originalSize);
             asset.setWidth(decoded.image().getWidth());
             asset.setHeight(decoded.image().getHeight());
-            asset.setSha256(sha256(original));
+            asset.setSha256(digest.digest());
             asset.setStatus("READY");
             assets.insert(asset);
             saved = true;
@@ -84,6 +97,7 @@ public class MediaServiceImpl implements MediaService {
             throw new BusinessException(503, "图片暂时无法保存", e);
         } finally {
             // 原子移动先于数据库写入；写库失败时清理已经落盘的文件。
+            if (originalFile != null) deleteQuietly(originalFile);
             if (temporary != null) deleteQuietly(temporary);
             if (destination != null && !saved) {
                 deleteQuietly(destination);
@@ -118,8 +132,8 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
-    private static DecodedImage decode(byte[] bytes) throws IOException {
-        try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+    private static DecodedImage decode(Path path) throws IOException {
+        try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
             if (input == null) throw new BusinessException(400, "图片格式不支持");
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) throw new BusinessException(400, "图片格式不支持");
@@ -161,9 +175,9 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
-    private static byte[] sha256(byte[] data) {
+    private static MessageDigest sha256() {
         try {
-            return MessageDigest.getInstance("SHA-256").digest(data);
+            return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
