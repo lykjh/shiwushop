@@ -15,8 +15,16 @@ public class MerchantShopAccess {
     private final AccountAccess accountAccess;
 
     public Shop requireOwned(Long userId, Long shopId, String notFoundMessage) {
+        return requireOwned(userId, shopId, notFoundMessage, false);
+    }
+
+    public Shop requireOwnedForUpdate(Long userId, Long shopId, String notFoundMessage) {
+        return requireOwned(userId, shopId, notFoundMessage, true);
+    }
+
+    private Shop requireOwned(Long userId, Long shopId, String notFoundMessage, boolean lock) {
         SessionUser.requireId(userId);
-        Shop shop = shopMapper.selectById(shopId);
+        Shop shop = lock ? shopMapper.selectForUpdate(shopId) : shopMapper.selectById(shopId);
         if (shop == null || !userId.equals(shop.getOwnerUserId())) {
             throw new BusinessException(404, notFoundMessage);
         }

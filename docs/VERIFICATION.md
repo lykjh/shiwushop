@@ -53,3 +53,12 @@
 首次补测发现双消费者用例在数据库时间尚未到期时发送消息；MySQL 将发货时间舍入到下一秒，消费记录已写入而运单仍待确认。测试现等待数据库读回的到期时间再投递。积压用例同时等待消费者完全停止及消息全部入队，避免异步时序造成误报。生产代码未修改。
 
 常规 `mvn verify` 再次运行 279 项，0 失败、0 错误、6 项按 live 开关跳过，JAR 打包成功；原始输出 `logs/RABBIT-default-verify.log`。上述 live 补测已单独执行这 6 项。
+
+## 并发复现修复
+
+2026-10-28，在 `codex/fix-race-findings` 分支处理分类互相移动成环、转让后旧店主更新 SKU、购物车写入影响 0 行仍返回成功三项。参考 [mall 的购物车接口](https://github.com/macrozheng/mall/blob/master/mall-portal/src/main/java/com/macro/mall/portal/controller/OmsCartItemController.java) 对写入结果的处理方式，最终按本项目的异常契约返回 404；分类与店铺使用现有事务和数据库行锁，不复制外部实现。
+
+- 单元测试：`mvn -B '-Dtest=CartWriteRaceUnitTests' test`，2 项通过；原始输出保存在本机 `logs/race-cart-unit.log`。
+- 集成测试：本机独立 MySQL 8.0.29 与 Redis 绑定 `127.0.0.1:13306/16379`，`CategoryMoveRaceTests` 和 `ShopOwnerSkuRaceTests` 共 2 项通过；原始输出 `logs/race-integration.log`。
+- 完整 `mvn verify`：283 项中 276 项通过、1 项失败、6 项按条件跳过。唯一失败是本轮开始前已有未提交改动的 `MerchantSkuUpdateTests` 新增的 `MERCHANT_ADJUST` 库存流水断言；SKU 更新实现尚未写该流水。首次运行另有本地 MySQL 连接数耗尽，调高这个隔离实例的连接上限后重跑，剩余失败仅此一项。原始输出 `logs/race-full-verify.log` 与 `logs/race-full-verify-retry.log`。
+- 本次只修改 SKU 更新路径的店主转让竞态；其他商家写入路径仍需逐一检查归属校验与事务写入间的时序。

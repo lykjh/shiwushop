@@ -172,14 +172,18 @@ public class CartServiceImpl implements CartService {
     public CartItemVO updateQuantity(Long userId, Long id, Integer quantity) {
         CartItem item = ownedItem(userId, id);
         item.setQuantity(quantity);
-        cartItemMapper.updateById(item);
+        if (cartItemMapper.updateById(item) != 1) {
+            throw new BusinessException(404, "购物车商品不存在");
+        }
         return toVO(item);
     }
 
     @Override
     public void delete(Long userId, Long id) {
         ownedItem(userId, id);
-        cartItemMapper.deleteById(id);
+        if (cartItemMapper.deleteById(id) != 1) {
+            throw new BusinessException(404, "购物车商品不存在");
+        }
     }
 
     @Override

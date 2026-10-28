@@ -34,6 +34,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryVO create(CategoryCreateDTO dto) {
+        categoryMapper.lockTree();
         String name = dto.getName().strip();
 
         if (name.isEmpty() || name.codePointCount(0, name.length()) > 50) {
@@ -82,6 +83,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryVO update(Long id, CategoryUpdateDTO dto) {
+        categoryMapper.lockTree();
         Category category = categoryMapper.selectById(id);
         if (category == null) {
             throw new BusinessException(404, "分类不存在");
@@ -155,6 +157,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void delete(Long id) {
+        categoryMapper.lockTree();
         if(categoryMapper.selectById(id)==null){
             throw new BusinessException(404, "分类不存在");
         }

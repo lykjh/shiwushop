@@ -491,12 +491,15 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "ID必须大于0");
         }
 
-        requireOwnedProduct(userId, productId, false);
+        OwnedProduct owned = requireOwnedProduct(userId, productId, false);
 
         Sku sku = skuMapper.selectForUpdate(skuId);
         if (sku == null || !productId.equals(sku.getProductId())) {
             throw new BusinessException(404, "SKU不存在");
         }
+
+        // SKU 锁之后重查并锁住店铺，避免转让完成后旧店主继续写入。
+        merchantShopAccess.requireOwnedForUpdate(userId, owned.shop().getId(), "商品不存在");
 
         skuMapper.update(null, new LambdaUpdateWrapper<Sku>()
                 .eq(Sku::getId, skuId)
