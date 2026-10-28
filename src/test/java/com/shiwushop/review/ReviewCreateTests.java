@@ -21,6 +21,7 @@ import com.shiwushop.mapper.shop.ShopMapper;
 import com.shiwushop.mapper.product.SkuMapper;
 import com.shiwushop.service.UserService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import com.shiwushop.common.auth.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,7 +33,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -43,10 +48,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+@SpringBootTest(properties = {
+        "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "shop.media.root=./target/review-media-tests"
+})
 @AutoConfigureMockMvc
 @Transactional
 class ReviewCreateTests {
+    private final List<Path> mediaFiles = new ArrayList<>();
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
     @Autowired private UserService users;
@@ -126,6 +135,8 @@ class ReviewCreateTests {
                 .andExpect(jsonPath("$.data.id").isNumber()).andReturn();
         assertEquals(200, created.getResponse().getStatus(), created.getResponse().getContentAsString());
         assertEquals(true, mediaAssets.isPubliclyReferenced(mediaId));
+        String mediaEtag = mvc.perform(get("/media/{id}", mediaId))
+                .andExpect(status().isOk()).andReturn().getResponse().getHeader("ETag");
         Long reviewId = reviews.selectIdByOrderItemId(itemId);
         mvc.perform(get("/products/{productId}/review-summary", product.getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewCount").value(1));
@@ -218,6 +229,8 @@ class ReviewCreateTests {
                 .andExpect(status().isOk());
         assertEquals(2, searchEvents(product.getId()));
         assertEquals(false, mediaAssets.isPubliclyReferenced(mediaId));
+        mvc.perform(get("/media/{id}", mediaId).header("If-None-Match", mediaEtag))
+                .andExpect(status().isNotFound());
         mvc.perform(get(listPath, product.getId())).andExpect(jsonPath("$.data.items.length()").value(0));
         mvc.perform(get("/products/{productId}/review-summary", product.getId()))
                 .andExpect(jsonPath("$.data.reviewCount").value(0));
@@ -320,12 +333,22 @@ class ReviewCreateTests {
                 + "AND aggregate_id=?", Integer.class, productId);
     }
 
-    private Long media(Long userId) {
-        String storageKey = "review-test-" + UUID.randomUUID() + ".png";
+    private Long media(Long userId) throws Exception {
+        String storageKey = UUID.randomUUID() + ".png";
+        Path root = Path.of("target/review-media-tests");
+        Files.createDirectories(root);
+        Path file = root.resolve(storageKey);
+        Files.write(file, new byte[]{1});
+        mediaFiles.add(file);
         jdbc.update("INSERT INTO media_assets (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status) "
                         + "VALUES (?, ?, 'image/png', 1, 1, 1, UNHEX(REPEAT('0', 64)), 'READY')",
                 userId, storageKey);
         return jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key=?", Long.class, storageKey);
+    }
+
+    @AfterEach
+    void deleteMediaFiles() throws Exception {
+        for (Path file : mediaFiles) Files.deleteIfExists(file);
     }
 
     private MockHttpSession session(Long userId) {

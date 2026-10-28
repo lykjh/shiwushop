@@ -37,6 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -72,7 +73,9 @@ class MediaSecurityTests {
         mediaIds.add(mediaId);
         assertEquals("image/png", jdbc.queryForObject("SELECT mime_type FROM media_assets WHERE id=?", String.class, mediaId));
         byte[] output = mvc.perform(get("/media/{id}", mediaId).session(owner))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andReturn().getResponse().getContentAsByteArray();
         BufferedImage decoded = ImageIO.read(new java.io.ByteArrayInputStream(output));
         assertNotNull(decoded);
         assertEquals(0x123456, decoded.getRGB(0, 0) & 0xffffff);
@@ -92,9 +95,20 @@ class MediaSecurityTests {
         productIds.add(productId);
         jdbc.update("INSERT INTO product_images (product_id,media_id,sort_order,is_cover) VALUES (?,?,0,1)",
                 productId, mediaId);
-        mvc.perform(get("/media/{id}", mediaId)).andExpect(status().isOk());
+        String etag = mvc.perform(get("/media/{id}", mediaId))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-cache"))
+                .andReturn().getResponse().getHeader("ETag");
+        mvc.perform(get("/media/{id}", mediaId).header("If-None-Match", etag))
+                .andExpect(status().isNotModified());
+        jdbc.update("DELETE FROM product_images WHERE product_id=?", productId);
+        mvc.perform(get("/media/{id}", mediaId).header("If-None-Match", etag))
+                .andExpect(status().isNotFound());
+        jdbc.update("INSERT INTO product_images (product_id,media_id,sort_order,is_cover) VALUES (?,?,0,1)",
+                productId, mediaId);
         jdbc.update("UPDATE products SET status='OFF_SALE' WHERE id=?", productId);
-        mvc.perform(get("/media/{id}", mediaId)).andExpect(status().isNotFound());
+        mvc.perform(get("/media/{id}", mediaId).header("If-None-Match", etag))
+                .andExpect(status().isNotFound());
     }
 
     @Test
