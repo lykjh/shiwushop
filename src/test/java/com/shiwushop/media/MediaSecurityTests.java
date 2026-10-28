@@ -7,6 +7,7 @@ import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.user.LoginTestRequest;
 import com.shiwushop.service.UserService;
 import com.shiwushop.service.MediaService;
+import com.shiwushop.service.impl.MediaOrphanCleanup;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +37,8 @@ import java.util.zip.CRC32;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,6 +54,7 @@ class MediaSecurityTests {
     @Autowired private UserService users;
     @Autowired private CaptchaProofStore proofs;
     @Autowired private MediaService mediaService;
+    @Autowired private MediaOrphanCleanup orphanCleanup;
     @Autowired private JdbcTemplate jdbc;
     private final List<Long> userIds = new ArrayList<>();
     private final List<Long> mediaIds = new ArrayList<>();
@@ -155,6 +162,29 @@ class MediaSecurityTests {
             ReflectionTestUtils.setField(mediaService, "storageRoot", originalRoot);
             Files.deleteIfExists(blocker);
         }
+    }
+
+    @Test
+    void cleanupKeepsDatabaseBackedImageAndRemovesOldOrphan() throws Exception {
+        account();
+        Path root = Path.of("target/media-security-tests");
+        Files.createDirectories(root);
+        String retainedKey = UUID.randomUUID() + ".png";
+        String orphanKey = UUID.randomUUID() + ".png";
+        Path retained = Files.writeString(root.resolve(retainedKey), "retained");
+        Path orphan = Files.writeString(root.resolve(orphanKey), "orphan");
+        FileTime old = FileTime.from(Instant.now().minus(48, ChronoUnit.HOURS));
+        Files.setLastModifiedTime(retained, old);
+        Files.setLastModifiedTime(orphan, old);
+        jdbc.update("INSERT INTO media_assets (uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) "
+                        + "VALUES (?,?,'image/png',8,1,1,UNHEX(SHA2(?,256)),'READY')",
+                userIds.getFirst(), retainedKey, retainedKey);
+        mediaIds.add(jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key=?", Long.class, retainedKey));
+
+        orphanCleanup.clean();
+
+        assertTrue(Files.exists(retained));
+        assertFalse(Files.exists(orphan));
     }
 
     private MockHttpSession account() throws Exception {

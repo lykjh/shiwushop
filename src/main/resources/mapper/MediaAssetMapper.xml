@@ -20,6 +20,10 @@
         FROM media_assets WHERE id = #{mediaId} AND status = 'READY'
     </select>
 
+    <select id="existsByStorageKey" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM media_assets WHERE storage_key = #{storageKey})
+    </select>
+
     <select id="isPubliclyReferenced" resultType="boolean" flushCache="true">
         SELECT EXISTS (
             SELECT 1 FROM product_images pi

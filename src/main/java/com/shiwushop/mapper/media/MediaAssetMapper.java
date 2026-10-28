@@ -11,4 +11,6 @@ public interface MediaAssetMapper {
     MediaAsset selectReady(@Param("mediaId") Long mediaId);
 
     boolean isPubliclyReferenced(@Param("mediaId") Long mediaId);
+
+    boolean existsByStorageKey(@Param("storageKey") String storageKey);
 }
