@@ -9,24 +9,24 @@ import com.shiwushop.entity.status.PaymentAttemptStatus;
 
 import com.shiwushop.entity.status.ProductStatus;
 
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.entity.order.Order;
-import com.shiwushop.entity.product.Product;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.entity.product.Sku;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.commerce.entity.order.Order;
+import com.shiwushop.catalog.entity.product.Product;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.entity.product.Sku;
 import com.shiwushop.entity.user.UserProfile;
 import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.common.privacy.PrivacyCipher;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.mapper.category.CategoryMapper;
-import com.shiwushop.mapper.order.OrderMapper;
-import com.shiwushop.mapper.payment.PaymentAttemptMapper;
-import com.shiwushop.mapper.product.ProductMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
-import com.shiwushop.mapper.product.SkuMapper;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
+import com.shiwushop.commerce.mapper.payment.PaymentAttemptMapper;
+import com.shiwushop.catalog.mapper.product.ProductMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.service.UserService;
 import org.springframework.jdbc.core.JdbcTemplate;
-import com.shiwushop.service.PaymentService;
+import com.shiwushop.commerce.service.PaymentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.auth.CaptchaProofStore;
@@ -398,7 +398,7 @@ class PaymentFlowTests {
         Sku sku = fixture.sku();
         sku.setStock(1);
         skuMapper.updateById(sku);
-        com.shiwushop.entity.payment.PaymentAttempt attempt = pendingAttempt(fixture, false);
+        com.shiwushop.commerce.entity.payment.PaymentAttempt attempt = pendingAttempt(fixture, false);
         when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "WAIT_BUYER_PAY", attempt.getOutTradeNo(), null, new BigDecimal("20.00")));
         when(gateway.close(attempt.getOutTradeNo())).thenReturn(true);
@@ -450,7 +450,7 @@ class PaymentFlowTests {
         Fixture guarded = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
         guarded.sku().setStock(1);
         skuMapper.updateById(guarded.sku());
-        com.shiwushop.entity.payment.PaymentAttempt safe = pendingAttempt(guarded, true);
+        com.shiwushop.commerce.entity.payment.PaymentAttempt safe = pendingAttempt(guarded, true);
         when(gateway.query(safe.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", safe.getOutTradeNo(), null, null));
         when(gateway.cancel(safe.getOutTradeNo())).thenReturn(AlipayGateway.CancelResult.NO_TRADE);
@@ -467,7 +467,7 @@ class PaymentFlowTests {
         Fixture legacy = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
         legacy.sku().setStock(1);
         skuMapper.updateById(legacy.sku());
-        com.shiwushop.entity.payment.PaymentAttempt unsafe = pendingAttempt(legacy, false);
+        com.shiwushop.commerce.entity.payment.PaymentAttempt unsafe = pendingAttempt(legacy, false);
         when(gateway.query(unsafe.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", unsafe.getOutTradeNo(), null, null));
         when(gateway.cancel(unsafe.getOutTradeNo())).thenReturn(AlipayGateway.CancelResult.NO_TRADE);
@@ -478,7 +478,7 @@ class PaymentFlowTests {
         assertEquals(0, searchEvents(legacy.product()));
 
         Fixture awaitingQr = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
-        com.shiwushop.entity.payment.PaymentAttempt qrStillValid = pendingAttempt(awaitingQr, true);
+        com.shiwushop.commerce.entity.payment.PaymentAttempt qrStillValid = pendingAttempt(awaitingQr, true);
         qrStillValid.setQrExpiresAt(LocalDateTime.now(businessClock).plusMinutes(1));
         paymentMapper.updateById(qrStillValid);
         when(gateway.query(qrStillValid.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
@@ -494,7 +494,7 @@ class PaymentFlowTests {
         Fixture fixture = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
         fixture.sku().setStock(1);
         skuMapper.updateById(fixture.sku());
-        com.shiwushop.entity.payment.PaymentAttempt attempt = pendingAttempt(fixture, true);
+        com.shiwushop.commerce.entity.payment.PaymentAttempt attempt = pendingAttempt(fixture, true);
         String outTradeNo = attempt.getOutTradeNo();
 
         when(gateway.query(outTradeNo)).thenThrow(new BusinessException(503, "模拟查询超时"));
@@ -530,7 +530,7 @@ class PaymentFlowTests {
                 Integer.class, fixture.order().getId()));
     }
 
-    private void assertPendingWithoutReturn(Fixture fixture, com.shiwushop.entity.payment.PaymentAttempt attempt) {
+    private void assertPendingWithoutReturn(Fixture fixture, com.shiwushop.commerce.entity.payment.PaymentAttempt attempt) {
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(attempt.getId()).getStatus());
         assertEquals(1, skuMapper.selectById(fixture.sku().getId()).getStock());
@@ -539,8 +539,8 @@ class PaymentFlowTests {
         assertEquals(0, searchEvents(fixture.product()));
     }
 
-    private com.shiwushop.entity.payment.PaymentAttempt pendingAttempt(Fixture fixture, boolean guardedQr) {
-        com.shiwushop.entity.payment.PaymentAttempt attempt = new com.shiwushop.entity.payment.PaymentAttempt();
+    private com.shiwushop.commerce.entity.payment.PaymentAttempt pendingAttempt(Fixture fixture, boolean guardedQr) {
+        com.shiwushop.commerce.entity.payment.PaymentAttempt attempt = new com.shiwushop.commerce.entity.payment.PaymentAttempt();
         attempt.setOrderId(fixture.order().getId());
         attempt.setChannel("ALIPAY_SANDBOX");
         attempt.setOutTradeNo("test-" + UUID.randomUUID());

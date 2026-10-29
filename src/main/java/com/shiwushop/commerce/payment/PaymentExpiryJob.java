@@ -1,6 +1,6 @@
 package com.shiwushop.commerce.payment;
 
-import com.shiwushop.service.PaymentService;
+import com.shiwushop.commerce.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

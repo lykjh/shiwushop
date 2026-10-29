@@ -3,8 +3,8 @@ package com.shiwushop.shop;
 import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.service.UserService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.auth.CaptchaProofStore;

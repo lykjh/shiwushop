@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.order.OrderMapper">
+<mapper namespace="com.shiwushop.commerce.mapper.order.OrderMapper">
     <sql id="summaryColumns">
         SELECT o.id, o.shop_id AS shopId, s.name AS shopName,
                o.total_amount AS totalAmount, o.status,
                (SELECT COUNT(*) FROM order_items item WHERE item.order_id = o.id) AS itemCount
     </sql>
 
-    <select id="selectBuyerSlice" resultType="com.shiwushop.vo.order.OrderSummaryVO">
+    <select id="selectBuyerSlice" resultType="com.shiwushop.commerce.vo.order.OrderSummaryVO">
         <include refid="summaryColumns"/>
         FROM orders o
         LEFT JOIN shops s ON s.id = o.shop_id
@@ -19,7 +19,7 @@
         ORDER BY o.created_at DESC, o.id DESC LIMIT #{limit}
     </select>
 
-    <select id="selectMerchantSlice" resultType="com.shiwushop.vo.order.OrderSummaryVO">
+    <select id="selectMerchantSlice" resultType="com.shiwushop.commerce.vo.order.OrderSummaryVO">
         <include refid="summaryColumns"/>
         FROM orders o
         JOIN shops s ON s.id = o.shop_id

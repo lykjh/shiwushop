@@ -4,12 +4,12 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.auth.AccountAccess;
 import com.shiwushop.common.auth.MerchantShopAccess;
 import com.shiwushop.common.privacy.PrivacyCipher;
-import com.shiwushop.entity.order.Order;
-import com.shiwushop.mapper.order.OrderItemMapper;
-import com.shiwushop.mapper.order.OrderMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
-import com.shiwushop.service.impl.OrderServiceImpl;
-import com.shiwushop.vo.order.OrderSummaryVO;
+import com.shiwushop.commerce.entity.order.Order;
+import com.shiwushop.commerce.mapper.order.OrderItemMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
+import com.shiwushop.commerce.service.impl.OrderServiceImpl;
+import com.shiwushop.commerce.vo.order.OrderSummaryVO;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;

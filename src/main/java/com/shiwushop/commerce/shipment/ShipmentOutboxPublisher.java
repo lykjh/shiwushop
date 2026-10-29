@@ -1,8 +1,8 @@
 package com.shiwushop.commerce.shipment;
 
-import com.shiwushop.entity.shipment.Shipment;
+import com.shiwushop.commerce.entity.shipment.Shipment;
 import com.shiwushop.mapper.outbox.OutboxEventMapper;
-import com.shiwushop.mapper.shipment.ShipmentMapper;
+import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

@@ -1,6 +1,6 @@
 package com.shiwushop.cart;
 
-import com.shiwushop.dto.cart.CheckoutDTO;
+import com.shiwushop.commerce.dto.cart.CheckoutDTO;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
 

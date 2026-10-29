@@ -2,8 +2,8 @@ package com.shiwushop.payment;
 
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.GlobalExceptionHandler;
-import com.shiwushop.controller.payment.PaymentController;
-import com.shiwushop.service.PaymentService;
+import com.shiwushop.commerce.controller.payment.PaymentController;
+import com.shiwushop.commerce.service.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;

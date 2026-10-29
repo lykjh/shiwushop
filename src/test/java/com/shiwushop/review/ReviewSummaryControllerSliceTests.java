@@ -1,8 +1,8 @@
 package com.shiwushop.review;
 
-import com.shiwushop.controller.review.ProductReviewController;
-import com.shiwushop.service.ReviewService;
-import com.shiwushop.vo.review.ReviewSummaryVO;
+import com.shiwushop.catalog.controller.review.ProductReviewController;
+import com.shiwushop.catalog.service.ReviewService;
+import com.shiwushop.catalog.vo.review.ReviewSummaryVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;

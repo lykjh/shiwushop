@@ -2,23 +2,23 @@ package com.shiwushop.product;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.brand.Brand;
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.entity.product.Product;
-import com.shiwushop.entity.product.ProductImage;
-import com.shiwushop.entity.product.ProductOption;
-import com.shiwushop.entity.product.ProductOptionValue;
-import com.shiwushop.entity.product.Sku;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.brand.BrandMapper;
-import com.shiwushop.mapper.category.CategoryMapper;
-import com.shiwushop.mapper.product.ProductImageMapper;
-import com.shiwushop.mapper.product.ProductMapper;
-import com.shiwushop.mapper.product.ProductOptionMapper;
-import com.shiwushop.mapper.product.ProductOptionValueMapper;
-import com.shiwushop.mapper.product.SkuMapper;
-import com.shiwushop.mapper.product.SkuOptionValueMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.entity.brand.Brand;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.catalog.entity.product.Product;
+import com.shiwushop.catalog.entity.product.ProductImage;
+import com.shiwushop.catalog.entity.product.ProductOption;
+import com.shiwushop.catalog.entity.product.ProductOptionValue;
+import com.shiwushop.catalog.entity.product.Sku;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.brand.BrandMapper;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
+import com.shiwushop.catalog.mapper.product.ProductImageMapper;
+import com.shiwushop.catalog.mapper.product.ProductMapper;
+import com.shiwushop.catalog.mapper.product.ProductOptionMapper;
+import com.shiwushop.catalog.mapper.product.ProductOptionValueMapper;
+import com.shiwushop.catalog.mapper.product.SkuMapper;
+import com.shiwushop.catalog.mapper.product.SkuOptionValueMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 
 import com.shiwushop.entity.status.ProductStatus;
 

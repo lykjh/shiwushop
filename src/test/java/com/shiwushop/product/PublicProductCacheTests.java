@@ -1,10 +1,10 @@
 package com.shiwushop.product;
 
-import com.shiwushop.dto.product.PublicProductQuery;
-import com.shiwushop.vo.product.PublicProductPageVO;
-import com.shiwushop.vo.product.PublicProductVO;
+import com.shiwushop.catalog.dto.product.PublicProductQuery;
+import com.shiwushop.catalog.vo.product.PublicProductPageVO;
+import com.shiwushop.catalog.vo.product.PublicProductVO;
 import com.shiwushop.catalog.cache.PublicProductCache;
-import com.shiwushop.service.ProductService;
+import com.shiwushop.catalog.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

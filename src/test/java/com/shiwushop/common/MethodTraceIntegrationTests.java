@@ -3,7 +3,7 @@ package com.shiwushop.common;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.shiwushop.controller.product.ProductController;
+import com.shiwushop.catalog.controller.product.ProductController;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;

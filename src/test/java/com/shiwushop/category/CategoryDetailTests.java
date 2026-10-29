@@ -1,7 +1,7 @@
 package com.shiwushop.category;
 
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.mapper.category.CategoryMapper;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

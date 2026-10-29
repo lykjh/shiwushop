@@ -1,7 +1,7 @@
 package com.shiwushop.commerce.shipment;
 
-import com.shiwushop.service.ShipmentService;
-import com.shiwushop.mapper.shipment.ShipmentMapper;
+import com.shiwushop.commerce.service.ShipmentService;
+import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;

@@ -2,11 +2,11 @@ package com.shiwushop.category;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.category.Category;
+import com.shiwushop.catalog.entity.category.Category;
 import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.service.UserService;
 import org.springframework.jdbc.core.JdbcTemplate;
-import com.shiwushop.mapper.category.CategoryMapper;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.auth.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;

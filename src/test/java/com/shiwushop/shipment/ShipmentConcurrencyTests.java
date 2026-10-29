@@ -1,12 +1,12 @@
 package com.shiwushop.shipment;
 
-import com.shiwushop.dto.shipment.ShipmentCreateDTO;
-import com.shiwushop.vo.shipment.ShipmentVO;
+import com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO;
+import com.shiwushop.commerce.vo.shipment.ShipmentVO;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.entity.shipment.Shipment;
+import com.shiwushop.commerce.entity.shipment.Shipment;
 import com.shiwushop.entity.status.ShipmentStatus;
-import com.shiwushop.mapper.shipment.ShipmentMapper;
-import com.shiwushop.service.ShipmentService;
+import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
+import com.shiwushop.commerce.service.ShipmentService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

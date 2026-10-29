@@ -2,7 +2,7 @@ package com.shiwushop.commerce.shipment;
 
 import com.shiwushop.mapper.outbox.ConsumedEventMapper;
 import com.shiwushop.mapper.outbox.OutboxEventMapper;
-import com.shiwushop.service.ShipmentService;
+import com.shiwushop.commerce.service.ShipmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

@@ -1,15 +1,15 @@
 package com.shiwushop.catalog.search;
 
-import com.shiwushop.vo.product.PublicProductVO;
+import com.shiwushop.catalog.vo.product.PublicProductVO;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.util.PageSpec;
-import com.shiwushop.entity.brand.Brand;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.brand.BrandMapper;
-import com.shiwushop.mapper.product.ProductMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
-import com.shiwushop.vo.query.product.PublicProductRow;
-import com.shiwushop.service.CategoryService;
+import com.shiwushop.catalog.entity.brand.Brand;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.brand.BrandMapper;
+import com.shiwushop.catalog.mapper.product.ProductMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.vo.query.product.PublicProductRow;
+import com.shiwushop.catalog.service.CategoryService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;

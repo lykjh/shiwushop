@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.order.CheckoutRequestMapper">
+<mapper namespace="com.shiwushop.commerce.mapper.order.CheckoutRequestMapper">
     <select id="selectForUpdate" resultType="map">
         SELECT id, HEX(request_hash) AS request_hash, status
         FROM checkout_requests
@@ -8,7 +8,7 @@
         FOR UPDATE
     </select>
 
-    <select id="selectOrders" resultType="com.shiwushop.entity.order.Order">
+    <select id="selectOrders" resultType="com.shiwushop.commerce.entity.order.Order">
         SELECT o.id, o.shop_id, o.total_amount, o.status
         FROM checkout_request_orders cro JOIN orders o ON o.id = cro.order_id
         WHERE cro.checkout_request_id = #{requestId} ORDER BY o.id

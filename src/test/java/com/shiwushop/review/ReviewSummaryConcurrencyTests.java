@@ -1,6 +1,6 @@
 package com.shiwushop.review;
 
-import com.shiwushop.mapper.review.ProductReviewMapper;
+import com.shiwushop.catalog.mapper.review.ProductReviewMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -5,12 +5,12 @@ import com.shiwushop.test.TestRegistration;
 import com.shiwushop.entity.status.ProductStatus;
 
 import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.entity.product.Product;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.category.CategoryMapper;
-import com.shiwushop.mapper.product.ProductMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.catalog.entity.product.Product;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
+import com.shiwushop.catalog.mapper.product.ProductMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.service.UserService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.auth.CaptchaProofStore;

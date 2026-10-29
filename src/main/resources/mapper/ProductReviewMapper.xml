@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.review.ProductReviewMapper">
+<mapper namespace="com.shiwushop.catalog.mapper.review.ProductReviewMapper">
     <!-- 仅已成功退款的件数扣减评价资格；锁订单明细以串行化同一明细的创建请求。 -->
-    <select id="selectEligibilityForUpdate" resultType="com.shiwushop.vo.query.review.ReviewEligibility" flushCache="true">
+    <select id="selectEligibilityForUpdate" resultType="com.shiwushop.catalog.vo.query.review.ReviewEligibility" flushCache="true">
         SELECT item.id AS orderItemId, item.order_id AS orderId, orders.user_id AS buyerUserId,
                sku.product_id AS productId, item.quantity, orders.status AS orderStatus,
                shipment.status AS shipmentStatus,
@@ -22,7 +22,7 @@
         SELECT id FROM product_reviews WHERE order_item_id = #{orderItemId}
     </select>
 
-    <insert id="insertReview" parameterType="com.shiwushop.entity.review.ProductReview" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertReview" parameterType="com.shiwushop.catalog.entity.review.ProductReview" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO product_reviews (order_item_id, product_id, buyer_user_id, rating, content, counted_in_summary)
         VALUES (#{orderItemId}, #{productId}, #{buyerUserId}, #{rating}, #{content}, #{countedInSummary})
     </insert>
@@ -32,14 +32,14 @@
         VALUES (#{reviewId}, #{mediaId}, #{phase}, #{position})
     </insert>
 
-    <select id="selectForUpdate" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+    <select id="selectForUpdate" resultType="com.shiwushop.catalog.entity.review.ProductReview" flushCache="true">
         SELECT id, order_item_id AS orderItemId, product_id AS productId, buyer_user_id AS buyerUserId,
                rating, follow_up_at AS followUpAt, deleted_at AS deletedAt, hidden_at AS hiddenAt,
                counted_in_summary AS countedInSummary
         FROM product_reviews WHERE id = #{reviewId} FOR UPDATE
     </select>
 
-    <select id="selectForUpdateByOrderItemId" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+    <select id="selectForUpdateByOrderItemId" resultType="com.shiwushop.catalog.entity.review.ProductReview" flushCache="true">
         SELECT id, order_item_id AS orderItemId, product_id AS productId, rating,
                counted_in_summary AS countedInSummary
         FROM product_reviews WHERE order_item_id = #{orderItemId} FOR UPDATE
@@ -103,7 +103,7 @@
         ON DUPLICATE KEY UPDATE id = id
     </insert>
 
-    <select id="selectPendingReports" resultType="com.shiwushop.vo.review.PendingReviewReportVO" flushCache="true">
+    <select id="selectPendingReports" resultType="com.shiwushop.catalog.vo.review.PendingReviewReportVO" flushCache="true">
         SELECT report.id, report.review_id AS reviewId, review.rating, review.content,
                review.follow_up AS followUp, report.reason, report.created_at AS createdAt
         FROM product_review_reports report
@@ -114,11 +114,11 @@
         LIMIT #{limit}
     </select>
 
-    <select id="selectReport" resultType="com.shiwushop.vo.query.review.ReviewReportRow" flushCache="true">
+    <select id="selectReport" resultType="com.shiwushop.catalog.vo.query.review.ReviewReportRow" flushCache="true">
         SELECT id, review_id AS reviewId, status FROM product_review_reports WHERE id = #{reportId}
     </select>
 
-    <select id="selectReportForUpdate" resultType="com.shiwushop.vo.query.review.ReviewReportRow" flushCache="true">
+    <select id="selectReportForUpdate" resultType="com.shiwushop.catalog.vo.query.review.ReviewReportRow" flushCache="true">
         SELECT id, review_id AS reviewId, status FROM product_review_reports
         WHERE id = #{reportId} FOR UPDATE
     </select>
@@ -147,7 +147,7 @@
         )
     </select>
 
-    <select id="selectPublicPage" resultType="com.shiwushop.entity.review.ProductReview" flushCache="true">
+    <select id="selectPublicPage" resultType="com.shiwushop.catalog.entity.review.ProductReview" flushCache="true">
         SELECT review.id, review.rating, review.content, review.follow_up AS followUp,
                review.created_at AS createdAt, review.follow_up_at AS followUpAt
         FROM product_reviews review
@@ -165,7 +165,7 @@
         LIMIT #{limit}
     </select>
 
-    <select id="selectPublicImages" resultType="com.shiwushop.vo.query.review.ReviewImageRow">
+    <select id="selectPublicImages" resultType="com.shiwushop.catalog.vo.query.review.ReviewImageRow">
         SELECT review_id AS reviewId, media_id AS mediaId, phase
         FROM product_review_images
         WHERE review_id IN
@@ -173,7 +173,7 @@
         ORDER BY review_id DESC, phase, position
     </select>
 
-    <select id="selectSummary" resultType="com.shiwushop.vo.review.ReviewSummaryVO" flushCache="true">
+    <select id="selectSummary" resultType="com.shiwushop.catalog.vo.review.ReviewSummaryVO" flushCache="true">
         SELECT COALESCE(summary.review_count, 0) AS reviewCount,
                CASE WHEN COALESCE(summary.review_count, 0) = 0 THEN 0
                     ELSE ROUND(summary.rating_sum / summary.review_count, 2) END AS averageRating

@@ -9,9 +9,9 @@ import com.shiwushop.common.auth.MerchantShopAccess;
 import com.shiwushop.entity.status.AccountStatus;
 import com.shiwushop.entity.status.AccountRole;
 
-import com.shiwushop.entity.shop.Shop;
+import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.entity.user.UserAccount;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.mapper.user.UserAccountMapper;
 import org.junit.jupiter.api.Test;
 

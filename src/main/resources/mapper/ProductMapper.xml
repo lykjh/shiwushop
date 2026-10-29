@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.product.ProductMapper">
+<mapper namespace="com.shiwushop.catalog.mapper.product.ProductMapper">
     <sql id="visibleCategories">
         WITH RECURSIVE visible_categories AS (
             SELECT id FROM categories
@@ -73,7 +73,7 @@
     </sql>
 
     <!-- 旧公开列表按 ID 游标翻页，不使用深页 OFFSET；发现接口另走搜索索引。 -->
-    <select id="selectPublicPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+    <select id="selectPublicPage" resultType="com.shiwushop.catalog.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         <include refid="primaryPageFrom"/>
@@ -82,7 +82,7 @@
     </select>
 
     <!-- 店铺筛选先缩到该店的上架商品，再按 ID 游标倒序读取，避免扫描其他店铺。 -->
-    <select id="selectPublicShopPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+    <select id="selectPublicShopPage" resultType="com.shiwushop.catalog.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         FROM products p FORCE INDEX (idx_products_shop_status_id)
@@ -95,7 +95,7 @@
         ORDER BY p.id DESC LIMIT #{limit}
     </select>
 
-    <select id="selectPublicFilteredPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+    <select id="selectPublicFilteredPage" resultType="com.shiwushop.catalog.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         <include refid="filteredPageFrom"/>
@@ -103,7 +103,7 @@
         ORDER BY p.id DESC LIMIT #{limit}
     </select>
 
-    <select id="selectPublicBrandPage" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+    <select id="selectPublicBrandPage" resultType="com.shiwushop.catalog.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         <include refid="brandPageFrom"/>
@@ -112,7 +112,7 @@
     </select>
 
     <!-- 搜索结果展示前再次从数据库核对上下架、店铺状态、筛选条件和当前价格。 -->
-    <select id="selectPublicCardsByIds" resultType="com.shiwushop.vo.query.product.PublicProductRow">
+    <select id="selectPublicCardsByIds" resultType="com.shiwushop.catalog.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         <include refid="filteredPageFrom"/>

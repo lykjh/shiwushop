@@ -2,7 +2,7 @@ package com.shiwushop.payment;
 
 import com.shiwushop.commerce.payment.AlipayGateway;
 import com.shiwushop.commerce.payment.SdkAlipayGateway;
-import com.shiwushop.service.PaymentService;
+import com.shiwushop.commerce.service.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

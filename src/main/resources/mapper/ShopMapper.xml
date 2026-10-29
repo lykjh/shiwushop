@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.shop.ShopMapper">
+<mapper namespace="com.shiwushop.catalog.mapper.shop.ShopMapper">
     <sql id="visibleCategories">
         WITH RECURSIVE visible_categories AS (
             SELECT id FROM categories
@@ -22,7 +22,7 @@
         )
     </sql>
 
-    <select id="selectPublicPage" resultType="com.shiwushop.vo.shop.ShopPublicVO">
+    <select id="selectPublicPage" resultType="com.shiwushop.catalog.vo.shop.ShopPublicVO">
         <include refid="visibleCategories"/>
         SELECT s.id, s.name, s.logo_media_id AS logoMediaId, s.description
         <include refid="publicShops"/>
@@ -36,7 +36,7 @@
         <include refid="publicShops"/>
     </select>
 
-    <select id="selectPublicCategories" resultType="com.shiwushop.vo.category.CategoryPathItemVO">
+    <select id="selectPublicCategories" resultType="com.shiwushop.catalog.vo.category.CategoryPathItemVO">
         WITH RECURSIVE visible_categories AS (
             SELECT id FROM categories WHERE visible = 1 AND parent_id IS NULL
             UNION ALL

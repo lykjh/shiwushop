@@ -7,11 +7,11 @@ import com.shiwushop.entity.status.AccountStatus;
 
 import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.common.privacy.PrivacyCipher;
-import com.shiwushop.entity.order.Order;
-import com.shiwushop.entity.shop.Shop;
+import com.shiwushop.commerce.entity.order.Order;
+import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.entity.user.UserAccount;
-import com.shiwushop.mapper.order.OrderMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.mapper.user.UserAccountMapper;
 import com.shiwushop.service.UserService;
 import org.junit.jupiter.api.Test;

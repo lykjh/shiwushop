@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.payment.RefundAttemptMapper">
+<mapper namespace="com.shiwushop.commerce.mapper.payment.RefundAttemptMapper">
     <select id="successfulAmount" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(attempt.amount), 0)
         FROM refund_attempts attempt

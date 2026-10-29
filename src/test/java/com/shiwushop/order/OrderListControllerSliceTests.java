@@ -1,12 +1,12 @@
 package com.shiwushop.order;
 
-import com.shiwushop.controller.order.OrderController;
-import com.shiwushop.controller.shop.MerchantShopController;
+import com.shiwushop.commerce.controller.order.OrderController;
+import com.shiwushop.catalog.controller.shop.MerchantShopController;
 import com.shiwushop.common.GlobalExceptionHandler;
-import com.shiwushop.service.OrderService;
-import com.shiwushop.service.ShopService;
-import com.shiwushop.vo.order.OrderSliceVO;
-import com.shiwushop.vo.order.OrderSummaryVO;
+import com.shiwushop.commerce.service.OrderService;
+import com.shiwushop.catalog.service.ShopService;
+import com.shiwushop.commerce.vo.order.OrderSliceVO;
+import com.shiwushop.commerce.vo.order.OrderSummaryVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;

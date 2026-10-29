@@ -2,16 +2,16 @@ package com.shiwushop.order;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.entity.order.Order;
-import com.shiwushop.entity.product.Product;
-import com.shiwushop.entity.product.Sku;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.category.CategoryMapper;
-import com.shiwushop.mapper.order.OrderMapper;
-import com.shiwushop.mapper.product.ProductMapper;
-import com.shiwushop.mapper.product.SkuMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.commerce.entity.order.Order;
+import com.shiwushop.catalog.entity.product.Product;
+import com.shiwushop.catalog.entity.product.Sku;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
+import com.shiwushop.catalog.mapper.product.ProductMapper;
+import com.shiwushop.catalog.mapper.product.SkuMapper;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.mapper.user.UserAccountMapper;
 
 import com.shiwushop.entity.status.OrderStatus;

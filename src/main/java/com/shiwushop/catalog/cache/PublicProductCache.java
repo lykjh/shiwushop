@@ -1,9 +1,9 @@
 package com.shiwushop.catalog.cache;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.dto.product.PublicProductQuery;
-import com.shiwushop.vo.product.PublicProductPageVO;
-import com.shiwushop.service.ProductService;
+import com.shiwushop.catalog.dto.product.PublicProductQuery;
+import com.shiwushop.catalog.vo.product.PublicProductPageVO;
+import com.shiwushop.catalog.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

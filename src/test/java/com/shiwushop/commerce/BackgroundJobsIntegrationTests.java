@@ -1,9 +1,9 @@
 package com.shiwushop.commerce;
 
-import com.shiwushop.mapper.order.OrderMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.mapper.outbox.OutboxEventMapper;
-import com.shiwushop.mapper.payment.RefundAttemptMapper;
-import com.shiwushop.mapper.shipment.ShipmentMapper;
+import com.shiwushop.commerce.mapper.payment.RefundAttemptMapper;
+import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

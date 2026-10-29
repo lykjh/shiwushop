@@ -3,8 +3,8 @@ package com.shiwushop.common.auth;
 import com.shiwushop.common.BusinessException;
 
 
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.mapper.shop.ShopMapper;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

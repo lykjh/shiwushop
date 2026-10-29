@@ -4,16 +4,16 @@ import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.dto.user.RegisterDTO;
 import com.shiwushop.common.privacy.PrivacyCipher;
-import com.shiwushop.entity.order.Order;
-import com.shiwushop.entity.shop.Shop;
-import com.shiwushop.entity.shipment.Shipment;
+import com.shiwushop.commerce.entity.order.Order;
+import com.shiwushop.catalog.entity.shop.Shop;
+import com.shiwushop.commerce.entity.shipment.Shipment;
 import com.shiwushop.entity.status.OrderStatus;
 import com.shiwushop.entity.status.ShipmentStatus;
-import com.shiwushop.mapper.order.OrderMapper;
+import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.mapper.outbox.OutboxEventMapper;
-import com.shiwushop.mapper.shop.ShopMapper;
-import com.shiwushop.mapper.shipment.ShipmentMapper;
-import com.shiwushop.service.ShipmentService;
+import com.shiwushop.catalog.mapper.shop.ShopMapper;
+import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
+import com.shiwushop.commerce.service.ShipmentService;
 import com.shiwushop.service.UserService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.auth.CaptchaProofStore;
@@ -126,7 +126,7 @@ class ShipmentFlowTests {
         Shop shop = shop(merchant);
         Order order = order(shop, buyer, OrderStatus.PAID);
         shipmentService.ship(merchant, shop.getId(), order.getId(),
-                new com.shiwushop.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
+                new com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
         Shipment shipment = shipments.selectByOrderId(order.getId());
         shipment.setShippedAt(LocalDateTime.now().minusDays(11));
         shipment.setAutoConfirmAt(LocalDateTime.now().minusDays(1));
@@ -146,7 +146,7 @@ class ShipmentFlowTests {
         Shop shop = shop(merchant);
         Order order = order(shop, buyer, OrderStatus.PAID);
         shipmentService.ship(merchant, shop.getId(), order.getId(),
-                new com.shiwushop.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
+                new com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
         Shipment shipment = shipments.selectByOrderId(order.getId());
         shipment.setShippedAt(LocalDateTime.now().minusDays(11));
         shipment.setAutoConfirmAt(LocalDateTime.now().minusDays(1));

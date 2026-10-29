@@ -1,9 +1,9 @@
 package com.shiwushop.brand;
 
-import com.shiwushop.entity.brand.Brand;
-import com.shiwushop.entity.category.Category;
-import com.shiwushop.mapper.brand.BrandMapper;
-import com.shiwushop.mapper.category.CategoryMapper;
+import com.shiwushop.catalog.entity.brand.Brand;
+import com.shiwushop.catalog.entity.category.Category;
+import com.shiwushop.catalog.mapper.brand.BrandMapper;
+import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

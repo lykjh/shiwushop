@@ -2,10 +2,10 @@ package com.shiwushop.cart;
 
 import com.shiwushop.common.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.entity.cart.CartItem;
-import com.shiwushop.mapper.cart.CartItemMapper;
-import com.shiwushop.mapper.product.SkuMapper;
-import com.shiwushop.service.impl.CartServiceImpl;
+import com.shiwushop.commerce.entity.cart.CartItem;
+import com.shiwushop.commerce.mapper.cart.CartItemMapper;
+import com.shiwushop.catalog.mapper.product.SkuMapper;
+import com.shiwushop.commerce.service.impl.CartServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
