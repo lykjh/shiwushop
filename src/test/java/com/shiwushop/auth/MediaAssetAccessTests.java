@@ -1,10 +1,10 @@
 package com.shiwushop.auth;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.MediaAssetAccess;
+import com.shiwushop.common.media.MediaAssetAccess;
 
 
-import com.shiwushop.mapper.media.MediaAssetMapper;
+import com.shiwushop.common.media.mapper.MediaAssetMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

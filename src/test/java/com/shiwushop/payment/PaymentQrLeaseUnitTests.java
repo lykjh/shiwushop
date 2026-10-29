@@ -1,14 +1,14 @@
 package com.shiwushop.payment;
 
-import com.shiwushop.common.auth.AccountAccess;
+import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.commerce.payment.AlipayGateway;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.commerce.entity.payment.PaymentAttempt;
-import com.shiwushop.entity.status.OrderStatus;
-import com.shiwushop.entity.status.PaymentAttemptStatus;
+import com.shiwushop.commerce.entity.status.OrderStatus;
+import com.shiwushop.commerce.entity.status.PaymentAttemptStatus;
 import com.shiwushop.commerce.mapper.order.OrderItemMapper;
 import com.shiwushop.commerce.mapper.order.OrderMapper;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.mapper.payment.PaymentAttemptMapper;
 import com.shiwushop.catalog.mapper.product.InventoryMovementMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;

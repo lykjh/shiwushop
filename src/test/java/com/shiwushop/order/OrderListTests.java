@@ -2,20 +2,20 @@ package com.shiwushop.order;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.status.OrderStatus;
-import com.shiwushop.entity.status.AccountStatus;
+import com.shiwushop.commerce.entity.status.OrderStatus;
+import com.shiwushop.account.entity.status.AccountStatus;
 
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.common.privacy.PrivacyCipher;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.catalog.entity.shop.Shop;
-import com.shiwushop.entity.user.UserAccount;
+import com.shiwushop.account.entity.user.UserAccount;
 import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.mapper.user.UserAccountMapper;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.mapper.user.UserAccountMapper;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

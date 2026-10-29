@@ -2,13 +2,13 @@ package com.shiwushop.address;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.dto.address.AddressSaveDTO;
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.vo.address.AddressVO;
-import com.shiwushop.service.AddressService;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.dto.address.AddressSaveDTO;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.vo.address.AddressVO;
+import com.shiwushop.account.service.AddressService;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

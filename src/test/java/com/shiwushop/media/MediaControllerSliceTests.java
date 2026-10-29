@@ -1,7 +1,7 @@
 package com.shiwushop.media;
 
-import com.shiwushop.controller.media.MediaController;
-import com.shiwushop.service.MediaService;
+import com.shiwushop.common.media.controller.MediaController;
+import com.shiwushop.common.media.service.MediaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.test.web.servlet.MockMvc;

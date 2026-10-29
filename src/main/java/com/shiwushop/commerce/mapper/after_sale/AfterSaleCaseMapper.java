@@ -2,7 +2,7 @@ package com.shiwushop.commerce.mapper.after_sale;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.shiwushop.commerce.entity.after_sale.AfterSaleCase;
-import com.shiwushop.entity.status.AfterSaleStatus;
+import com.shiwushop.commerce.entity.status.AfterSaleStatus;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;

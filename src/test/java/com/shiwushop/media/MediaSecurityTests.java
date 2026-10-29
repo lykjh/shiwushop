@@ -2,12 +2,12 @@ package com.shiwushop.media;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.common.auth.CaptchaProofStore;
-import com.shiwushop.dto.user.RegisterDTO;
+import com.shiwushop.common.captcha.CaptchaProofStore;
+import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.user.LoginTestRequest;
-import com.shiwushop.service.UserService;
-import com.shiwushop.service.MediaService;
-import com.shiwushop.service.impl.MediaOrphanCleanup;
+import com.shiwushop.account.service.UserService;
+import com.shiwushop.common.media.service.MediaService;
+import com.shiwushop.common.media.MediaOrphanCleanup;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

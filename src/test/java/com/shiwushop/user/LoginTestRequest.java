@@ -1,6 +1,6 @@
 package com.shiwushop.user;
 
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;

@@ -18,12 +18,12 @@ import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.catalog.mapper.product.SkuOptionValueMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

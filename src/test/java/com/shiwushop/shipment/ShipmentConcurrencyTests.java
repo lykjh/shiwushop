@@ -4,7 +4,7 @@ import com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO;
 import com.shiwushop.commerce.vo.shipment.ShipmentVO;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.commerce.entity.shipment.Shipment;
-import com.shiwushop.entity.status.ShipmentStatus;
+import com.shiwushop.commerce.entity.status.ShipmentStatus;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import com.shiwushop.commerce.service.ShipmentService;
 import org.junit.jupiter.api.AfterEach;

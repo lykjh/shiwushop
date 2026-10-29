@@ -8,10 +8,10 @@ import com.shiwushop.catalog.vo.brand.BrandVO;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.MediaAssetAccess;
+import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.catalog.entity.brand.Brand;
 import com.shiwushop.catalog.mapper.brand.BrandMapper;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.catalog.service.BrandService;
 import com.shiwushop.catalog.service.CategoryService;
 import lombok.RequiredArgsConstructor;

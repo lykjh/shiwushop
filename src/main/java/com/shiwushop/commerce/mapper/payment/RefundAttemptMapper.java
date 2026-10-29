@@ -2,7 +2,7 @@ package com.shiwushop.commerce.mapper.payment;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.shiwushop.commerce.entity.payment.RefundAttempt;
-import com.shiwushop.entity.status.RefundAttemptStatus;
+import com.shiwushop.commerce.entity.status.RefundAttemptStatus;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;

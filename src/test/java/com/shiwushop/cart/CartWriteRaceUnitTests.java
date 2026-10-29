@@ -1,6 +1,6 @@
 package com.shiwushop.cart;
 
-import com.shiwushop.common.auth.AccountAccess;
+import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.commerce.entity.cart.CartItem;
 import com.shiwushop.commerce.mapper.cart.CartItemMapper;

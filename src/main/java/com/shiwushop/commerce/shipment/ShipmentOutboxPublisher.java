@@ -1,7 +1,7 @@
 package com.shiwushop.commerce.shipment;
 
 import com.shiwushop.commerce.entity.shipment.Shipment;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

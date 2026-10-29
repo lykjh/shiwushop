@@ -1,7 +1,7 @@
 package com.shiwushop.commerce;
 
 import com.shiwushop.commerce.mapper.order.OrderMapper;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.mapper.payment.RefundAttemptMapper;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import org.junit.jupiter.api.Test;

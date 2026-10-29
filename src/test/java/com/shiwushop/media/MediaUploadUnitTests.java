@@ -1,10 +1,11 @@
 package com.shiwushop.media;
 
-import com.shiwushop.common.auth.AccountAccess;
+import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.entity.media.MediaAsset;
-import com.shiwushop.mapper.media.MediaAssetMapper;
-import com.shiwushop.service.impl.MediaServiceImpl;
+import com.shiwushop.common.media.entity.MediaAsset;
+import com.shiwushop.common.media.mapper.MediaAssetMapper;
+import com.shiwushop.common.media.PublicMediaReference;
+import com.shiwushop.common.media.service.impl.MediaServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -44,7 +45,7 @@ class MediaUploadUnitTests {
             ((MediaAsset) invocation.getArgument(0)).setId(7L);
             return 1;
         }).when(assets).insert(any(MediaAsset.class));
-        MediaServiceImpl service = new MediaServiceImpl(assets, mock(AccountAccess.class));
+        MediaServiceImpl service = new MediaServiceImpl(assets, mock(PublicMediaReference.class), mock(AccountAccess.class));
         ReflectionTestUtils.setField(service, "storageRoot", root.toString());
 
         assertEquals(7L, service.upload(1L, file));
@@ -65,7 +66,7 @@ class MediaUploadUnitTests {
         when(file.getSize()).thenReturn(1L);
         when(file.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[10 * 1024 * 1024 + 1]));
         MediaAssetMapper assets = mock(MediaAssetMapper.class);
-        MediaServiceImpl service = new MediaServiceImpl(assets, mock(AccountAccess.class));
+        MediaServiceImpl service = new MediaServiceImpl(assets, mock(PublicMediaReference.class), mock(AccountAccess.class));
         ReflectionTestUtils.setField(service, "storageRoot", root.toString());
 
         assertEquals(413, assertThrows(BusinessException.class, () -> service.upload(1L, file)).getCode());

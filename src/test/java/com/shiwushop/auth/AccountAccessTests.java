@@ -1,18 +1,18 @@
 package com.shiwushop.auth;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.AccountAccess;
-import com.shiwushop.common.auth.AccountAuthCache;
-import com.shiwushop.common.auth.MerchantShopAccess;
+import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.account.auth.AccountAuthCache;
+import com.shiwushop.catalog.auth.MerchantShopAccess;
 
 
-import com.shiwushop.entity.status.AccountStatus;
-import com.shiwushop.entity.status.AccountRole;
+import com.shiwushop.account.entity.status.AccountStatus;
+import com.shiwushop.account.entity.status.AccountRole;
 
 import com.shiwushop.catalog.entity.shop.Shop;
-import com.shiwushop.entity.user.UserAccount;
+import com.shiwushop.account.entity.user.UserAccount;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.mapper.user.UserAccountMapper;
+import com.shiwushop.account.mapper.user.UserAccountMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

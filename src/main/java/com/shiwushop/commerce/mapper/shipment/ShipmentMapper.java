@@ -2,7 +2,7 @@ package com.shiwushop.commerce.mapper.shipment;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.shiwushop.commerce.entity.shipment.Shipment;
-import com.shiwushop.entity.status.ConfirmSource;
+import com.shiwushop.commerce.entity.status.ConfirmSource;
 import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;

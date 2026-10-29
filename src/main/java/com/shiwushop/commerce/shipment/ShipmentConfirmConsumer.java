@@ -1,7 +1,7 @@
 package com.shiwushop.commerce.shipment;
 
-import com.shiwushop.mapper.outbox.ConsumedEventMapper;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.ConsumedEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.service.ShipmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

@@ -7,11 +7,11 @@ import com.shiwushop.commerce.vo.order.OrderSummaryVO;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.AccountAccess;
-import com.shiwushop.common.auth.MerchantShopAccess;
+import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.catalog.auth.MerchantShopAccess;
 import com.shiwushop.common.auth.SessionUser;
-import com.shiwushop.util.PageSpec;
-import com.shiwushop.common.privacy.PrivacyCipher;
+import com.shiwushop.common.pagination.PageSpec;
+import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.commerce.mapper.order.OrderMapper;

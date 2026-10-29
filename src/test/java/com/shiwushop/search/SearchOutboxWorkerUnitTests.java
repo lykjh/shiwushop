@@ -3,7 +3,7 @@ package com.shiwushop.search;
 import com.shiwushop.catalog.search.SearchGateway;
 import com.shiwushop.catalog.search.SearchIndexSource;
 import com.shiwushop.catalog.search.SearchOutboxWorker;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 

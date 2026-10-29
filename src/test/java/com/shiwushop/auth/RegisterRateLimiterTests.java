@@ -3,7 +3,7 @@ package com.shiwushop.auth;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.GlobalExceptionHandler;
 import com.shiwushop.common.auth.RateLimiter;
-import com.shiwushop.common.auth.RegisterRateLimiter;
+import com.shiwushop.account.auth.RegisterRateLimiter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

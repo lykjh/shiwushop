@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import java.time.Clock;
 import java.time.ZoneId;
 
-@MapperScan({"com.shiwushop.mapper", "com.shiwushop.catalog.mapper", "com.shiwushop.commerce.mapper"})
+@MapperScan({"com.shiwushop.account.mapper", "com.shiwushop.catalog.mapper", "com.shiwushop.commerce.mapper", "com.shiwushop.common.media.mapper", "com.shiwushop.common.outbox"})
 @SpringBootApplication
 @EnableScheduling
 public class ShiwushopApplication {

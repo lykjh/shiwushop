@@ -1,10 +1,12 @@
 package com.shiwushop.common.auth;
 
+import com.shiwushop.account.auth.AccountAuthCache;
+
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.Result;
 
 
-import com.shiwushop.entity.status.AccountStatus;
+import com.shiwushop.account.entity.status.AccountStatus;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

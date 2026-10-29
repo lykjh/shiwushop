@@ -2,7 +2,7 @@ package com.shiwushop.catalog.search;
 
 import com.shiwushop.catalog.vo.product.PublicProductVO;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.util.PageSpec;
+import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.catalog.entity.brand.Brand;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.catalog.mapper.brand.BrandMapper;

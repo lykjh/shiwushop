@@ -1,8 +1,8 @@
 package com.shiwushop.test;
 
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.common.auth.CaptchaProofStore;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.common.captcha.CaptchaProofStore;
+import com.shiwushop.account.service.UserService;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
 

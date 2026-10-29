@@ -2,15 +2,15 @@ package com.shiwushop.user;
 
 import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.AccountAccess;
-import com.shiwushop.common.auth.AuthRiskLimiter;
-import com.shiwushop.common.auth.CaptchaRateLimiter;
-import com.shiwushop.common.auth.LoginRateLimiter;
-import com.shiwushop.common.auth.RegisterRateLimiter;
-import com.shiwushop.controller.user.UserController;
-import com.shiwushop.dto.user.CaptchaVerifyDTO;
-import com.shiwushop.service.CaptchaService;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.account.auth.AuthRiskLimiter;
+import com.shiwushop.common.captcha.CaptchaRateLimiter;
+import com.shiwushop.account.auth.LoginRateLimiter;
+import com.shiwushop.account.auth.RegisterRateLimiter;
+import com.shiwushop.account.controller.user.UserController;
+import com.shiwushop.account.dto.user.CaptchaVerifyDTO;
+import com.shiwushop.common.captcha.CaptchaService;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 

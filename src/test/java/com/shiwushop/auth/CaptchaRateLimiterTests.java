@@ -1,7 +1,7 @@
 package com.shiwushop.auth;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.CaptchaRateLimiter;
+import com.shiwushop.common.captcha.CaptchaRateLimiter;
 import com.shiwushop.common.auth.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;

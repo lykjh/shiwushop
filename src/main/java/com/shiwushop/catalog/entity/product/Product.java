@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;

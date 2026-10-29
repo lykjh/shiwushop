@@ -5,8 +5,8 @@ import cloud.tianai.captcha.application.vo.ImageCaptchaVO;
 import cloud.tianai.captcha.common.constant.CaptchaTypeConstant;
 import cloud.tianai.captcha.common.response.ApiResponse;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.CaptchaProofStore;
-import com.shiwushop.service.impl.CaptchaServiceImpl;
+import com.shiwushop.common.captcha.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;

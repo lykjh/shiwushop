@@ -20,16 +20,16 @@ import com.shiwushop.catalog.mapper.shop.ShopMapper;
 
 import com.shiwushop.catalog.service.ProductService;
 
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 
-import com.shiwushop.dto.user.RegisterDTO;
+import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.catalog.dto.product.ProductStatusUpdateDTO;
 import com.shiwushop.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

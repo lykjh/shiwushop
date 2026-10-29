@@ -1,9 +1,9 @@
 package com.shiwushop.order;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.AccountAccess;
-import com.shiwushop.common.auth.MerchantShopAccess;
-import com.shiwushop.common.privacy.PrivacyCipher;
+import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.catalog.auth.MerchantShopAccess;
+import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.commerce.mapper.order.OrderItemMapper;
 import com.shiwushop.commerce.mapper.order.OrderMapper;

@@ -1,6 +1,6 @@
 package com.shiwushop.auth;
 
-import com.shiwushop.common.auth.AuthRiskLimiter;
+import com.shiwushop.account.auth.AuthRiskLimiter;
 import com.shiwushop.common.auth.RateLimiter;
 import io.lettuce.core.cluster.SlotHash;
 import io.lettuce.core.RedisClient;

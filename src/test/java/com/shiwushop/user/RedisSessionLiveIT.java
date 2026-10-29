@@ -2,10 +2,10 @@ package com.shiwushop.user;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;

@@ -3,7 +3,7 @@ package com.shiwushop.commerce.entity.payment;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.shiwushop.entity.status.PaymentAttemptStatus;
+import com.shiwushop.commerce.entity.status.PaymentAttemptStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;

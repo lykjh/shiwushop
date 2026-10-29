@@ -1,10 +1,10 @@
 package com.shiwushop.catalog.controller.admin;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.auth.AccountAccess;
+import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.auth.SessionUser;
-import com.shiwushop.entity.user.UserAccount;
-import com.shiwushop.entity.status.AccountRole;
+import com.shiwushop.account.entity.user.UserAccount;
+import com.shiwushop.account.entity.status.AccountRole;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

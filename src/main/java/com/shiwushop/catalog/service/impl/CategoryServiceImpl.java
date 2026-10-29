@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.catalog.entity.category.Category;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.catalog.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;

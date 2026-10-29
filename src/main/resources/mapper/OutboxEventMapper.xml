@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.shiwushop.mapper.outbox.OutboxEventMapper">
+<mapper namespace="com.shiwushop.common.outbox.OutboxEventMapper">
     <insert id="insertShipmentAutoConfirm">
         INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
                                    status, attempts, next_attempt_at)
@@ -36,7 +36,7 @@
                 JSON_OBJECT('categoryId', #{categoryId}), 'PENDING', 0, NOW())
     </insert>
 
-    <select id="selectPendingShipmentEvents" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$ShipmentConfirmEvent">
+    <select id="selectPendingShipmentEvents" resultType="com.shiwushop.common.outbox.OutboxEventMapper$ShipmentConfirmEvent">
         SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events
         WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING'
           AND next_attempt_at &lt;= #{now}
@@ -48,7 +48,7 @@
         WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING'
     </select>
 
-    <select id="selectShipmentEvent" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$ShipmentConfirmEvent">
+    <select id="selectShipmentEvent" resultType="com.shiwushop.common.outbox.OutboxEventMapper$ShipmentConfirmEvent">
         SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events
         WHERE id = #{eventId} AND event_type = 'SHIPMENT_AUTO_CONFIRM'
     </select>
@@ -79,7 +79,7 @@
         WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
     </update>
 
-    <select id="selectPendingSearchEvent" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$SearchEvent">
+    <select id="selectPendingSearchEvent" resultType="com.shiwushop.common.outbox.OutboxEventMapper$SearchEvent">
         SELECT id, event_type AS eventType, aggregate_type AS aggregateType,
                aggregate_id AS aggregateId, attempts,
                CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.lastProductId')) AS UNSIGNED) AS lastProductId
@@ -107,7 +107,7 @@
         WHERE id = #{eventId} AND status = 'PENDING' AND claim_token = #{token}
     </update>
 
-    <select id="selectSearchBacklog" resultType="com.shiwushop.mapper.outbox.OutboxEventMapper$SearchBacklog">
+    <select id="selectSearchBacklog" resultType="com.shiwushop.common.outbox.OutboxEventMapper$SearchBacklog">
         SELECT COUNT(CASE WHEN status = 'PENDING' THEN 1 END) AS pending,
                COUNT(CASE WHEN status = 'DEAD' THEN 1 END) AS dead,
                TIMESTAMPDIFF(SECOND, MIN(CASE WHEN status = 'PENDING' THEN created_at END), NOW())

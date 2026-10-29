@@ -1,7 +1,7 @@
 package com.shiwushop.media;
 
-import com.shiwushop.mapper.media.MediaAssetMapper;
-import com.shiwushop.service.impl.MediaOrphanCleanup;
+import com.shiwushop.common.media.mapper.MediaAssetMapper;
+import com.shiwushop.common.media.MediaOrphanCleanup;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;

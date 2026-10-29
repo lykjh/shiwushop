@@ -1,5 +1,7 @@
 package com.shiwushop.common;
 
+import com.shiwushop.common.logging.MethodTraceAspect;
+
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;

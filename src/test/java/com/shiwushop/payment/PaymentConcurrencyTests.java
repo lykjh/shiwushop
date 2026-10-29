@@ -4,10 +4,10 @@ import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.commerce.payment.AlipayGateway;
 import com.shiwushop.commerce.payment.SdkAlipayGateway;
-import com.shiwushop.entity.status.OrderStatus;
-import com.shiwushop.entity.status.PaymentAttemptStatus;
+import com.shiwushop.commerce.entity.status.OrderStatus;
+import com.shiwushop.commerce.entity.status.PaymentAttemptStatus;
 
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.catalog.entity.category.Category;
@@ -17,10 +17,10 @@ import com.shiwushop.commerce.entity.payment.PaymentAttempt;
 import com.shiwushop.catalog.entity.product.Product;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.catalog.entity.product.Sku;
-import com.shiwushop.entity.user.UserProfile;
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.common.privacy.PrivacyCipher;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.entity.user.UserProfile;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.privacy.PrivacyCipher;
+import com.shiwushop.account.service.UserService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.commerce.mapper.order.OrderItemMapper;
@@ -31,7 +31,7 @@ import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.commerce.service.PaymentService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;

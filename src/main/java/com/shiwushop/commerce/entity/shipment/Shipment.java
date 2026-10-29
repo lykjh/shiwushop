@@ -3,8 +3,8 @@ package com.shiwushop.commerce.entity.shipment;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.shiwushop.entity.status.ConfirmSource;
-import com.shiwushop.entity.status.ShipmentStatus;
+import com.shiwushop.commerce.entity.status.ConfirmSource;
+import com.shiwushop.commerce.entity.status.ShipmentStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;

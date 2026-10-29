@@ -2,11 +2,11 @@ package com.shiwushop.user;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.common.auth.CaptchaProofStore;
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.entity.user.UserAccount;
-import com.shiwushop.mapper.user.UserAccountMapper;
-import com.shiwushop.service.UserService;
+import com.shiwushop.common.captcha.CaptchaProofStore;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.entity.user.UserAccount;
+import com.shiwushop.account.mapper.user.UserAccountMapper;
+import com.shiwushop.account.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -2,9 +2,9 @@ package com.shiwushop.product;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 
-import com.shiwushop.dto.user.RegisterDTO;
+import com.shiwushop.account.dto.user.RegisterDTO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.catalog.entity.brand.Brand;
 import com.shiwushop.catalog.entity.category.Category;
@@ -16,9 +16,9 @@ import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductImageMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.service.UserService;
+import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

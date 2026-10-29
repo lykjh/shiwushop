@@ -1,10 +1,10 @@
 package com.shiwushop.review;
 
-import com.shiwushop.common.auth.AccountAccess;
-import com.shiwushop.common.auth.MediaAssetAccess;
+import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.catalog.dto.review.ReviewCreateDTO;
 import com.shiwushop.catalog.entity.review.ProductReview;
-import com.shiwushop.mapper.outbox.OutboxEventMapper;
+import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.catalog.mapper.review.ProductReviewMapper;
 import com.shiwushop.catalog.service.impl.ReviewServiceImpl;
 import com.shiwushop.catalog.vo.query.review.ReviewEligibility;

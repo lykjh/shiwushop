@@ -1,6 +1,6 @@
 package com.shiwushop.common.api;
 
-import com.shiwushop.common.MethodTraceAspect;
+import com.shiwushop.common.logging.MethodTraceAspect;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;

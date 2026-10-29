@@ -3,7 +3,7 @@ package com.shiwushop.shipment;
 import com.shiwushop.commerce.shipment.ShipmentMessagingConfig;
 import com.shiwushop.commerce.shipment.ShipmentOutboxPublisher;
 import com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO;
-import com.shiwushop.entity.status.ShipmentStatus;
+import com.shiwushop.commerce.entity.status.ShipmentStatus;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import com.shiwushop.commerce.service.ShipmentService;
 import org.junit.jupiter.api.AfterEach;

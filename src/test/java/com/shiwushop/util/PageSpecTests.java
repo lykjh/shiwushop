@@ -1,5 +1,7 @@
 package com.shiwushop.util;
 
+import com.shiwushop.common.pagination.PageSpec;
+
 import com.shiwushop.common.BusinessException;
 
 

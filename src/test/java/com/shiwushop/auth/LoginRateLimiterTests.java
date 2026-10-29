@@ -2,7 +2,7 @@ package com.shiwushop.auth;
 
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.GlobalExceptionHandler;
-import com.shiwushop.common.auth.LoginRateLimiter;
+import com.shiwushop.account.auth.LoginRateLimiter;
 import com.shiwushop.common.auth.RateLimiter;
 import org.junit.jupiter.api.Test;
 

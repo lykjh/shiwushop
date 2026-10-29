@@ -2,18 +2,18 @@ package com.shiwushop.cart;
 
 import com.shiwushop.test.TestRegistration;
 
-import com.shiwushop.entity.status.ProductStatus;
+import com.shiwushop.catalog.entity.status.ProductStatus;
 
-import com.shiwushop.entity.address.Address;
+import com.shiwushop.account.entity.address.Address;
 import com.shiwushop.catalog.entity.category.Category;
 import com.shiwushop.catalog.entity.product.Product;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.catalog.entity.product.Sku;
-import com.shiwushop.entity.user.UserProfile;
-import com.shiwushop.dto.user.RegisterDTO;
-import com.shiwushop.common.privacy.PrivacyCipher;
-import com.shiwushop.service.UserService;
-import com.shiwushop.mapper.address.AddressMapper;
+import com.shiwushop.account.entity.user.UserProfile;
+import com.shiwushop.account.dto.user.RegisterDTO;
+import com.shiwushop.account.privacy.PrivacyCipher;
+import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.mapper.address.AddressMapper;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
@@ -21,7 +21,7 @@ import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.catalog.mapper.product.InventoryMovementMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import com.shiwushop.common.auth.CaptchaProofStore;
+import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
