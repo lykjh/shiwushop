@@ -588,13 +588,14 @@ class PaymentFlowTests {
 
     private Fixture fixture(LocalDateTime expiresAt) {
         UserProfile buyer = user();
+        long fixtureId = buyer.getId();
         Shop shop = new Shop();
         shop.setOwnerUserId(buyer.getId());
-        shop.setName("支付店铺-" + UUID.randomUUID());
+        shop.setName("青禾日用品店" + fixtureId);
         shop.setEnabled(1);
         shopMapper.insert(shop);
         Category category = new Category();
-        category.setName("支付分类-" + UUID.randomUUID());
+        category.setName("居家用品" + fixtureId);
         category.setLevel(1);
         category.setVisible(1);
         category.setSortOrder(0);
@@ -602,7 +603,7 @@ class PaymentFlowTests {
         Product product = new Product();
         product.setCategoryId(category.getId());
         product.setShopId(shop.getId());
-        product.setName("支付商品");
+        product.setName("棉质购物袋");
         product.setStatus(ProductStatus.ON_SALE);
         productMapper.insert(product);
         jdbc.update("INSERT INTO product_sales_stats (product_id, sold_count) VALUES (?, 0)", product.getId());

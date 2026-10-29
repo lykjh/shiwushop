@@ -84,11 +84,11 @@ class PaymentConcurrencyTests {
         try {
             shop = new Shop();
             shop.setOwnerUserId(buyer.getId());
-            shop.setName("并发支付店铺-" + UUID.randomUUID());
+            shop.setName("青禾家居用品店" + buyer.getId());
             shop.setEnabled(1);
             shopMapper.insert(shop);
             category = new Category();
-            category.setName("并发支付分类-" + UUID.randomUUID());
+            category.setName("家居收纳" + buyer.getId());
             category.setLevel(1);
             category.setVisible(1);
             category.setSortOrder(0);
@@ -96,7 +96,7 @@ class PaymentConcurrencyTests {
             product = new Product();
             product.setShopId(shop.getId());
             product.setCategoryId(category.getId());
-            product.setName("并发支付商品");
+            product.setName("桌面收纳盒");
             product.setStatus(ProductStatus.ON_SALE);
             productMapper.insert(product);
             sku = new Sku();

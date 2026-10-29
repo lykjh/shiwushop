@@ -49,12 +49,12 @@ class ShopOwnerSkuRaceTests {
         Long oldOwner = user("MERCHANT");
         Long newOwner = user("USER");
         Shop shop = new Shop();
-        shop.setName("转让竞态-" + UUID.randomUUID());
+        shop.setName("青禾家居店" + oldOwner);
         shop.setOwnerUserId(oldOwner);
         shop.setEnabled(1);
         shopMapper.insert(shop);
         Category category = new Category();
-        category.setName("转让分类-" + UUID.randomUUID());
+        category.setName("家居收纳" + oldOwner);
         category.setLevel(1);
         category.setVisible(1);
         category.setSortOrder(0);
@@ -62,7 +62,7 @@ class ShopOwnerSkuRaceTests {
         Product product = new Product();
         product.setShopId(shop.getId());
         product.setCategoryId(category.getId());
-        product.setName("转让商品");
+        product.setName("桌面收纳盒");
         product.setStatus(ProductStatus.DRAFT);
         productMapper.insert(product);
         Sku sku = new Sku();
