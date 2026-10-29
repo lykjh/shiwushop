@@ -10,6 +10,7 @@ import com.shiwushop.entity.shop.Shop;
 import com.shiwushop.mapper.brand.BrandMapper;
 import com.shiwushop.mapper.outbox.OutboxEventMapper;
 import com.shiwushop.mapper.product.ProductImageMapper;
+import com.shiwushop.mapper.product.InventoryMovementMapper;
 import com.shiwushop.mapper.product.ProductMapper;
 import com.shiwushop.mapper.product.ProductOptionMapper;
 import com.shiwushop.mapper.product.ProductOptionValueMapper;
@@ -69,6 +70,7 @@ import java.util.HexFormat;
 public class ProductServiceImpl implements ProductService {
     private final ProductMapper productMapper;
     private final SkuMapper skuMapper;
+    private final InventoryMovementMapper inventoryMovementMapper;
     private final ShopMapper shopMapper;
     private final MerchantShopAccess merchantShopAccess;
     private final MediaAssetAccess mediaAssetAccess;
@@ -510,6 +512,11 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Sku::getId, skuId)
                 .set(Sku::getPrice, dto.getPrice())
                 .set(Sku::getStock, dto.getStock()));
+        int stockDelta = dto.getStock() - sku.getStock();
+        if (stockDelta != 0 && inventoryMovementMapper.insertMerchantAdjust(skuId, stockDelta,
+                dto.getStock(), "MERCHANT_ADJUST:" + UUID.randomUUID()) != 1) {
+            throw new IllegalStateException("商家库存调整流水写入失败");
+        }
         queueSearchRefresh(productId);
 
         return new MerchantSkuVO(

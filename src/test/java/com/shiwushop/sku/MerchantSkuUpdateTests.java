@@ -82,8 +82,29 @@ class MerchantSkuUpdateTests {
                 saved.getOptionSignature());
         assertEquals(List.of(f.colorId, f.capacityId), linkMapper.selectValueIds(f.skuId));
         assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE sku_id = ? AND reason = 'MERCHANT_ADJUST' " +
+                        "AND delta = 5 AND balance_after = 8", Integer.class, f.skuId));
+        assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, f.productId));
+    }
+
+    @Test
+    void recordsOnlyActualStockChanges() throws Exception {
+        Fixture f = fixture();
+        String path = "/merchant/products/{productId}/skus/{skuId}";
+        mockMvc.perform(put(path, f.productId, f.skuId).session(f.session)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"price\":20.00,\"stock\":1}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(put(path, f.productId, f.skuId).session(f.session)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"price\":21.00,\"stock\":1}"))
+                .andExpect(status().isOk());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE sku_id=? AND reason='MERCHANT_ADJUST' "
+                        + "AND delta=-2 AND balance_after=1", Integer.class, f.skuId));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE sku_id=? AND reason='MERCHANT_ADJUST'",
+                Integer.class, f.skuId));
     }
 
     @Test

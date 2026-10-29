@@ -76,3 +76,10 @@
 - 并发测试 `ShopOwnerOtherWriteRaceTests`：10 条路径均在转让提交后返回 404，原有商品 1 行、发货 0 行、售后状态仍为 `REQUESTED`。`ShopOwnerSkuRaceTests` 验证已获授权的 SKU 更新先完成、转让随后完成。两项均通过，原始输出 `logs/owner-fix-race-tests.log`。
 - 商品、SKU、物流、售后、店铺相关 40 项测试全部通过，原始输出 `logs/owner-fix-module-tests.log`。
 - 完整 `mvn verify`：284 项中 277 项通过、1 项失败、6 项按条件跳过。唯一失败是本轮开始前已有未提交改动的 `MerchantSkuUpdateTests` 所要求的 `MERCHANT_ADJUST` 库存流水；现有 SKU 更新路径尚未写入该流水。原始输出 `logs/owner-fix-full-verify.log`。
+
+## 商家写入竞态与库存流水最终验证
+
+2026-10-29 在 `codex/sku-stock-movement` 分支完成前述商家写入修复的回归，并补齐 SKU 库存调整流水。商家修改库存时，在同一数据库事务内写入 `MERCHANT_ADJUST` 流水；只修改价格时不新增库存流水。此前 `MerchantSkuUpdateTests` 的断言现已通过。未修改用户已有的 `RateLimiter.java` 工作区改动。
+
+- 定向集成测试：`MerchantSkuUpdateTests`、`ShopOwnerOtherWriteRaceTests`、`ShopOwnerSkuRaceTests` 共 5 项通过，0 失败、0 错误。并发用例逐项覆盖商品创建、修改、规格替换、SKU 创建、状态更新、发货、售后审核、退货签收、退款发起和退款同步；转让先提交时，旧店主的 10 条请求均返回 404。原始输出保存在本机 `logs/sku-stock-movement-targeted.log`。
+- 完整 `mvn verify`：285 项，0 失败、0 错误、6 项按条件跳过，JAR 构建成功；原始输出保存在本机 `logs/sku-stock-movement-full-verify-retry.log`。首次全套运行时隔离 MySQL 的连接上限为 151，后段 3 个测试上下文因 `Too many connections` 无法启动；将该测试实例的上限设为 500 后重跑通过。首次运行记录为 `logs/sku-stock-movement-full-verify.log`。这些日志保存在本机，不提交到 Git。

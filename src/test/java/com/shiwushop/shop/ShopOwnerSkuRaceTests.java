@@ -99,6 +99,7 @@ class ShopOwnerSkuRaceTests {
         } finally {
             proceed.countDown();
             jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='PRODUCT' AND aggregate_id=?", product.getId());
+            jdbc.update("DELETE FROM inventory_movements WHERE sku_id=?", sku.getId());
             jdbc.update("DELETE FROM skus WHERE id=?", sku.getId());
             jdbc.update("DELETE FROM products WHERE id=?", product.getId());
             jdbc.update("DELETE FROM shops WHERE id=?", shop.getId());
