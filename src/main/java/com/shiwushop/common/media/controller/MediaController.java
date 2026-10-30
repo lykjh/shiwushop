@@ -26,11 +26,27 @@ public class MediaController {
     private final MediaService uploadService;
     private final MediaReadService readService;
 
+    /**
+     * 上传一张图片。先从 Session 取得登录用户 ID，再交给上传服务验证并保存文件。
+     * 返回的 ID 供商品等业务在后续请求中引用这张图片。
+     *
+     * @param file multipart 请求中的图片文件
+     * @param request 当前请求，用于确认上传者身份
+     * @return 新图片的 ID
+     */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<Uploaded> upload(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
         return Result.success(new Uploaded(uploadService.upload(SessionUser.requireId(request), file)));
     }
 
+    /**
+     * 按 ID 读取图片。读取服务根据当前用户和图片归属决定是否允许访问。
+     * 自有图片禁止缓存；公开图片允许客户端使用 ETag 做条件请求。
+     *
+     * @param mediaId 图片 ID
+     * @param request 当前请求，用于取得可选的登录用户 ID
+     * @return 图片内容、媒体类型和缓存响应头
+     */
     @GetMapping("/{mediaId}")
     public ResponseEntity<Resource> read(@PathVariable Long mediaId, HttpServletRequest request) {
         MediaReadService.ImageFile image = readService.read(mediaId, SessionUser.currentId(request));

@@ -20,6 +20,15 @@ import java.util.List;
 public class MerchantShopController {
 
     private final ShopService shopService;
+
+    /**
+     * 修改指定店铺的展示资料。请求体先经过字段校验；服务层根据当前用户 ID 检查店铺归属并保存。
+     *
+     * @param id 要修改的店铺 ID
+     * @param dto 新的店铺资料
+     * @param request 当前请求，用于取得操作人的用户 ID
+     * @return 更新后的店铺资料
+     */
     @PutMapping("/{id}")
     public Result<ShopVO> update(
             @PathVariable Long id,
@@ -29,6 +38,12 @@ public class MerchantShopController {
         return Result.success(shopService.updateProfile(id,SessionUser.currentId(request),dto));
     }
 
+    /**
+     * 列出当前用户管理的店铺。控制器提供会话用户 ID，查询与权限判断由店铺服务完成。
+     *
+     * @param request 当前请求
+     * @return 当前用户可管理的店铺列表
+     */
     @GetMapping
     public Result<List<ShopVO>> list(HttpServletRequest request) {
         return Result.success(shopService.listMine(SessionUser.currentId(request)));

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReviewOwnerController {
     private final ReviewService reviews;
 
+    /** 由评价作者对原评价追加说明；服务层检查评价归属和允许追加的状态。 */
     @PostMapping("/follow-up")
     public Result<Void> followUp(@PathVariable Long reviewId, @RequestBody ReviewFollowUpDTO request,
                                  HttpServletRequest http) {
@@ -26,6 +27,7 @@ public class ReviewOwnerController {
         return Result.success();
     }
 
+    /** 删除本人评价；服务层负责归属校验和评价状态更新。 */
     @DeleteMapping
     public Result<Void> delete(@PathVariable Long reviewId, HttpServletRequest http) {
         reviews.delete(SessionUser.requireId(http), reviewId);

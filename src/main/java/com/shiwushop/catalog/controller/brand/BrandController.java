@@ -20,6 +20,7 @@ public class BrandController {
 
     private final BrandService brandService;
 
+    /** 列出公开品牌；传入分类 ID 时只返回该分类可用的品牌。 */
     @GetMapping
     public Result<List<BrandPublicVO>> list(
             @RequestParam(required = false) Long categoryId

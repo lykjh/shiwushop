@@ -21,6 +21,7 @@ public class AdminProductStatusController {
     private final ProductService productService;
     private final AdminAuth adminAuth;
 
+    /** 管理员对指定商品执行下架；具体状态转换交给商品服务。 */
     @PutMapping("/{id}/status")
     public Result<ProductStatusVO> takeDown(
             @PathVariable Long id,

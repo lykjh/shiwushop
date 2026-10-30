@@ -22,11 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final OrderService orderService;
+    /** 读取当前买家的指定订单详情；订单归属由服务层确认。 */
     @GetMapping("/{id}")
     public Result<OrderDetailVO> detail(@PathVariable Long id, HttpServletRequest request) {
         return Result.success(orderService.detail(SessionUser.requireId(request), id));
     }
 
+    /** 使用订单 ID 游标列出当前买家的订单；拒绝页码和总数参数。 */
     @GetMapping
     public Result<OrderSliceVO> list(@RequestParam(required = false) Long afterId,
                                     @RequestParam(defaultValue = "20") int size,

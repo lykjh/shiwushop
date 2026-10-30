@@ -23,6 +23,10 @@ import java.util.List;
 public class DiscoveryController {
     private final DiscoveryService discovery;
 
+    /**
+     * 按关键词和商品筛选条件返回发现页，使用服务生成的不透明游标翻页。
+     * 拒绝页码和商品 ID 游标参数，防止客户端混用不同的翻页规则。
+     */
     @GetMapping
     public Result<DiscoveryPage> list(@RequestParam(required = false) String q,
                                       @RequestParam(required = false) Long categoryId,
@@ -41,6 +45,7 @@ public class DiscoveryController {
                 minPrice, maxPrice, size), cursor, SessionUser.currentId(request)));
     }
 
+    /** 根据候选商品 ID 和当前筛选条件刷新其展示状态，供已加载页面更新商品卡片。 */
     @GetMapping("/refresh")
     public Result<DiscoveryRefresh> refresh(@RequestParam List<Long> ids,
                                             @RequestParam(required = false) String q,

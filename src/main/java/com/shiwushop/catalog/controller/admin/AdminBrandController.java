@@ -23,6 +23,7 @@ public class AdminBrandController {
     private final BrandService brandService;
     private final AdminAuth adminAuth;
 
+    /** 管理员创建品牌，并记录创建操作人。 */
     @PostMapping
     public Result<AdminBrandListVO> create(
             @Valid @RequestBody BrandCreateDTO dto, HttpServletRequest request){
@@ -30,12 +31,14 @@ public class AdminBrandController {
         return Result.success(brandService.create(dto, adminId));
     }
 
+    /** 管理员查看品牌管理列表，包括品牌的管理状态。 */
     @GetMapping
     public Result<List<AdminBrandListVO>> list(HttpServletRequest request) {
         adminAuth.requireAdmin(request);
         return Result.success(brandService.adminList());
     }
 
+    /** 管理员修改指定品牌的资料，服务层处理归属和字段校验。 */
     @PutMapping("/{id}")
     public Result<BrandVO> update(
             @PathVariable Long id,

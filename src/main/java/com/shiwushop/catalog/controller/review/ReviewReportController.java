@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReviewReportController {
     private final ReviewService reviews;
 
+    /** 提交对指定评价的举报；服务层处理举报人、评价和重复举报规则。 */
     @PostMapping("/reviews/{reviewId}/reports")
     public Result<Void> report(@PathVariable Long reviewId, @RequestBody ReviewReportDTO request,
                                HttpServletRequest http) {

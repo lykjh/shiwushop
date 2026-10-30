@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductReviewController {
     private final PublicReviewService reviews;
 
+    /** 按评价 ID 游标读取某商品对外可见的评价列表。 */
     @GetMapping("/products/{productId}/reviews")
     public Result<PublicReviewPageVO> list(@PathVariable Long productId,
                                            @RequestParam(required = false) Long afterId,
@@ -22,6 +23,7 @@ public class ProductReviewController {
         return Result.success(reviews.listPublic(productId, afterId, size));
     }
 
+    /** 返回某商品的公开评价数量与评分汇总。 */
     @GetMapping("/products/{productId}/review-summary")
     public Result<ReviewSummaryVO> summary(@PathVariable Long productId) {
         return Result.success(reviews.summary(productId));

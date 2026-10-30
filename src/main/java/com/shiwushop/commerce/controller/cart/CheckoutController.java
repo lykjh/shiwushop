@@ -20,11 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class CheckoutController {
     private final CheckoutService checkoutService;
 
+    /** 将购物车中选中的项目结算成订单；服务层处理价格、库存和地址核对。 */
     @PostMapping
     public Result<CheckoutVO> checkout(@Valid @RequestBody CheckoutDTO dto, HttpServletRequest request) {
         return Result.success(checkoutService.checkoutSelected(SessionUser.requireId(request), dto));
     }
 
+    /** 不经购物车，按指定 SKU 和数量直接创建订单。 */
     @PostMapping("/direct")
     public Result<CheckoutVO> direct(@Valid @RequestBody DirectCheckoutDTO dto, HttpServletRequest request) {
         return Result.success(checkoutService.checkoutDirect(SessionUser.requireId(request), dto));

@@ -26,6 +26,10 @@ public class ProductController {
     private final PublicProductService productService;
     private final PublicProductCache publicProductCache;
 
+    /**
+     * 按分类、品牌、店铺和价格范围浏览公开商品，使用商品 ID 游标翻页。
+     * 拒绝页码和总数参数；列表读取交给公开缓存，缓存未命中时由服务回源。
+     */
     @GetMapping
     public Result<PublicProductPageVO> list(
             @RequestParam(required = false) Long categoryId,
@@ -44,6 +48,7 @@ public class ProductController {
                 categoryId, brandId, shopId, minPrice, maxPrice, size, afterId)));
     }
 
+    /** 读取一件可公开展示的商品详情；服务层负责可见性判断。 */
     @GetMapping("/{id}")
     public Result<PublicProductDetailVO> publicDetail(@PathVariable Long id) {
         return Result.success(productService.publicDetail(id));

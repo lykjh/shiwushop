@@ -21,6 +21,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class MerchantOrderController {
     private final OrderService orderService;
 
+    /**
+     * 按游标查询某店铺的商家订单。拒绝旧的页码和总数参数，避免同一接口出现两套分页语义。
+     * 店铺访问权限和游标查询由订单服务处理。
+     *
+     * @param id 店铺 ID
+     * @param afterId 上一批最后一笔订单的 ID；首次查询可省略
+     * @param size 本批最多返回的订单数，默认 20
+     * @param request 当前请求，用于取得商家用户 ID
+     * @return 订单列表及下一批游标
+     */
     @GetMapping("/{id}/orders")
     public Result<OrderSliceVO> orders(@PathVariable Long id,
                                       @RequestParam(required = false) Long afterId,
@@ -32,6 +42,14 @@ public class MerchantOrderController {
         return Result.success(orderService.listMerchant(userId, id, afterId, size));
     }
 
+    /**
+     * 读取指定店铺的一笔订单详情。订单服务会结合当前用户、店铺和订单 ID 校验访问权限。
+     *
+     * @param shopId 店铺 ID
+     * @param orderId 订单 ID
+     * @param request 当前请求，用于取得商家用户 ID
+     * @return 商家可查看的订单详情
+     */
     @GetMapping("/{shopId}/orders/{orderId}")
     public Result<OrderDetailVO> orderDetail(@PathVariable Long shopId, @PathVariable Long orderId,
                                               HttpServletRequest request) {

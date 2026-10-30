@@ -18,11 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReviewController {
     private final ReviewService reviews;
 
+    /** 为本人订单中的指定订单项提交评价；评价资格和重复提交由评价服务校验。 */
     @PostMapping
     public Result<Created> create(@PathVariable Long orderId, @PathVariable Long orderItemId,
                                   @RequestBody ReviewCreateDTO request, HttpServletRequest http) {
         return Result.success(new Created(reviews.create(SessionUser.requireId(http), orderId, orderItemId, request)));
     }
 
+    /** 新建评价成功后返回的评价 ID。 */
     public record Created(Long id) { }
 }

@@ -15,6 +15,7 @@ class AdminAuth {
 
     private final AccountAccess accountAccess;
 
+    /** 从 Session 取用户并再次确认账号启用且具有管理员角色，返回通过校验的用户 ID。 */
     Long requireAdmin(HttpServletRequest request) {
         Long userId = SessionUser.requireId(request);
 

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SearchController {
     private final DiscoveryService discovery;
 
+    /** 根据用户输入的关键词返回搜索建议，供输入框联想使用。 */
     @GetMapping("/suggestions")
     public Result<SearchSuggestions> suggestions(@RequestParam String q) {
         return Result.success(discovery.suggestions(q));

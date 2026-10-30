@@ -21,6 +21,7 @@ public class AdminReviewReportController {
     private final AdminAuth auth;
     private final ReviewService reviews;
 
+    /** 管理员按游标查看待处理的评价举报。 */
     @GetMapping
     public Result<PendingReviewReportPageVO> pending(@RequestParam(required = false) Long afterId,
                                                        @RequestParam(defaultValue = "20") int size,
@@ -29,6 +30,7 @@ public class AdminReviewReportController {
         return Result.success(reviews.pendingReports(afterId, size));
     }
 
+    /** 管理员对一条评价举报作出处理决定，并记录处理人。 */
     @PostMapping("/{reportId}/resolve")
     public Result<Void> resolve(@PathVariable Long reportId, @RequestBody ReviewReportDecisionDTO request,
                                 HttpServletRequest http) {
