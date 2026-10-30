@@ -19,6 +19,7 @@ public class DiscoveryCursor {
     private final ObjectMapper json;
     private final SecretKeySpec key;
 
+    /** 配置搜索游标签名密钥；未配置时为当前进程生成随机密钥。 */
     public DiscoveryCursor(ObjectMapper json,
                            @Value("${shop.search.cursor-secret:}") String configuredSecret) {
         this.json = json;
@@ -29,9 +30,10 @@ public class DiscoveryCursor {
         this.key = new SecretKeySpec(secret, "HmacSHA256");
     }
 
+    /** 游标携带的搜索快照、排序位置、查询指纹、访问身份和到期时间。 */
     public record State(String pit, List<Object> sort, String query, Long userId, long expiresAt) { }
 
-    /** 游标包含 PIT、排序位置、查询指纹和访问身份，签名防止客户端改写。 */
+    /** 把游标状态编码为 URL 安全的载荷和 HMAC 签名，防止客户端改写翻页位置。 */
     public String encode(State state) {
         try {
             String payload = Base64.getUrlEncoder().withoutPadding()
@@ -42,6 +44,10 @@ public class DiscoveryCursor {
         }
     }
 
+    /**
+     * 校验游标签名、长度、查询条件、访问身份和有效期。
+     * 格式或身份不符返回 400，过期返回 410，要求客户端重新从首页开始浏览。
+     */
     public State decode(String token, String query, Long userId) {
         try {
             String[] parts = token.split("\\.", -1);
@@ -66,6 +72,7 @@ public class DiscoveryCursor {
         }
     }
 
+    /** 对游标载荷计算 HMAC-SHA256，供编码和常量时间签名比较使用。 */
     private byte[] sign(String payload) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(key);

@@ -23,12 +23,14 @@ public class SearchGateway {
     private final ObjectMapper json;
     private final String baseUrl;
 
+    /** 配置搜索服务地址；HTTP 客户端使用固定连接超时。 */
     public SearchGateway(ObjectMapper json,
                          @Value("${shop.search.url:http://127.0.0.1:19200}") String baseUrl) {
         this.json = json;
         this.baseUrl = baseUrl;
     }
 
+    /** 为商品索引打开两分钟的 PIT 快照，供连续翻页使用。 */
     public String openPit() {
         JsonNode result = call("/shiwushop-products-read/_search/point_in_time?keep_alive=2m", null);
         String id = result.path("pit_id").asText();
@@ -36,6 +38,7 @@ public class SearchGateway {
         return id;
     }
 
+    /** 尽力释放 PIT；释放失败只记录日志，快照最终仍由搜索服务自动到期。 */
     public void closePit(String pit) {
         try {
             JsonNode closed = send("/_search/point_in_time", json.writeValueAsString(Map.of("pit_id", List.of(pit))),
@@ -50,26 +53,35 @@ public class SearchGateway {
         }
     }
 
+    /** 在已打开的 PIT 上执行搜索请求。 */
     public JsonNode search(Map<String, Object> body) {
         return call("/_search", body);
     }
 
+    /** 查询指定类型的只读索引别名，用于候选和搜索建议。 */
     public JsonNode searchIndex(String index, Map<String, Object> body) {
         return call("/shiwushop-" + index + "-read/_search", body);
     }
 
+    /** 发送 NDJSON 批量索引或删除操作，并等待搜索刷新完成。 */
     public JsonNode bulk(String ndjson) {
         return send("/_bulk?refresh=wait_for", ndjson, "application/x-ndjson");
     }
 
+    /** 把结构化请求体序列化为 JSON 后交给统一 HTTP 发送入口。 */
     private JsonNode call(String path, Object body) {
         return send(path, body == null ? "" : json.writeValueAsString(body), "application/json");
     }
 
+    /** 以 POST 方法发送搜索请求。 */
     private JsonNode send(String path, String payload, String contentType) {
         return send(path, payload, contentType, "POST");
     }
 
+    /**
+     * 设置请求超时并解析搜索响应；非成功状态转为服务故障。
+     * PIT 已失效的搜索返回 410，让客户端丢弃旧游标重新加载。
+     */
     private JsonNode send(String path, String payload, String contentType, String method) {
         try {
             // PIT 清理是尽力操作，末页不等待完整的搜索请求超时。

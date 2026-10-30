@@ -23,7 +23,7 @@ public class ShopController {
         return Result.success(shopService.publicList(categoryId, page, size));
     }
 
-    /** 查询一家公开店铺的展示资料；服务层检查店铺是否对外可见。 */
+    /** 按 ID 查询店铺资料及其公开分类；服务层校验 ID 和店铺是否存在。 */
     @GetMapping("/{id}")
     public Result<ShopDetailVO> detail(@PathVariable Long id) {
         return Result.success(shopService.publicDetail(id));

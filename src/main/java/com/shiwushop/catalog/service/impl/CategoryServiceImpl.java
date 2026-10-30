@@ -31,6 +31,10 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryMapper categoryMapper;
     private final OutboxEventMapper outboxEventMapper;
 
+    /**
+     * 锁住分类树后校验名称与父分类层级，创建分类并写入搜索刷新事件。
+     * 树锁使并发新建或移动分类按顺序检查层级约束。
+     */
     @Override
     @Transactional
     public CategoryVO create(CategoryCreateDTO dto) {
@@ -70,6 +74,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
 
+    /** 按层级、排序值和 ID 返回管理员可见的完整分类列表。 */
     @Override
     public List<CategoryVO> adminList() {
         return categoryMapper.selectList(
@@ -80,6 +85,10 @@ public class CategoryServiceImpl implements CategoryService {
                 .toList();
     }
 
+    /**
+     * 在分类树锁下移动或修改分类。检查新父分类不会形成环，且整棵子树仍不超过三级；
+     * 同步更新子孙层级并在同一事务写入搜索刷新事件。
+     */
     @Override
     @Transactional
     public CategoryVO update(Long id, CategoryUpdateDTO dto) {
@@ -139,6 +148,7 @@ public class CategoryServiceImpl implements CategoryService {
         return toVO(categoryMapper.selectById(id));
     }
 
+    /** 沿新父分类的祖先链向上检查，拒绝把分类移到自己或自己的后代之下。 */
     private Category validatedParent(Long id, Long parentId) {
         if (parentId == null) return null;
         Category parent = categoryMapper.selectById(parentId);
@@ -154,6 +164,10 @@ public class CategoryServiceImpl implements CategoryService {
         return parent;
     }
 
+    /**
+     * 锁住分类树后删除指定分类；有子分类或被数据库关联引用时拒绝删除。
+     * 删除与搜索刷新事件在同一事务中提交。
+     */
     @Override
     @Transactional
     public void delete(Long id) {
@@ -176,6 +190,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
     }
 
+    /** 读取分类及其祖先路径；路径上任一级隐藏时不向公开接口展示。 */
     @Override
     public CategoryDetailVO detail(Long id) {
         Category category = categoryMapper.selectById(id);
@@ -201,6 +216,7 @@ public class CategoryServiceImpl implements CategoryService {
         );
     }
 
+    /** 返回顶层或指定父分类下可见的导航项，并标记各项是否有可见子分类。 */
     @Override
     public List<CategoryNavVO> list(Long parentId) {
         if(parentId!=null){
@@ -231,6 +247,7 @@ public class CategoryServiceImpl implements CategoryService {
                 )).toList();
     }
 
+    /** 沿祖先链检查当前分类是否位于隐藏分支，以免从公开导航泄露隐藏分类。 */
     private boolean hasHiddenCategoryInPath(Category parent) {
         Category current = parent;
         while (current != null) {
@@ -244,6 +261,7 @@ public class CategoryServiceImpl implements CategoryService {
         return false;
     }
 
+    /** 组装管理员接口使用的分类视图，保留父级、层级与展示顺序。 */
     private CategoryVO toVO(Category category) {
         return new CategoryVO(
                 category.getId(), category.getParentId(), category.getLevel(),

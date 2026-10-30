@@ -6,6 +6,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration
 class SearchWorkerScheduling {
+    /** 为搜索索引任务提供独立单线程调度器，避免搜索等待占用支付或物流任务线程。 */
     @Bean
     ThreadPoolTaskScheduler searchTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();

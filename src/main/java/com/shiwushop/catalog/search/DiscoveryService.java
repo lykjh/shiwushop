@@ -35,6 +35,7 @@ public class DiscoveryService {
     private final ObjectMapper json;
     private final boolean enabled;
 
+    /** 注入搜索网关与数据库核对依赖；配置开关控制发现接口是否对外提供服务。 */
     public DiscoveryService(SearchGateway search, DiscoveryCursor cursors, ProductMapper products,
                             BrandMapper brands, ShopMapper shops, CategoryService categories,
                             ObjectMapper json,
@@ -49,7 +50,10 @@ public class DiscoveryService {
         this.enabled = enabled;
     }
 
-    /** 搜索索引只负责候选和顺序；每批展示前以数据库核对可售状态与当前价格。 */
+    /**
+     * 搜索索引负责候选顺序，数据库负责最终可见性、价格和库存核对。
+     * 游标绑定查询、用户和 PIT；过滤失效命中后继续扫描候选以补满页面，结束时释放无用 PIT。
+     */
     public DiscoveryPage list(DiscoveryQuery raw, String cursor, Long userId) {
         if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
         DiscoveryQuery query = normalize(raw);
@@ -110,7 +114,10 @@ public class DiscoveryService {
         }
     }
 
-    /** 已显示的卡片重新核对数据库，供前端回滚到列表时刷新价格和可见状态。 */
+    /**
+     * 对前端已显示的商品 ID 重新核对搜索条件和数据库当前状态。
+     * 返回仍匹配的卡片和应移除的 ID，供返回列表时更新价格或下架状态。
+     */
     public DiscoveryRefresh refresh(List<Long> ids, DiscoveryQuery raw) {
         if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
         if (ids == null || ids.isEmpty() || ids.size() > 60 || ids.stream().anyMatch(id -> id == null || id <= 0))
@@ -140,6 +147,10 @@ public class DiscoveryService {
                 unique.stream().filter(id -> !rows.containsKey(id)).toList());
     }
 
+    /**
+     * 分别从商品、店铺和品牌索引取最多五个候选，再到数据库排除已失效的记录。
+     * 返回名称与站内跳转路径，避免直接展示过期索引中的实体。
+     */
     public SearchSuggestions suggestions(String raw) {
         if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
         String q = raw == null ? "" : raw.strip();
@@ -164,6 +175,7 @@ public class DiscoveryService {
                         .map(id -> new SearchSuggestions.Entry(id, brandRows.get(id).getName(), "/brands/" + id)).toList());
     }
 
+    /** 在指定搜索索引中按名称匹配候选 ID，并对名称精确匹配加权。 */
     private List<Long> suggestIds(String index, String q) {
         JsonNode hits = search.searchIndex(index, Map.of("size", 5, "_source", List.of("id"),
                 "query", Map.of("bool", Map.of(
@@ -176,11 +188,13 @@ public class DiscoveryService {
         return ids;
     }
 
+    /** 去除搜索词首尾空白，保留其他筛选参数供后续校验和游标签名。 */
     private DiscoveryQuery normalize(DiscoveryQuery query) {
         return new DiscoveryQuery(query.q() == null ? null : query.q().strip(), query.categoryId(),
                 query.brandId(), query.shopId(), query.minPrice(), query.maxPrice(), query.size());
     }
 
+    /** 校验搜索词、分页、筛选实体和价格区间，避免无效条件进入搜索请求。 */
     private void validate(DiscoveryQuery q) {
         PageSpec.of(1, q.size());
         if (q.q() != null && q.q().codePointCount(0, q.q().length()) > 100) {
@@ -199,11 +213,13 @@ public class DiscoveryService {
         }
     }
 
+    /** 拒绝非正数筛选 ID，返回可直接用于后续查询的原值。 */
     private long positive(Long id) {
         if (id <= 0) throw new BusinessException(400, "筛选ID必须大于0");
         return id;
     }
 
+    /** 将筛选、关键词权重、PIT 和上一页排序位置组装为搜索引擎请求体。 */
     private Map<String, Object> request(DiscoveryQuery q, String pit, List<Object> position, int size) {
         List<Object> filters = new ArrayList<>();
         if (q.categoryId() != null) filters.add(Map.of("term", Map.of("categoryPathIds", q.categoryId())));
@@ -235,6 +251,7 @@ public class DiscoveryService {
         return body;
     }
 
+    /** 将数据库复核后的商品行转为公开商品卡片，避免直接信任索引中的价格。 */
     private PublicProductVO toCard(PublicProductRow row) {
         return new PublicProductVO(row.getId(), row.getName(), row.getCoverMediaId(),
                 row.getBrandId() == null ? null : new PublicProductVO.Brand(row.getBrandId(), row.getBrandName()),

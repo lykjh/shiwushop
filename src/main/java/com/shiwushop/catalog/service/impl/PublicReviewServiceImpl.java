@@ -23,6 +23,10 @@ import java.util.stream.Collectors;
 public class PublicReviewServiceImpl implements PublicReviewService {
     private final ProductReviewMapper reviews;
 
+    /**
+     * 确认商品公开可见后按评价 ID 游标取一页评价，多读一条判断下一页。
+     * 图片一次批量查询，再按原评与追评分别归入返回结果。
+     */
     @Override
     @Transactional(readOnly = true)
     public PublicReviewPageVO listPublic(Long productId, Long afterId, int size) {
@@ -46,6 +50,7 @@ public class PublicReviewServiceImpl implements PublicReviewService {
         return new PublicReviewPageVO(items, hasMore, hasMore ? items.getLast().id() : null);
     }
 
+    /** 只为公开可见商品返回数据库维护的评价数量和评分汇总。 */
     @Override
     @Transactional(readOnly = true)
     public ReviewSummaryVO summary(Long productId) {

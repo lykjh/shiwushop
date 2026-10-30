@@ -22,6 +22,11 @@ class ProductOptionReader {
     private final ProductOptionMapper optionMapper;
     private final ProductOptionValueMapper valueMapper;
     private final SkuOptionValueMapper skuOptionValueMapper;
+
+    /**
+     * 按配置顺序读取商品规格项，再批量读取对应规格值。
+     * 公开详情和商家详情共用此映射，保持同一商品的规格展示一致。
+     */
     List<ProductOptionVO> loadOptions(Long productId) {
         List<ProductOption> options = optionMapper.selectList(
                 new LambdaQueryWrapper<ProductOption>()
@@ -40,6 +45,10 @@ class ProductOptionReader {
                 option.getId(), option.getName(), values.getOrDefault(option.getId(), List.of()))).toList();
     }
 
+    /**
+     * 批量读取每个 SKU 所选的规格值，按 SKU ID 归组。
+     * 每批最多 200 个 ID，避免大量 SKU 形成过长的 SQL IN 列表。
+     */
     Map<Long, List<Long>> loadSkuValueIds(List<Sku> skus) {
         Map<Long, List<Long>> values = new HashMap<>();
         List<Long> ids = skus.stream().map(Sku::getId).toList();

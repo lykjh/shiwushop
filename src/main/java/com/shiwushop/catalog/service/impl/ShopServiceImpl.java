@@ -40,12 +40,17 @@ public class ShopServiceImpl implements ShopService {
     private final CategoryService categoryService;
     private final OutboxEventMapper outboxEventMapper;
 
+    /** 将店铺变化写入事务发件箱，确保搜索索引随后刷新；写入失败时中断事务。 */
     private void queueSearchRefresh(Long shopId) {
         if (outboxEventMapper.insertSearchShopRefresh(shopId) != 1) {
             throw new IllegalStateException("店铺搜索事件写入失败");
         }
     }
 
+    /**
+     * 管理员创建店铺，验证经营者账号及店铺标识图片。
+     * 首次开店的普通用户在同一事务内提升为商家，并投递搜索刷新事件。
+     */
     @Override
     @Transactional
     public ShopVO create(ShopCreateDTO dto, Long adminId) {
@@ -84,6 +89,10 @@ public class ShopServiceImpl implements ShopService {
         return toVO(shop);
     }
 
+    /**
+     * 锁住店铺后将其归属转给有效用户；若新店主仍是普通用户，同事务提升为商家。
+     * 旧店主后续写请求会因归属检查失败而被拒绝。
+     */
     @Override
     @Transactional
     public ShopVO changeOwner(Long shopId, Long newOwnerId) {
@@ -114,6 +123,7 @@ public class ShopServiceImpl implements ShopService {
         return toVO(shop);
     }
 
+    /** 修改店铺启用状态，并在事务内写入搜索索引刷新事件。 */
     @Override
     @Transactional
     public ShopVO changeStatus(Long shopId, Integer enabled) {
@@ -131,6 +141,7 @@ public class ShopServiceImpl implements ShopService {
         return toVO(updatedShop);
     }
 
+    /** 按 ID 返回所有店铺的管理视图，不按启用状态过滤。 */
     @Override
     public List<ShopVO> adminList() {
         return shopMapper.selectList(
@@ -138,6 +149,7 @@ public class ShopServiceImpl implements ShopService {
         ).stream().map(this::toVO).toList();
     }
 
+    /** 验证分页和可选分类参数，查询启用中店铺的一页公开列表及总数。 */
     @Override
     public ShopPageVO publicList(Long categoryId, int page, int size) {
         PageSpec pageSpec = PageSpec.of(page, size);
@@ -156,6 +168,7 @@ public class ShopServiceImpl implements ShopService {
         );
     }
 
+    /** 按 ID 读取店铺资料及公开分类；当前方法只校验店铺存在，不过滤停用状态。 */
     @Override
     public ShopDetailVO publicDetail(Long id) {
         if (id <= 0) {
@@ -174,6 +187,10 @@ public class ShopServiceImpl implements ShopService {
                 shopMapper.selectPublicCategories(id));
     }
 
+    /**
+     * 店主修改店铺资料；更新 SQL 再次附加店主 ID 条件，避免归属检查后转店导致旧店主写入。
+     * 店铺标识图片必须属于当前操作人，修改成功后刷新搜索索引。
+     */
     @Override
     @Transactional
     public ShopVO updateProfile(Long shopId, Long userId, ShopProfileUpdateDTO dto) {
@@ -203,6 +220,7 @@ public class ShopServiceImpl implements ShopService {
 
     }
 
+    /** 验证商家角色后列出其名下店铺，包括停用店铺。 */
     @Override
     public List<ShopVO> listMine(Long userId) {
         accountAccess.requireMerchant(userId);
@@ -215,6 +233,7 @@ public class ShopServiceImpl implements ShopService {
                 .toList();
     }
 
+    /** 将店铺实体转换为管理接口使用的店铺视图。 */
     private ShopVO toVO(Shop shop) {
         return new ShopVO(shop.getId(), shop.getOwnerUserId(), shop.getName(),
                 shop.getLogoMediaId(), shop.getDescription(), shop.getEnabled());

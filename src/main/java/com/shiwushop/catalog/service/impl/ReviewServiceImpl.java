@@ -31,6 +31,10 @@ public class ReviewServiceImpl implements ReviewService {
     private final MediaAssetAccess media;
     private final OutboxEventMapper outbox;
 
+    /**
+     * 锁定订单项，确认买家已付款、已确认收货、未全额退款且尚未评价。
+     * 写入评价、图片和评分汇总后，在同一事务加入商品搜索刷新事件。
+     */
     @Transactional
     public Long create(Long buyerId, Long orderId, Long orderItemId, ReviewCreateDTO request) {
         accounts.checkActive(buyerId);
@@ -70,6 +74,10 @@ public class ReviewServiceImpl implements ReviewService {
         return review.getId();
     }
 
+    /**
+     * 对本人未删除、未隐藏且未追评的评价追加内容；全额退款的订单项不能追评。
+     * 新图片也必须属于当前买家且已准备就绪。
+     */
     @Transactional
     public void followUp(Long buyerId, Long reviewId, ReviewFollowUpDTO request) {
         accounts.checkActive(buyerId);
@@ -87,6 +95,7 @@ public class ReviewServiceImpl implements ReviewService {
         for (int i = 0; i < images.size(); i++) reviews.insertImage(reviewId, images.get(i), "FOLLOW_UP", i);
     }
 
+    /** 软删除本人评价；被计入公开评分时同步扣减汇总，并刷新搜索结果。 */
     @Transactional
     public void delete(Long buyerId, Long reviewId) {
         accounts.checkActive(buyerId);
@@ -99,6 +108,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
+    /** 举报公开可见的他人评价；锁定评价后写入举报原因。 */
     @Transactional
     public void report(Long reporterId, Long reviewId, ReviewReportDTO request) {
         accounts.checkActive(reporterId);
@@ -110,6 +120,7 @@ public class ReviewServiceImpl implements ReviewService {
         reviews.insertReport(reviewId, reporterId, reason);
     }
 
+    /** 用评价举报 ID 游标返回待处理列表，多读一条判断是否还有下一页。 */
     @Transactional(readOnly = true)
     public PendingReviewReportPageVO pendingReports(Long afterId, int size) {
         if (afterId != null && afterId <= 0) throw new BusinessException(400, "游标无效");
@@ -120,6 +131,10 @@ public class ReviewServiceImpl implements ReviewService {
         return new PendingReviewReportPageVO(rows, hasMore, hasMore ? rows.getLast().id() : null);
     }
 
+    /**
+     * 管理员选择保留或隐藏评价。先锁评价再锁举报，避免并发处理交叉等待；
+     * 隐藏时移出评分汇总并刷新搜索，最后写处理审计记录。
+     */
     @Transactional
     public void resolveReport(Long adminId, Long reportId, ReviewReportDecisionDTO request) {
         if (reportId == null || reportId <= 0) throw new BusinessException(400, "举报ID无效");
@@ -144,6 +159,7 @@ public class ReviewServiceImpl implements ReviewService {
         reviews.insertModerationAudit(report.getReviewId(), reportId, adminId, decision, reason);
     }
 
+    /** 锁定评价并确认作者身份；无权限时用 404 隐藏评价存在性。 */
     private ProductReview ownedForUpdate(Long buyerId, Long reviewId) {
         if (reviewId == null || reviewId <= 0) throw new BusinessException(400, "评价ID无效");
         ProductReview review = reviews.selectForUpdate(reviewId);
@@ -152,6 +168,7 @@ public class ReviewServiceImpl implements ReviewService {
         return review;
     }
 
+    /** 去除评价正文首尾空白，并将长度限制在 1 到 2000 个 Unicode 字符。 */
     private String content(String value) {
         String content = value == null ? "" : value.strip();
         if (content.isEmpty() || content.codePointCount(0, content.length()) > 2000)
@@ -159,6 +176,7 @@ public class ReviewServiceImpl implements ReviewService {
         return content;
     }
 
+    /** 校验评价图片 ID 为正数、无重复且最多 9 张。 */
     private List<Long> images(List<Long> value) {
         List<Long> images = value == null ? List.of() : value;
         if (images.size() > 9 || images.stream().anyMatch(id -> id == null || id <= 0)
@@ -167,6 +185,7 @@ public class ReviewServiceImpl implements ReviewService {
         return images;
     }
 
+    /** 清理举报或审核原因，并限制为 1 到 500 个 Unicode 字符。 */
     private String reportReason(String value) {
         String reason = value == null ? "" : value.strip();
         if (reason.isEmpty() || reason.codePointCount(0, reason.length()) > 500)
@@ -174,11 +193,13 @@ public class ReviewServiceImpl implements ReviewService {
         return reason;
     }
 
+    /** 把评价变化写入商品搜索刷新发件箱；失败时让当前事务回滚。 */
     private void refreshSearch(Long productId) {
         if (outbox.insertSearchProductRefresh(productId) != 1)
             throw new IllegalStateException("评价商品搜索事件写入失败");
     }
 
+    /** 从商品评分汇总扣除一条评价；更新不到汇总时报告数据不一致。 */
     private void removeFromSummary(ProductReview review) {
         if (reviews.removeFromSummary(review.getProductId(), review.getRating()) != 1)
             throw new IllegalStateException("评价汇总与评价状态不一致");

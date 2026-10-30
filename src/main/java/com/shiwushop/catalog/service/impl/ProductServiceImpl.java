@@ -75,18 +75,24 @@ public class ProductServiceImpl implements ProductService {
     private final OutboxEventMapper outboxEventMapper;
     private final ProductOptionReader optionReader;
 
+    /** 将商品变化写入事务发件箱；事件写入失败时回滚商品变更，避免搜索索引漏更新。 */
     private void queueSearchRefresh(Long productId) {
         if (outboxEventMapper.insertSearchProductRefresh(productId) != 1) {
             throw new IllegalStateException("商品搜索事件写入失败");
         }
     }
 
+    /** 在查询前拒绝空值和非正数商品 ID，统一返回参数错误。 */
     private void requireProductId(Long productId) {
         if (productId == null || productId <= 0) {
             throw new BusinessException(400, "商品ID必须大于0");
         }
     }
 
+    /**
+     * 确认商品所在店铺属于当前商家。写操作先锁店铺再锁商品，
+     * 锁后复查店铺关联，防止归属变更与商家写入并发交错。
+     */
     private OwnedProduct requireOwnedProduct(Long userId, Long productId, boolean lock) {
         Product product = productMapper.selectById(productId);
         if (product == null || product.getShopId() == null) {
@@ -104,8 +110,13 @@ public class ProductServiceImpl implements ProductService {
         return new OwnedProduct(product, shop);
     }
 
+    /** 同时保存通过归属校验的商品和店铺，供上架等操作复用。 */
     private record OwnedProduct(Product product, Shop shop) { }
 
+    /**
+     * 在商家所属店铺创建草稿。校验分类、品牌和图片归属后保存商品、品牌关联与图片顺序，
+     * 最后写搜索刷新事件；草稿尚不对公开列表展示。
+     */
     @Override
     @Transactional
     public MerchantProductVO createDraft(Long userId, MerchantProductCreateDTO dto) {
@@ -143,6 +154,10 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
+    /**
+     * 锁住商家商品后修改资料。图片列表未提交时保留原图；提交新列表时检查封面包含关系，
+     * 在售商品不得移除所有图片或封面，更新后通知搜索索引。
+     */
     @Override
     @Transactional
     public MerchantProductVO updateMerchantProduct(Long userId, Long productId, MerchantProductUpdateDTO dto) {
@@ -193,6 +208,7 @@ public class ProductServiceImpl implements ProductService {
             );
     }
 
+    /** 要求商品使用公开的二级或三级分类；可选品牌必须存在且启用。 */
     private void validateCategoryAndBrand(Long categoryId, Long brandId) {
         if (categoryService.detail(categoryId).getLevel() < 2) {
             throw new BusinessException(409, "商品只能选择二级或三级分类");
@@ -209,6 +225,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 拒绝重复图片，并要求指定的封面 ID 同时出现在商品图片列表中。 */
     private void validateImages(List<Long> imageIds, Long coverId) {
         if (new HashSet<>(imageIds).size() != imageIds.size()) {
             throw new BusinessException(400, "商品图片不能重复");
@@ -218,12 +235,17 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 逐张确认图片已经准备好且属于当前商家，避免引用其他用户的私有图片。 */
     private void validateOwnedMedia(List<Long> imageIds, Long userId) {
         for (Long mediaId : imageIds) {
             mediaAssetAccess.requireReadyOwned(mediaId, userId, "商品图片不存在或不可用");
         }
     }
 
+    /**
+     * 解析更新后的封面：显式新封面优先；替换图片列表但未给封面时清空封面；
+     * 两者均未提交时沿用原封面。
+     */
     private Long resolveCoverId(MerchantProductUpdateDTO dto, List<ProductImage> oldImages) {
         if (dto.getCoverMediaId() != null) {
             return dto.getCoverMediaId();
@@ -235,6 +257,7 @@ public class ProductServiceImpl implements ProductService {
                 .map(ProductImage::getMediaId).findFirst().orElse(null);
     }
 
+    /** 按请求顺序保存商品图片关联，并为唯一封面设置标记。 */
     private void insertProductImages(Long productId, List<Long> imageIds, Long coverId) {
         for (int i = 0; i < imageIds.size(); i++) {
             ProductImage image = new ProductImage();
@@ -246,6 +269,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 提交图片列表时整体替换关联；只提交封面时仅切换原列表中的封面标记。 */
     private void updateProductImages(Long productId, MerchantProductUpdateDTO dto,
                                      List<Long> imageIds, Long coverId) {
         if (dto.getImageMediaIds() != null) {
@@ -263,6 +287,10 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * 在商品未上架且没有 SKU 时整体替换规格选项，避免改变既有 SKU 签名和历史订单含义。
+     * 删除旧规格、插入新规格值都在同一事务内完成。
+     */
     @Override
     @Transactional
     public List<ProductOptionVO> replaceOptions(Long userId, Long productId, ProductOptionsUpdateDTO dto) {
@@ -288,6 +316,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 校验规格项名称不重复，且同一规格项内部的值不重复。 */
     private void validateOptions(List<ProductOptionSaveDTO> options) {
         Set<String> names = new HashSet<>();
         for (ProductOptionSaveDTO option : options) {
@@ -303,6 +332,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 先删除商品旧规格值，再删除规格项，以满足外键引用顺序。 */
     private void deleteProductOptions(Long productId) {
         List<ProductOption> oldOptions = optionMapper.selectList(new LambdaQueryWrapper<ProductOption>()
                 .eq(ProductOption::getProductId, productId));
@@ -315,6 +345,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(ProductOption::getProductId, productId));
     }
 
+    /** 按输入顺序写入规格项和值，并返回数据库生成的 ID 供商家创建 SKU。 */
     private List<ProductOptionVO> insertProductOptions(Long productId, List<ProductOptionSaveDTO> inputs) {
         List<ProductOptionVO> result = new ArrayList<>();
         for (int i = 0; i < inputs.size(); i++) {
@@ -338,6 +369,10 @@ public class ProductServiceImpl implements ProductService {
         return result;
     }
 
+    /**
+     * 锁住店铺、商品和 SKU 后修改价格与库存；库存变化同步写入调整流水。
+     * SQL 更新前确认 SKU 属于目标商品，成功后投递搜索刷新事件。
+     */
     @Override
     @Transactional
     public MerchantSkuVO updateMerchantSku(Long userId, Long productId, Long skuId, MerchantSkuUpdateDTO dto) {
@@ -373,6 +408,10 @@ public class ProductServiceImpl implements ProductService {
                 false);
     }
 
+    /**
+     * 验证每个规格项恰好选择一个值；按规格顺序计算组合摘要，依靠唯一约束拒绝重复 SKU。
+     * SKU、规格关联和搜索刷新事件在一个事务中提交。
+     */
     @Override
     @Transactional
     public MerchantSkuVO createMerchantSku(Long userId, Long productId, MerchantSkuCreateDTO dto) {
@@ -412,6 +451,10 @@ public class ProductServiceImpl implements ProductService {
                 sku.getId(), productId, orderedIds, dto.getPrice(), dto.getStock(), false);
     }
 
+    /**
+     * 确认提交的规格值全部属于该商品，且每个规格项恰好选中一个值。
+     * 按规格项顺序返回 ID，使同一组合无论请求顺序如何都得到相同签名。
+     */
     private List<Long> validatedSkuValueIds(Long productId, List<Long> valueIds) {
         List<ProductOption> options=optionMapper.selectList(
                 new LambdaQueryWrapper<ProductOption>()
@@ -456,6 +499,7 @@ public class ProductServiceImpl implements ProductService {
         return orderedIds;
     }
 
+    /** 店主切换商品上下架状态；上架前检查店铺、分类、品牌、图片和有效 SKU。 */
     @Override
     @Transactional
     public ProductStatusVO updateMerchantProductStatus(Long userId, Long productId, ProductStatusUpdateDTO dto) {
@@ -517,6 +561,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** 校验店铺归属和分页参数，按商品 ID 倒序列出商家管理页并返回总数。 */
     @Override
     @Transactional(readOnly = true)
     public MerchantProductPageVO listMerchantProducts(Long userId, Long shopId, int page, int size) {
@@ -547,6 +592,7 @@ public class ProductServiceImpl implements ProductService {
         return new MerchantProductPageVO(items, page, size, total);
     }
 
+    /** 读取商家商品详情，汇集图片、封面、规格选项与 SKU 及其规格值。 */
     @Override
     @Transactional(readOnly = true)
     public MerchantProductDetailVO merchantDetail(Long userId, Long productId) {
@@ -586,6 +632,7 @@ public class ProductServiceImpl implements ProductService {
                 coverMediaId, product.getStatus().name(), imageMediaIds, options, skus);
     }
 
+    /** 管理员只能把商品设为下架；更新状态后写入搜索刷新事件。 */
     @Override
     @Transactional
     public ProductStatusVO adminTakeDown(Long productId, ProductStatusUpdateDTO dto) {

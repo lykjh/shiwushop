@@ -26,6 +26,7 @@ public class SearchOutboxWorker {
     private final Clock clock;
     private final boolean enabled;
 
+    /** 注入搜索事件、数据库当前状态和搜索网关；开关决定定时消费者是否执行。 */
     public SearchOutboxWorker(OutboxEventMapper outbox, SearchIndexSource source,
                              SearchGateway search, ObjectMapper json, Clock clock,
                              @Value("${shop.search.worker-enabled:false}") boolean enabled) {
@@ -37,6 +38,10 @@ public class SearchOutboxWorker {
         this.enabled = enabled;
     }
 
+    /**
+     * 定时领取一条待处理搜索事件。数据库租约避免多实例重复推进同一事件；
+     * 失败时退避重试，达到上限后标记为死信供运维排查。
+     */
     @Scheduled(initialDelayString = "${shop.search.worker-scan-delay-ms:2000}",
             fixedDelayString = "${shop.search.worker-scan-delay-ms:2000}", scheduler = "searchTaskScheduler")
     public void processNext() {
@@ -59,6 +64,10 @@ public class SearchOutboxWorker {
         }
     }
 
+    /**
+     * 校验事件类型，分批找受影响商品并从数据库生成最新文档。
+     * 写入搜索索引后再保存游标检查点或标记完成，保证失败后可以重试。
+     */
     private void process(OutboxEventMapper.SearchEvent event, String token) {
         String type = event.getEventType();
         String expectedAggregate = switch (type) {
@@ -86,6 +95,7 @@ public class SearchOutboxWorker {
         else outbox.markPublished(event.getId(), token, LocalDateTime.now(clock));
     }
 
+    /** 把文档变化编码成批量索引请求，逐项检查搜索服务的写入结果。 */
     private void write(List<Action> actions) {
         if (actions.isEmpty()) return;
         StringBuilder ndjson = new StringBuilder();
@@ -107,6 +117,7 @@ public class SearchOutboxWorker {
         }
     }
 
+    /** 定时记录待处理、死信和最老事件积压时长，供搜索索引运维监控。 */
     @Scheduled(initialDelay = 60000, fixedDelay = 60000, scheduler = "searchTaskScheduler")
     public void reportBacklog() {
         OutboxEventMapper.SearchBacklog backlog = outbox.selectSearchBacklog();
@@ -114,5 +125,6 @@ public class SearchOutboxWorker {
                 backlog.getPending(), backlog.getDead(), backlog.getOldestPendingSeconds());
     }
 
+    /** 一项批量搜索写入；document 为空表示从索引删除该 ID。 */
     private record Action(String index, long id, Map<String, Object> document) {}
 }

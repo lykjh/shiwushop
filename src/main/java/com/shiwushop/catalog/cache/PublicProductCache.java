@@ -47,7 +47,10 @@ public class PublicProductCache {
     @Value("${shop.public-cache.wait-millis:1000}")
     private long waitMillis;
 
-    /** 仅缓存无筛选的首页首批；其他查询直接读取数据库，避免组合键和深页缓存膨胀。 */
+    /**
+     * 只缓存无筛选的首页首批；其他筛选和深页直接查公开商品服务。
+     * 缓存未命中时用 Redis 租约限制同键回源，等待者短暂重读；超时或缓存故障进入有界兜底。
+     */
     public PublicProductPageVO list(PublicProductQuery query) {
         if (query.afterId() != null || query.size() != 20 || query.categoryId() != null
                 || query.brandId() != null || query.shopId() != null
@@ -108,7 +111,10 @@ public class PublicProductCache {
         return fallback(query);
     }
 
-    // Redis 故障与等待超时共用这个入口；每实例最多一个兜底查询，排队有上限。
+    /**
+     * Redis 故障或等待回填超时后的兜底入口。每个应用实例最多一个回源查询；
+     * 未在等待期限内取得许可时再查一次缓存，仍未命中则返回 503。
+     */
     private PublicProductPageVO fallback(PublicProductQuery query) {
         try {
             if (!fallbackSlot.tryAcquire(waitMillis, TimeUnit.MILLISECONDS)) {
@@ -138,6 +144,7 @@ public class PublicProductCache {
         }
     }
 
+    /** 读取并反序列化首页缓存；键不存在时返回空，由调用方决定回源或等待。 */
     private PublicProductPageVO readHome() {
         String value = redis.opsForValue().get(HOME_KEY);
         return value == null ? null : json.readValue(value, PublicProductPageVO.class);

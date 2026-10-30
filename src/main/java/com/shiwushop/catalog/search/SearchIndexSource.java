@@ -16,6 +16,10 @@ import java.util.Map;
 public class SearchIndexSource {
     private final NamedParameterJdbcTemplate db;
 
+    /**
+     * 根据商品、店铺、品牌或分类刷新事件找出受影响商品 ID。
+     * 使用 afterId 分批遍历，避免一个大型店铺或分类事件一次读取全部商品。
+     */
     public List<Long> affectedProductIds(String eventType, long aggregateId, long afterId, int limit) {
         if (eventType.equals("SEARCH_PRODUCT_REFRESH"))
             return afterId == 0 ? List.of(aggregateId) : List.of();
@@ -42,6 +46,7 @@ public class SearchIndexSource {
         return db.queryForList(sql, Map.of("id", aggregateId, "afterId", afterId, "limit", limit), Long.class);
     }
 
+    /** 从当前数据库读取店铺或品牌文档；记录已删除时返回空供索引执行删除。 */
     public Map<String, Object> lookupDocument(String eventType, long id) {
         String table = switch (eventType) {
             case "SEARCH_SHOP_REFRESH" -> "shops";
@@ -56,6 +61,10 @@ public class SearchIndexSource {
         return row;
     }
 
+    /**
+     * 批量读取商品、店铺、价格、库存和评分的当前数据库状态。
+     * 仅为在售、店铺启用且分类路径可见的商品生成搜索文档；其余 ID 由工作器从索引删除。
+     */
     public Map<Long, Map<String, Object>> productDocuments(List<Long> ids) {
         if (ids.isEmpty()) return Map.of();
         Map<String, Object> args = Map.of("ids", ids);
@@ -119,6 +128,7 @@ public class SearchIndexSource {
         return result;
     }
 
+    /** 把带 productId 的查询结果按商品 ID 建索引，供文档组装时快速合并。 */
     private Map<Long, Map<String, Object>> byProduct(List<Map<String, Object>> rows) {
         Map<Long, Map<String, Object>> result = new HashMap<>();
         for (Map<String, Object> row : rows)
@@ -126,6 +136,7 @@ public class SearchIndexSource {
         return result;
     }
 
+    /** 沿父分类链构造最多三级的可见路径；缺失、隐藏或超深时返回空。 */
     static List<Long> categoryPath(long id, Map<Long, Category> categories) {
         List<Long> path = new ArrayList<>();
         Long current = id;
@@ -138,5 +149,6 @@ public class SearchIndexSource {
         return path;
     }
 
+    /** 搜索文档生成时使用的分类父级和可见状态快照。 */
     record Category(Long parentId, boolean visible) {}
 }

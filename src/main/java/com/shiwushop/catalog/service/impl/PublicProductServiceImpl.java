@@ -43,11 +43,16 @@ public class PublicProductServiceImpl implements PublicProductService {
     private final CategoryService categoryService;
     private final ProductOptionReader optionReader;
 
+    /** 统一拒绝无效商品 ID，避免后续查询把参数错误误报成商品不存在。 */
     private void requireProductId(Long productId) {
         if (productId == null || productId <= 0) {
             throw new BusinessException(400, "商品ID必须大于0");
         }
     }
+    /**
+     * 校验公开筛选条件，多读一行判断是否还有下一页，再按商品 ID 返回游标。
+     * 列表只组装公开卡片字段，详情和商家管理字段由独立接口读取。
+     */
     @Override
     public PublicProductPageVO publicList(PublicProductQuery query) {
         validatePublicFilters(query);
@@ -66,6 +71,7 @@ public class PublicProductServiceImpl implements PublicProductService {
                 hasMore ? items.getLast().id() : null);
     }
 
+    /** 一次校验分页、游标、价格区间及可选分类、品牌、店铺筛选参数。 */
     private void validatePublicFilters(PublicProductQuery query) {
         PageSpec.of(1, query.size());
         if (query.afterId() != null && query.afterId() <= 0) {
@@ -77,6 +83,7 @@ public class PublicProductServiceImpl implements PublicProductService {
         validatePublicShop(query.shopId());
     }
 
+    /** 拒绝负价格和最低价高于最高价的区间。 */
     private void validatePriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
         if ((minPrice != null && minPrice.signum() < 0)
                 || (maxPrice != null && maxPrice.signum() < 0)
@@ -85,6 +92,7 @@ public class PublicProductServiceImpl implements PublicProductService {
         }
     }
 
+    /** 确认筛选分类 ID 为正数，且分类及其祖先对外可见。 */
     private void validatePublicCategory(Long categoryId) {
         if (categoryId != null) {
             if (categoryId <= 0) {
@@ -94,6 +102,7 @@ public class PublicProductServiceImpl implements PublicProductService {
         }
     }
 
+    /** 确认可选品牌筛选参数为正数且品牌存在。 */
     private void validatePublicBrand(Long brandId) {
         if (brandId != null) {
             if (brandId <= 0) {
@@ -105,6 +114,7 @@ public class PublicProductServiceImpl implements PublicProductService {
         }
     }
 
+    /** 确认可选店铺筛选参数为正数且店铺存在。 */
     private void validatePublicShop(Long shopId) {
         if (shopId != null) {
             if (shopId <= 0) {
@@ -116,6 +126,7 @@ public class PublicProductServiceImpl implements PublicProductService {
         }
     }
 
+    /** 根据店铺、分类或品牌筛选选择专用 SQL，减少通用查询扫描无关商品。 */
     private List<PublicProductRow> selectPublicRows(PublicProductQuery query, int limit) {
         if (query.shopId() != null) {
             return productMapper.selectPublicShopPage(query.categoryId(), query.brandId(), query.shopId(),
@@ -135,6 +146,10 @@ public class PublicProductServiceImpl implements PublicProductService {
                 query.minPrice(), query.maxPrice(), query.afterId(), limit);
     }
 
+    /**
+     * 只展示在售且店铺启用的商品；分类隐藏时也拒绝详情访问。
+     * 在同一只读事务中汇集图片、分类路径、品牌、销量、规格和 SKU 可售状态。
+     */
     @Override
     @Transactional(readOnly = true)
     public PublicProductDetailVO publicDetail(Long id) {
