@@ -18,6 +18,7 @@ public class AccountAccess {
     private final UserAccountMapper userAccountMapper;
     private final AccountAuthCache authCache;
 
+    /** 从鉴权状态缓存确认账号仍启用；缓存缺失或账号停用时要求重新登录。 */
     public void checkActive(Long userId) {
         SessionUser.requireId(userId);
         AccountAuthCache.State state = authCache.current(userId);
@@ -26,6 +27,7 @@ public class AccountAccess {
         }
     }
 
+    /** 从数据库读取启用中的完整账号，供需要角色或鉴权版本的业务使用。 */
     public UserAccount requireActive(Long userId) {
         SessionUser.requireId(userId);
         UserAccount account = userAccountMapper.selectById(userId);
@@ -35,6 +37,7 @@ public class AccountAccess {
         return account;
     }
 
+    /** 确认当前用户是启用中的商家；否则拒绝商家专属操作。 */
     public void requireMerchant(Long userId) {
         SessionUser.requireId(userId);
         UserAccount account = userAccountMapper.selectById(userId);

@@ -16,6 +16,7 @@ public class LoginRateLimiter {
     private final long tokensPerSecond;
     private final long burst;
 
+    /** 读取登录入口的令牌补充速率和突发容量，并拒绝无效配置。 */
     public LoginRateLimiter(RateLimiter limiter,
                             @Value("${shop.security.login.key-prefix}") String keyPrefix,
                             @Value("${shop.security.login.tokens-per-second}") long tokensPerSecond,
@@ -29,6 +30,10 @@ public class LoginRateLimiter {
         this.burst = burst;
     }
 
+    /**
+     * 对单个出口的登录入口流量使用令牌桶保护；桶耗尽时返回 429 和重试秒数。
+     * 这里只限制请求速率，账号撞库风险由失败行为规则单独判断。
+     */
     public void check(String remoteAddress) {
         // 桶限制瞬时入口流量；账号是否需要滑块只看失败行为。
         long retry = limiter.tokenBucketRetrySeconds(

@@ -37,8 +37,13 @@ public class AccountAuthCache {
     private final StringRedisTemplate redis;
     private final UserAccountMapper accounts;
 
+    /** 缓存中的账号状态和鉴权版本；版本变化用于识别应失效的旧 Session。 */
     public record State(AccountStatus status, int version) {}
 
+    /**
+     * 读取账号状态缓存；未命中时从数据库加载并尝试回填。
+     * 回填后再次读取 Redis，防止数据库查询期间错过并发事务写入的阻断标记。
+     */
     public State current(Long userId) {
         String key = key(userId);
         try {
@@ -91,14 +96,17 @@ public class AccountAuthCache {
         });
     }
 
+    /** 为一个用户构造 Redis 鉴权状态键，避免与业务缓存共用命名空间。 */
     private static String key(Long userId) {
         return "shiwushop:auth:state:" + userId;
     }
 
+    /** 将状态和版本编码为短字符串，供 Redis 缓存与事务收尾脚本使用。 */
     private static String encode(State state) {
         return state.status().name() + ":" + state.version();
     }
 
+    /** 解析缓存状态；缺失标记返回空，变更中的阻断标记和损坏数据均拒绝放行。 */
     private static State decode(String value) {
         if ("MISSING".equals(value)) return null;
         if (value.startsWith("BLOCKED:")) {

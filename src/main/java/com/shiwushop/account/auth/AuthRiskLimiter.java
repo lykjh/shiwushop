@@ -35,6 +35,7 @@ public class AuthRiskLimiter {
     private final long ipUaRequestsPerMinute;
     private final double ipUaFailureRatio;
 
+    /** 从配置注入各项挑战阈值，并校验跨 Session 跟踪容量至少为一条。 */
     public AuthRiskLimiter(
             RateLimiter rateLimiter,
             MeterRegistry metrics,
@@ -65,15 +66,18 @@ public class AuthRiskLimiter {
         this.ipUaFailureRatio = ipUaFailureRatio;
     }
 
+    /** 将规范化用户名摘要作为失败历史键，换 Session 或出口也保留同账号信号。 */
     private String accountKey(String username) {
         return PREFIX + "account:fail:rolling:5m:" + rateLimiter.digest(username.toLowerCase(Locale.ROOT));
     }
 
+    /** 根据当前 Session ID 生成摘要键；原始会话标识不写入 Redis 键名。 */
     private String sessionKey(HttpServletRequest request) {
         // Session 失败历史跟随 Session，客户端换 IP 不会重置这条信号。
         return PREFIX + "session:" + rateLimiter.digest(request.getSession(true).getId());
     }
 
+    /** 将请求出口与归一化浏览器类别合并为共享流量信号，不保存完整 IP 或 UA。 */
     private String ipUaKey(HttpServletRequest request){
         String ua=request.getHeader("User-Agent");
         if(ua==null)ua="";
@@ -82,6 +86,7 @@ public class AuthRiskLimiter {
         return PREFIX + "ip-ua:" + rateLimiter.digest(source);
     }
 
+    /** 把易变的 UA 字符串归并为有限的浏览器类别，限制风险键的数量。 */
     private static String browserFamily(String ua) {
         String normalized = ua.toLowerCase(Locale.ROOT);
         if (normalized.contains("edg/") || normalized.contains("edgios/")) return "edge";
@@ -92,6 +97,7 @@ public class AuthRiskLimiter {
         return "other";
     }
 
+    /** 校验可选设备信号格式并生成摘要键；该客户端信号只辅助挑战判断。 */
     private String deviceKey(HttpServletRequest request) {
         String fingerprint = request.getHeader("X-Device-Fingerprint");
         if (fingerprint == null || fingerprint.isBlank()) {
@@ -104,6 +110,10 @@ public class AuthRiskLimiter {
         return PREFIX + "device:" + rateLimiter.digest(fingerprint);
     }
 
+    /**
+     * 记录一次密码认证失败，同时更新账号、Session 和共享出口的滚动失败历史。
+     * 同一风险事件交给底层限流器原子写入，并记录登录失败指标。
+     */
     public void recordLoginFailure(String username, HttpServletRequest request){
         String session = sessionKey(request) + ":login:fail:rolling";
         String shared = ipUaKey(request) + ":login:fail:rolling";
@@ -116,6 +126,10 @@ public class AuthRiskLimiter {
         metrics.counter("shiwushop.auth.login.failure").increment();
     }
 
+    /**
+     * 记录一次注册风险失败；有设备信号时额外累计设备维度的失败历史。
+     * 用户名冲突等正常业务错误不应调用此方法。
+     */
     public void recordRegisterFailure(HttpServletRequest request){
         String session = sessionKey(request) + ":register:fail:rolling";
         String shared = ipUaKey(request) + ":register:fail:rolling";
@@ -135,6 +149,10 @@ public class AuthRiskLimiter {
         metrics.counter("shiwushop.auth.register.failure").increment();
     }
 
+    /**
+     * 记录共享出口和可选设备的注册成功次数，供重复注册风险判断使用。
+     * 账号已经提交后，统计服务故障只记错误指标，不把成功响应改为失败。
+     */
     public void recordRegisterSuccess(HttpServletRequest request) {
         try {
             List<String> keys = new ArrayList<>(List.of(ipUaKey(request) + ":register:success:5m"));
@@ -153,6 +171,7 @@ public class AuthRiskLimiter {
         metrics.counter("shiwushop.auth.register.success").increment();
     }
 
+    /** 清除该账号及当前 Session 的登录失败历史，并累计登录成功指标。 */
     public void recordLoginSuccess(String username, HttpServletRequest request) {
         rateLimiter.clearAuthRisk(List.of(accountKey(username),
                 sessionKey(request) + ":login:fail:rolling:5m",
@@ -160,11 +179,16 @@ public class AuthRiskLimiter {
         metrics.counter("shiwushop.auth.login.success").increment();
     }
 
+    /** 读取登录风险快照，按账号、会话与共享失败信号决定是否要求滑块或短时拒绝。 */
     public boolean loginRequiresCaptcha(String username, HttpServletRequest request) {
         RateLimiter.AuthRiskSnapshot risk = snapshot("login", accountKey(username), request);
         return requiresCaptcha("login", risk);
     }
 
+    /**
+     * 读取注册风险快照，先判断失败与 Session 尝试，再结合可选设备信号判断重复注册。
+     * 共享出口信号只有与当前设备的重复行为同时出现才提高挑战要求。
+     */
     public boolean registerRequiresCaptcha(HttpServletRequest request) {
         RateLimiter.AuthRiskSnapshot risk = snapshot("register", null, request);
         if (requiresCaptcha("register", risk)) {
@@ -196,6 +220,10 @@ public class AuthRiskLimiter {
                 && challenge("device_register_shared_failure_burst");
     }
 
+    /**
+     * 一次性读取并更新某类操作的风险快照，使用占位键维持底层脚本固定的键位布局。
+     * 将快照的时间桶留在 request 中，供随后记录失败时写入对应时间段。
+     */
     private RateLimiter.AuthRiskSnapshot snapshot(String action, String account, HttpServletRequest request) {
         String session = sessionKey(request);
         String shared = ipUaKey(request);
@@ -217,15 +245,21 @@ public class AuthRiskLimiter {
         return risk;
     }
 
+    /** 构造登录或注册的一分钟入口流量键。 */
     private String volumeKey(String action, HttpServletRequest request) {
         return ipUaKey(request) + ":" + action + ":volume:1m";
     }
 
+    /** 取出本次风险快照的时间桶；未读取快照时返回 -1 交由底层处理。 */
     private long requestBucket(String action, HttpServletRequest request) {
         Object bucket = request.getAttribute(PREFIX + action + ":bucket");
         return bucket instanceof Long value ? value : -1;
     }
 
+    /**
+     * 应用登录与注册共用的失败规则：会话高频失败返回 429，其余风险要求滑块。
+     * 共享出口信号必须叠加账号或当前 Session 风险，避免误伤同出口的其他用户。
+     */
     private boolean requiresCaptcha(String action, RateLimiter.AuthRiskSnapshot risk) {
         if (risk.sessionBlockFailures() >= sessionBlockFailures) {
             // 规则名是固定值，指标标签不会包含账号、IP、UA 或 Cookie。
@@ -251,6 +285,7 @@ public class AuthRiskLimiter {
                 && challenge("ip_ua_failure_ratio");
     }
 
+    /** 记录触发规则的固定名称指标，并把“需要滑块”返回给调用方。 */
     private boolean challenge(String rule) {
         metrics.counter("shiwushop.auth.risk.triggered", "rule", rule).increment();
         return true;

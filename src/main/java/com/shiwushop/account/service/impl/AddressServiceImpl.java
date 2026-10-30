@@ -28,6 +28,10 @@ public class AddressServiceImpl implements AddressService {
     private final PrivacyCipher privacyCipher;
     private final Clock businessClock;
 
+    /**
+     * 创建收货地址。先锁定用户行串行化该用户的默认地址变更，敏感字段加密后写库；
+     * 若这是用户的首个有效地址，则补设为默认地址。
+     */
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AddressVO create(Long userId, AddressSaveDTO dto) {
@@ -48,6 +52,7 @@ public class AddressServiceImpl implements AddressService {
         return toVO(address);
     }
 
+    /** 只查询当前用户未删除的地址，并在返回前解密收货人、手机号和详细地址。 */
     @Override
     public List<AddressVO> list(Long userId) {
         accountAccess.checkActive(userId);
@@ -58,6 +63,10 @@ public class AddressServiceImpl implements AddressService {
                 .stream().map(this::toVO).toList();
     }
 
+    /**
+     * 在用户行锁保护下修改本人地址。调用方未指定默认状态时保留原值；
+     * 指定为默认地址时先清除原默认地址，最后保证仍有一个默认地址。
+     */
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AddressVO update(Long userId, Long id, AddressSaveDTO dto) {
@@ -79,6 +88,10 @@ public class AddressServiceImpl implements AddressService {
         return toVO(address);
     }
 
+    /**
+     * 软删除本人地址。写入删除时间并取消默认状态；删除默认地址后为剩余地址重新选择默认项。
+     * 归属检查与写入条件都限制为当前用户，避免并发删除后误报成功。
+     */
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void delete(Long userId, Long id) {
@@ -97,7 +110,10 @@ public class AddressServiceImpl implements AddressService {
         ensureDefault(userId);
     }
 
-    /** 缺少默认地址时优先选最近使用的地址，再按创建时间选；调用方已锁住用户行。 */
+    /**
+     * 返回现有默认地址 ID；没有默认地址时选择最近使用的有效地址并设为默认。
+     * 调用方必须已锁住用户行，防止同一用户并发生成多个默认地址。
+     */
     private Long ensureDefault(Long userId) {
         Long defaultId = addressMapper.selectDefaultId(userId);
         if (defaultId != null) return defaultId;
@@ -108,6 +124,7 @@ public class AddressServiceImpl implements AddressService {
         return preferredId;
     }
 
+    /** 确认地址属于当前有效用户且尚未删除；否则统一以 404 隐藏地址存在性。 */
     private Address ownedAddress(Long userId, Long id) {
         accountAccess.checkActive(userId);
         Address address = addressMapper.selectOwnedActive(userId, id);
@@ -117,6 +134,7 @@ public class AddressServiceImpl implements AddressService {
         return address;
     }
 
+    /** 将地址表单复制到实体，并按用户和字段名加密收货人、电话、详细地址。 */
     private void copy(AddressSaveDTO dto, Address address) {
         Long userId = address.getUserId();
         address.setConsigneeCiphertext(privacyCipher.encrypt(userId, "consignee", dto.getConsignee().strip()));
@@ -129,6 +147,7 @@ public class AddressServiceImpl implements AddressService {
         address.setIsDefault(dto.getIsDefault() == null ? 0 : dto.getIsDefault());
     }
 
+    /** 按实体记录的密钥版本解密敏感字段，组装仅供接口返回的地址视图。 */
     private AddressVO toVO(Address address) {
         Long userId = address.getUserId();
         int version = address.getKeyVersion();

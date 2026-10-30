@@ -18,6 +18,7 @@ public class RegisterRateLimiter {
     private final long tokensPerSecond;
     private final long burst;
 
+    /** 读取注册入口的令牌补充速率和突发容量，并拒绝无效配置。 */
     public RegisterRateLimiter(RateLimiter limiter,
                                @Value("${shop.security.register.key-prefix}") String keyPrefix,
                                @Value("${shop.security.register.tokens-per-second}") long tokensPerSecond,
@@ -31,6 +32,10 @@ public class RegisterRateLimiter {
         this.burst = burst;
     }
 
+    /**
+     * 对单个出口的注册请求量使用令牌桶保护；额度耗尽时返回 429 和重试秒数。
+     * 此处控制入口资源消耗，不把出口 IP 当作独立注册者身份。
+     */
     public void check(String remoteAddress) {
         long retry = limiter.tokenBucketRetrySeconds(
                 keyPrefix + ":bucket:" + limiter.digest(remoteAddress), tokensPerSecond, burst);

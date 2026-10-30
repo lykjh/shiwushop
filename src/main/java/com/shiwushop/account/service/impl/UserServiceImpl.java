@@ -46,6 +46,10 @@ public class UserServiceImpl implements UserService {
     private final AuthRiskLimiter authRiskLimiter;
     private final CaptchaService captchaService;
 
+    /**
+     * 执行注册入口的资源保护和滑块验证，然后在事务内创建账号。
+     * 注册必须携带当前 Session 的一次性凭证；只有无效凭证才计入注册风控失败。
+     */
     @Override
     @Transactional
     public void register(RegisterDTO dto, HttpServletRequest request){
@@ -70,8 +74,10 @@ public class UserServiceImpl implements UserService {
         // 密码格式和用户名冲突不属于滑块凭证失败，不增加风控失败次数。
         realRegister(dto);
     }
-
-
+    /**
+     * 创建用户资料与账号记录，并以 BCrypt 保存密码哈希。
+     * 数据库唯一约束负责处理并发使用同一用户名的情况；冲突转换为 409 响应。
+     */
     void realRegister(RegisterDTO dto){
         //注册业务
         if (dto.getPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
@@ -91,6 +97,11 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(409, "账号已存在",e);
         }
     }
+
+    /**
+     * 检查登录入口额度和风险状态；风险要求滑块时校验当前 Session 的凭证。
+     * 仅账号或密码错误累计失败次数；成功后清除失败状态、轮换 Session ID 并写入登录身份。
+     */
     @Override
     public LoginVO login(LoginDTO dto, HttpServletRequest request) {
         loginRateLimiter.check(request.getRemoteAddr());
@@ -126,6 +137,7 @@ public class UserServiceImpl implements UserService {
         return loginVO;
     }
 
+    /** 查询启用中的账号并校验密码；对账号不存在、停用和密码错误使用相同错误响应。 */
     private LoginVO authenticate(LoginDTO dto) {
         UserAccount account = userAccountMapper.selectOne(
                 new LambdaQueryWrapper<UserAccount>()
@@ -139,12 +151,17 @@ public class UserServiceImpl implements UserService {
         return new LoginVO(account.getUserId(), account.getUsername());
     }
 
+    /** 根据用户 ID 读取启用中的账号，返回客户端可见的基本资料与角色。 */
     @Override
     public UserInfoVO currentUser(Long userId) {
         UserAccount account = accountAccess.requireActive(userId);
         return new UserInfoVO(account.getUserId(), account.getUsername(), account.getRole().name());
     }
 
+    /**
+     * 锁定账号后校验旧密码并更新密码哈希与鉴权版本。
+     * 鉴权版本变化用于让旧会话失效；事务提交前阻止缓存继续提供旧版本状态。
+     */
     @Override
     @Transactional(timeout = 30)
     public void changePassword(Long userId, String oldPassword, String newPassword) {
