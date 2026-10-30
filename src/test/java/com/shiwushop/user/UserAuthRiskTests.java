@@ -4,7 +4,7 @@ import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class UserAuthRiskTests {
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private CaptchaProofStore proofs;
     private final String registerIp = "risk-test-" + UUID.randomUUID();
 

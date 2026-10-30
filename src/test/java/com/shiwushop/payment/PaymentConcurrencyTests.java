@@ -20,7 +20,7 @@ import com.shiwushop.catalog.entity.product.Sku;
 import com.shiwushop.account.entity.user.UserProfile;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.account.privacy.PrivacyCipher;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.commerce.mapper.order.OrderItemMapper;
@@ -55,7 +55,7 @@ import static org.mockito.Mockito.when;
 class PaymentConcurrencyTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private PaymentService paymentService;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private PrivacyCipher cipher;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CategoryMapper categoryMapper;

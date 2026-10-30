@@ -5,7 +5,7 @@ import com.shiwushop.test.TestRegistration;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.user.LoginTestRequest;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.common.media.service.MediaService;
 import com.shiwushop.common.media.MediaOrphanCleanup;
 import com.jayway.jsonpath.JsonPath;
@@ -51,7 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "shop.media.root=./target/media-security-tests")
 class MediaSecurityTests {
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private CaptchaProofStore proofs;
     @Autowired private MediaService mediaService;
     @Autowired private MediaOrphanCleanup orphanCleanup;

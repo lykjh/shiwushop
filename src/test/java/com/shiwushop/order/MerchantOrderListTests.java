@@ -18,7 +18,7 @@ import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.mapper.product.SkuMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class MerchantOrderListTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PrivacyCipher cipher;
     @Autowired private ShopMapper shops;

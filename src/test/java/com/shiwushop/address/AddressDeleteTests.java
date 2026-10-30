@@ -6,7 +6,7 @@ import com.shiwushop.account.dto.address.AddressSaveDTO;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.account.vo.address.AddressVO;
 import com.shiwushop.account.service.AddressService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +33,7 @@ class AddressDeleteTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mockMvc;
     @Autowired private AddressService addressService;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbcTemplate;
 
     @Test

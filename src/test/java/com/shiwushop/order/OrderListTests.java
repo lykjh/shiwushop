@@ -13,7 +13,7 @@ import com.shiwushop.account.entity.user.UserAccount;
 import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.account.mapper.user.UserAccountMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class OrderListTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private ShopMapper shopMapper;
     @Autowired private OrderMapper orderMapper;
     @Autowired private PrivacyCipher cipher;

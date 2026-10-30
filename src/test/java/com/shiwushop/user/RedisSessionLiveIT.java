@@ -3,7 +3,7 @@ package com.shiwushop.user;
 import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +44,7 @@ class RedisSessionLiveIT {
     }
 
     @Autowired private SessionRepository<? extends Session> repository;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
     @LocalServerPort private int port;
     private final ObjectMapper json = new ObjectMapper();

@@ -24,7 +24,7 @@ import com.shiwushop.commerce.mapper.payment.PaymentAttemptMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.mapper.product.SkuMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.commerce.service.PaymentService;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +79,7 @@ class PaymentFlowTests {
     @Autowired private MockMvc mockMvc;
     @Autowired private PaymentService paymentService;
     @Autowired private PaymentAttemptMapper paymentMapper;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private PrivacyCipher cipher;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CategoryMapper categoryMapper;

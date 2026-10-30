@@ -28,7 +28,7 @@ import com.shiwushop.commerce.service.AfterSaleService;
 import com.shiwushop.catalog.service.ProductService;
 import com.shiwushop.commerce.service.ShipmentService;
 import com.shiwushop.catalog.service.ShopService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.test.TestRegistration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,7 +59,7 @@ import static org.mockito.Mockito.doAnswer;
 @SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=20")
 class ShopOwnerOtherWriteRaceTests {
     @Autowired private CaptchaProofStore proofs;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private ShopService shops;
     @Autowired private ProductService products;
     @Autowired private ShipmentService shipments;

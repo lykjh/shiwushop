@@ -8,7 +8,7 @@ import com.shiwushop.catalog.entity.category.Category;
 import com.shiwushop.catalog.entity.product.Product;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
@@ -40,7 +40,7 @@ class CategoryDeleteTests {
     @Autowired private MockMvc mockMvc;
     @Autowired private CategoryMapper categoryMapper;
     @Autowired private ProductMapper productMapper;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ShopMapper shopMapper;
 

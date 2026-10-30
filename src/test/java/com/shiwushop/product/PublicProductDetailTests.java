@@ -23,7 +23,7 @@ import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.entity.status.ProductStatus;
 
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +51,7 @@ import static org.mockito.Mockito.verify;
 class PublicProductDetailTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CategoryMapper categories;
     @Autowired private BrandMapper brands;

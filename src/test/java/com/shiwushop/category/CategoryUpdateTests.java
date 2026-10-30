@@ -4,7 +4,7 @@ import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.catalog.entity.category.Category;
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ class CategoryUpdateTests {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private CategoryMapper categoryMapper;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbc;
 
     private final ObjectMapper om = new ObjectMapper();

@@ -16,7 +16,7 @@ import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductImageMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +46,7 @@ class MerchantProductCreateTests {
     @Autowired private CaptchaProofStore registrationProofs;
 
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ShopMapper shopMapper;
     @Autowired private CategoryMapper categoryMapper;

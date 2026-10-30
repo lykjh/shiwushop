@@ -19,7 +19,7 @@ import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.review.ProductReviewMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.mapper.product.SkuMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import com.shiwushop.common.captcha.CaptchaProofStore;
@@ -58,7 +58,7 @@ class ReviewCreateTests {
     private final List<Path> mediaFiles = new ArrayList<>();
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PrivacyCipher cipher;
     @Autowired private CategoryMapper categories;

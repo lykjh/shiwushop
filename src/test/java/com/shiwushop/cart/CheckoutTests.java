@@ -25,7 +25,7 @@ import com.shiwushop.commerce.dto.cart.CheckoutDTO;
 import com.shiwushop.commerce.service.CartService;
 import com.shiwushop.commerce.service.CheckoutService;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CheckoutTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private PrivacyCipher privacyCipher;
     @Autowired private CategoryMapper categoryMapper;
     @Autowired private ShopMapper shopMapper;

@@ -3,7 +3,7 @@ package com.shiwushop.category;
 import com.shiwushop.test.TestRegistration;
 
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class CategoryHierarchyTests {
     @Autowired private CaptchaProofStore registrationProofs;
 
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CategoryMapper categoryMapper;
 

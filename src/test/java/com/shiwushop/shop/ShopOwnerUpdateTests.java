@@ -5,7 +5,7 @@ import com.shiwushop.test.TestRegistration;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,7 @@ class ShopOwnerUpdateTests {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ShopMapper shopMapper;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbcTemplate;
 
     private final ObjectMapper om = new ObjectMapper();

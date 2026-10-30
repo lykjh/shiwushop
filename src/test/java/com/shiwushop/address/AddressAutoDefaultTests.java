@@ -6,7 +6,7 @@ import com.shiwushop.account.dto.address.AddressSaveDTO;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.account.vo.address.AddressVO;
 import com.shiwushop.account.service.AddressService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class AddressAutoDefaultTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private AddressService addresses;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
 
     @Test

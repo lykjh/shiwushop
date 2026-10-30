@@ -22,7 +22,7 @@ import com.shiwushop.catalog.entity.status.ProductStatus;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.account.entity.user.UserAccount;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OrderDetailTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mockMvc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PrivacyCipher cipher;
     @Autowired private UserAccountMapper accountMapper;

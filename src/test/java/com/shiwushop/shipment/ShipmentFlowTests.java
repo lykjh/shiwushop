@@ -14,7 +14,7 @@ import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import com.shiwushop.commerce.service.ShipmentService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ShipmentFlowTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private PrivacyCipher cipher;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ShopMapper shops;

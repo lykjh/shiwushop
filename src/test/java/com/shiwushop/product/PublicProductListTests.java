@@ -18,7 +18,7 @@ import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.entity.status.ProductStatus;
 
 import com.shiwushop.account.dto.user.RegisterDTO;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.catalog.vo.query.product.PublicProductRow;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PublicProductListTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mvc;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CategoryMapper categories;
     @Autowired private BrandMapper brands;

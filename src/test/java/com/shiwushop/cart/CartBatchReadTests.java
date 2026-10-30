@@ -15,7 +15,7 @@ import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.catalog.mapper.product.SkuOptionValueMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.commerce.service.CartService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.test.TestRegistration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verify;
 @SpringBootTest
 @Transactional
 class CartBatchReadTests {
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private CaptchaProofStore proofs;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CartService carts;

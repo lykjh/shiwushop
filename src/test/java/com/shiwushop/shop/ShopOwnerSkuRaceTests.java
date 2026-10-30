@@ -13,7 +13,7 @@ import com.shiwushop.catalog.mapper.product.SkuMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 import com.shiwushop.catalog.service.ProductService;
 import com.shiwushop.catalog.service.ShopService;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.test.TestRegistration;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.doAnswer;
 @SpringBootTest
 class ShopOwnerSkuRaceTests {
     @Autowired private CaptchaProofStore proofs;
-    @Autowired private UserService users;
+    @Autowired private RegisterService users;
     @Autowired private ShopService shops;
     @Autowired private ProductService products;
     @Autowired private ShopMapper shopMapper;

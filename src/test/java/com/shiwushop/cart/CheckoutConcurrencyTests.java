@@ -12,7 +12,7 @@ import com.shiwushop.catalog.entity.product.Sku;
 import com.shiwushop.account.entity.user.UserProfile;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.account.privacy.PrivacyCipher;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import com.shiwushop.account.mapper.address.AddressMapper;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
@@ -58,7 +58,7 @@ class CheckoutConcurrencyTests {
     @Autowired private CaptchaProofStore registrationProofs;
     @Autowired private MockMvc mockMvc;
     @Autowired private JdbcTemplate jdbc;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private PrivacyCipher cipher;
     @Autowired private AddressMapper addressMapper;
     @Autowired private CategoryMapper categoryMapper;

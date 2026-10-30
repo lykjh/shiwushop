@@ -24,7 +24,9 @@
 - 修改类请求使用 CSRF 保护；客户端可先调用 `GET /users/csrf` 获取令牌。支付宝通知回调使用独立验签流程。
 - 注册、登录和滑块入口实施流量与风险控制；触发挑战时返回 `403` 和 `data.state=CAPTCHA_REQUIRED`，入口额度耗尽时返回 `429`。Redis 用于会话及风控状态。
 
-实现依据：[UserController](../src/main/java/com/shiwushop/controller/user/UserController.java)、[UserServiceImpl](../src/main/java/com/shiwushop/service/Impl/UserServiceImpl.java)、[鉴权组件](../src/main/java/com/shiwushop/common/auth)。
+实现依据：[注册入口](../src/main/java/com/shiwushop/account/controller/user/RegisterController.java)、[登录与会话入口](../src/main/java/com/shiwushop/account/controller/user/LoginController.java)、[滑块入口](../src/main/java/com/shiwushop/account/controller/user/CaptchaController.java)；各自调用对应服务，注册与登录共用鉴权风险组件。
+
+结构拆分验证：账号相关定向测试 28 项通过；完整回归使用 `mvn -q '-Dspring.datasource.hikari.maximum-pool-size=2' '-Dspring.test.context.cache.maxSize=4' verify`，300 项运行、0 失败、0 错误、6 项按现有配置跳过。输出保存在 `logs/split-user-auth-targeted.log` 与 `logs/split-user-auth-verify.log`。
 
 ### F02 公开目录与商品
 

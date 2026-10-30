@@ -11,7 +11,7 @@ import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.catalog.mapper.category.CategoryMapper;
 import com.shiwushop.catalog.mapper.product.ProductMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
-import com.shiwushop.account.service.UserService;
+import com.shiwushop.account.service.RegisterService;
 import org.junit.jupiter.api.Test;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +38,7 @@ class PublicShopTests {
     @Autowired private CategoryMapper categoryMapper;
     @Autowired private ProductMapper productMapper;
     @Autowired private ShopMapper shopMapper;
-    @Autowired private UserService userService;
+    @Autowired private RegisterService userService;
     @Autowired private JdbcTemplate jdbcTemplate;
 
     @Test
