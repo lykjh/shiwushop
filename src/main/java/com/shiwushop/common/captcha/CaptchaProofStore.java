@@ -24,6 +24,7 @@ public class CaptchaProofStore {
     private final RateLimiter rateLimiter;
     private final SecureRandom random=new SecureRandom();
 
+    /** 先标记原滑块已使用，再保存与 Session 摘要绑定的随机短期凭证。 */
     public String issue(String captchaId,String sessionId){
         try{
             String usedKey=USED_PREFIX+rateLimiter.digest(captchaId);
@@ -44,6 +45,7 @@ public class CaptchaProofStore {
         }
     }
 
+    /** 原子读取并删除凭证；仅签发时的 Session 可消费一次。 */
     public void consume(String proof, String sessionId) {
 
         if (proof == null || !proof.matches("[A-Za-z0-9_-]{43}")) {

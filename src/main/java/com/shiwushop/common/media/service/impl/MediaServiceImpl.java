@@ -40,6 +40,10 @@ public class MediaServiceImpl implements MediaService {
     @Value("${shop.media.root:./local-data/media}")
     private String storageRoot;
 
+    /**
+     * 校验用户与文件大小，暂存原图并按实际格式解码、重编码后落盘。
+     * 成功写入图片记录才返回 ID；失败清理临时文件和未入库的目标文件。
+     */
     @Override
     public Long upload(Long userId, MultipartFile file) {
         accounts.checkActive(userId);
@@ -106,6 +110,7 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
+    /** 读取真实格式与尺寸，仅接收 JPEG/PNG 且像素不超过上限。 */
     private static DecodedImage decode(Path path) throws IOException {
         try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
             if (input == null) throw new BusinessException(400, "图片格式不支持");
@@ -149,6 +154,7 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
+    /** 创建上传原始字节的 SHA-256 摘要器，用于图片记录。 */
     private static MessageDigest sha256() {
         try {
             return MessageDigest.getInstance("SHA-256");
@@ -157,6 +163,7 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
+    /** 尽力删除上传过程的临时文件；清理失败交由残留文件任务处理。 */
     private static void deleteQuietly(Path path) {
         try {
             Files.deleteIfExists(path);

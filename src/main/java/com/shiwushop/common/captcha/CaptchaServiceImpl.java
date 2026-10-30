@@ -34,6 +34,7 @@ public class CaptchaServiceImpl implements CaptchaService {
         this.generationWaitMs = generationWaitMs;
     }
 
+    /** 获取本实例图像生成许可后制作滑块；异常时也释放许可。 */
     @Override
     public ApiResponse<ImageCaptchaVO> generateCaptcha() {
         try {
@@ -58,6 +59,7 @@ public class CaptchaServiceImpl implements CaptchaService {
         }
     }
 
+    /** 验证轨迹并签发绑定 Session 的一次性登录凭证。 */
     @Override
     public String verifyAndIssueProof(
             String captchaId,
@@ -77,6 +79,7 @@ public class CaptchaServiceImpl implements CaptchaService {
         return proofStore.issue(captchaId, sessionId);
     }
 
+    /** 登录或注册消费滑块凭证，拒绝跨 Session 或重复使用。 */
     @Override
     public void consumeLoginProof(String proof, String sessionId) {
         proofStore.consume(proof, sessionId);

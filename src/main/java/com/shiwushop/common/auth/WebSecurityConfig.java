@@ -18,6 +18,7 @@ public class WebSecurityConfig {
         this.objectMapper = objectMapper;
     }
 
+    /** 开启框架 CSRF，支付平台回调例外；接口鉴权由业务 Session 校验执行。 */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http

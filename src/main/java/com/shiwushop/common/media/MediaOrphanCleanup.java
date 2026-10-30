@@ -30,6 +30,7 @@ public class MediaOrphanCleanup {
     @Value("${shop.media.orphan-retention-hours:24}")
     private long retentionHours;
 
+    /** 清理超过保留期且无数据库记录的图片和上传临时文件；数据库核对失败时保留文件。 */
     @Scheduled(initialDelayString = "${shop.media.cleanup-delay-ms:86400000}",
             fixedDelayString = "${shop.media.cleanup-delay-ms:86400000}")
     public void clean() {

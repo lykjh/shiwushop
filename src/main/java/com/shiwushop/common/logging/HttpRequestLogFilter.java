@@ -22,6 +22,7 @@ import java.util.UUID;
 public class HttpRequestLogFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(HttpRequestLogFilter.class);
 
+    /** 为每次 HTTP 请求生成追踪 ID，并记录路由模板、状态码和耗时。 */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {

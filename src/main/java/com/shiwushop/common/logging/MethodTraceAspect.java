@@ -15,6 +15,7 @@ import org.springframework.util.ClassUtils;
 public class MethodTraceAspect {
     private static final Logger log = LoggerFactory.getLogger(MethodTraceAspect.class);
 
+    /** 按需记录公开方法耗时与结果；不输出参数、返回值或异常消息。 */
     @Around("execution(public * com.shiwushop..*(..)) && !within(com.shiwushop.common.logging.MethodTraceAspect)")
     public Object trace(ProceedingJoinPoint call) throws Throwable {
         long started = System.nanoTime();

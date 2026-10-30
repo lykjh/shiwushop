@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class CaptchaResourceConfiguration {
+    /** 装载滑块底图资源；挑战答案仍由共享存储维护。 */
     @Bean
     ResourceStore captchaResourceStore() {
         LocalMemoryResourceStore store = new LocalMemoryResourceStore();

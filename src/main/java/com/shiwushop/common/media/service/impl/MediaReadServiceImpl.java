@@ -27,6 +27,10 @@ public class MediaReadServiceImpl implements MediaReadService {
     @Value("${shop.media.root:./local-data/media}")
     private String storageRoot;
 
+    /**
+     * 上传者可读取本人有效图片；其他用户仅可读取公开业务对象引用的图片。
+     * 校验存储键、路径和实际文件后返回资源及缓存标识。
+     */
     @Override
     public ImageFile read(Long mediaId, Long currentUserId) {
         if (mediaId == null || mediaId <= 0) throw new BusinessException(404, "图片不存在");

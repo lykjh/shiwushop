@@ -203,14 +203,17 @@ public class RateLimiter {
         }
     }
 
+    /** 以随机事件 ID 记录滚动窗口内的一次失败，并限制单键事件数量。 */
     public long recordFailure(String key, long windowMs, long maxEvents) {
         return failureWindow(key, windowMs, UUID.randomUUID().toString(), maxEvents);
     }
 
+    /** 查询指定滚动时间窗内的失败次数，不写入新事件。 */
     public long failureCount(String key, long windowMs) {
         return failureWindow(key, windowMs, "", 1);
     }
 
+    /** 调用 Redis 原子脚本清理过期事件并记录或读取当前计数。 */
     private long failureWindow(String key, long windowMs, String eventId, long maxEvents) {
         try {
             Long count = redis.execute(FAILURE_WINDOW, List.of(key),
@@ -222,6 +225,7 @@ public class RateLimiter {
         }
     }
 
+    /** 计算失败事件滚动窗口最早何时释放额度。 */
     public long failureRetrySeconds(String key, long windowMs) {
         try {
             Long retry = redis.execute(FAILURE_RETRY, List.of(key), String.valueOf(windowMs));
@@ -237,6 +241,7 @@ public class RateLimiter {
             long accountFailures, long deviceFailures, long deviceSuccesses,
             long sharedSuccesses, long sessionAttempts, long sessionRetrySeconds) {}
 
+    /** 原子读取鉴权风险快照，包含同时间桶的请求、失败及设备信号。 */
     public AuthRiskSnapshot checkAuthRisk(List<String> keys, boolean register, long windowMs,
             long maxTrackedSessions, String sessionDigest) {
         try {
@@ -253,6 +258,7 @@ public class RateLimiter {
         }
     }
 
+    /** 一次风险失败原子更新关联键；键数与各规则窗口须一一对应。 */
     public void recordAuthFailure(List<String> keys, long bucket, long[] windows, long[] limits) {
         if (keys.size() != windows.length + 1 || windows.length != limits.length) {
             throw new IllegalArgumentException("风险失败键和窗口数量不一致");
@@ -272,6 +278,7 @@ public class RateLimiter {
         }
     }
 
+    /** 记录成功事件，供注册及登录风险比例判断。 */
     public void recordAuthSuccess(List<String> keys, long windowMs) {
         try {
             Long updated = redis.execute(AUTH_SUCCESS_EVENT, keys, String.valueOf(windowMs));
@@ -281,6 +288,7 @@ public class RateLimiter {
         }
     }
 
+    /** 登录成功后原子清除需要重置的账号或会话风险键。 */
     public void clearAuthRisk(List<String> keys) {
         try {
             if (redis.execute(AUTH_CLEAR_EVENT, keys) == null) {
@@ -291,6 +299,7 @@ public class RateLimiter {
         }
     }
 
+    /** 读取普通计数键，不存在时返回零；Redis 故障时返回 503。 */
     public long count(String key){
         try{
             String value=redis.opsForValue().get(key);
@@ -300,6 +309,7 @@ public class RateLimiter {
         }
     }
 
+    /** 删除指定限流键，供成功操作清除失败额度。 */
     public void clear(String key){
         try{
             redis.delete(key);

@@ -31,6 +31,7 @@ public class SessionValidationFilter extends OncePerRequestFilter {
     private final AccountAuthCache authCache;
     private final ObjectMapper objectMapper;
 
+    /** 每个携带登录 Session 的请求都校验账号状态和鉴权版本；异常时保留 Session。 */
     @Override
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {

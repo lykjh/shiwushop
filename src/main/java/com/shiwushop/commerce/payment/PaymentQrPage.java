@@ -15,6 +15,7 @@ import java.util.Map;
 public final class PaymentQrPage {
     private PaymentQrPage() {}
 
+    /** 将渠道二维码编码成内嵌 SVG 收银页；页面仅展示付款信息，不更新订单状态。 */
     public static String render(String qrCode, BigDecimal amount, LocalDateTime expiresAt, String channel) {
         try {
             BitMatrix matrix = new MultiFormatWriter().encode(qrCode, BarcodeFormat.QR_CODE, 1, 1,

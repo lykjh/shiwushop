@@ -14,6 +14,7 @@ import java.time.ZoneId;
 @EnableScheduling
 public class ShiwushopApplication {
 
+    /** 为订单、支付和物流提供统一的上海时区业务时钟。 */
     @Bean
     Clock businessClock() {
         return Clock.system(ZoneId.of("Asia/Shanghai"));
