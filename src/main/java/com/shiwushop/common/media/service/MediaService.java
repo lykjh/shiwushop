@@ -1,11 +1,8 @@
 package com.shiwushop.common.media.service;
 
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.core.io.Resource;
 
+/** 上传图片并返回资源 ID；公开读取走 MediaReadService。 */
 public interface MediaService {
     Long upload(Long userId, MultipartFile file);
-    ImageFile read(Long mediaId, Long currentUserId);
-
-    record ImageFile(Resource resource, String mimeType, boolean owned, String etag) {}
 }

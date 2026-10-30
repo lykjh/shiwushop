@@ -4,8 +4,8 @@ import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.media.entity.MediaAsset;
 import com.shiwushop.common.media.PublicMediaReference;
 import com.shiwushop.common.media.mapper.MediaAssetMapper;
-import com.shiwushop.common.media.service.MediaService;
-import com.shiwushop.common.media.service.impl.MediaServiceImpl;
+import com.shiwushop.common.media.service.MediaReadService;
+import com.shiwushop.common.media.service.impl.MediaReadServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.FileSystemResource;
@@ -26,7 +26,7 @@ class MediaReadUnitTests {
     void returnsFileResourceAfterCheckingPublicVisibility() throws Exception {
         MediaAssetMapper assets = mock(MediaAssetMapper.class);
         PublicMediaReference references = mock(PublicMediaReference.class);
-        MediaServiceImpl service = new MediaServiceImpl(assets, references, mock(AccountAccess.class));
+        MediaReadServiceImpl service = new MediaReadServiceImpl(assets, references, mock(AccountAccess.class));
         ReflectionTestUtils.setField(service, "storageRoot", root.toString());
         String key = "d3bd6f2b-2b7b-4430-865a-4fc44875118f.png";
         Files.write(root.resolve(key), new byte[]{1, 2, 3});
@@ -37,7 +37,7 @@ class MediaReadUnitTests {
         when(assets.selectReady(7L)).thenReturn(asset);
         when(references.isPubliclyReferenced(7L)).thenReturn(true);
 
-        MediaService.ImageFile result = service.read(7L, null);
+        MediaReadService.ImageFile result = service.read(7L, null);
 
         assertInstanceOf(FileSystemResource.class, result.resource());
         assertEquals(key, result.etag());
