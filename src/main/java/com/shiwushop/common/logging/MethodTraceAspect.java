@@ -23,14 +23,19 @@ public class MethodTraceAspect {
         String owner = declaredBy.startsWith("com.shiwushop.") ? declaredBy
                 : ClassUtils.getUserClass(call.getTarget()).getName();
         String method = owner + "." + call.getSignature().getName();
+        String module = owner.startsWith("com.shiwushop.account.") ? "account"
+                : owner.startsWith("com.shiwushop.catalog.") ? "catalog"
+                : owner.startsWith("com.shiwushop.commerce.") ? "commerce"
+                : owner.startsWith("com.shiwushop.common.media.") ? "media" : "common";
         try {
             Object result = call.proceed();
-            log.info("method={} outcome=success durationMs={}", method, (System.nanoTime() - started) / 1_000_000);
+            log.info("method={} outcome=success durationMs={} module={}", method,
+                    (System.nanoTime() - started) / 1_000_000, module);
             return result;
         } catch (Throwable failure) {
             // 仅记录异常类型，避免参数和异常消息携带账号、密码或交易数据。
-            log.warn("method={} outcome=failure error={} durationMs={}", method,
-                    failure.getClass().getSimpleName(), (System.nanoTime() - started) / 1_000_000);
+            log.warn("method={} outcome=failure error={} durationMs={} module={}", method,
+                    failure.getClass().getSimpleName(), (System.nanoTime() - started) / 1_000_000, module);
             throw failure;
         }
     }

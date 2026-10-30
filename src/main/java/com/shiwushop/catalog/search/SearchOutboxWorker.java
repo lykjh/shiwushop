@@ -2,6 +2,7 @@ package com.shiwushop.catalog.search;
 
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -52,14 +53,16 @@ public class SearchOutboxWorker {
         String token = UUID.randomUUID().toString();
         // Search bulk is idempotent by document ID; the DB lease prevents concurrent fanout checkpoints.
         if (outbox.claimSearchEvent(event.getId(), token, now, now.plusSeconds(60)) != 1) return;
-        try {
-            process(event, token);
-        } catch (Exception failure) {
-            log.warn("搜索索引事件处理失败，eventId={}", event.getId(), failure);
-            if (event.getAttempts() >= 9) outbox.markDead(event.getId(), token);
-            else {
-                long delay = Math.min(300, 1L << Math.min(event.getAttempts() + 1, 8));
-                outbox.markRetry(event.getId(), token, LocalDateTime.now(clock).plusSeconds(delay));
+        try (MDC.MDCCloseable ignored = MDC.putCloseable("eventId", event.getId().toString())) {
+            try {
+                process(event, token);
+            } catch (Exception failure) {
+                log.warn("搜索索引事件处理失败，eventId={}", event.getId(), failure);
+                if (event.getAttempts() >= 9) outbox.markDead(event.getId(), token);
+                else {
+                    long delay = Math.min(300, 1L << Math.min(event.getAttempts() + 1, 8));
+                    outbox.markRetry(event.getId(), token, LocalDateTime.now(clock).plusSeconds(delay));
+                }
             }
         }
     }
@@ -92,7 +95,11 @@ public class SearchOutboxWorker {
         write(actions);
         if (ids.size() == BATCH)
             outbox.checkpointSearchEvent(event.getId(), token, ids.getLast());
-        else outbox.markPublished(event.getId(), token, LocalDateTime.now(clock));
+        else {
+            if (outbox.markPublished(event.getId(), token, LocalDateTime.now(clock)) == 1)
+                log.info("search_event outcome=published eventId={} type={} indexed={}",
+                        event.getId(), type, actions.size());
+        }
     }
 
     /** 把文档变化编码成批量索引请求，逐项检查搜索服务的写入结果。 */

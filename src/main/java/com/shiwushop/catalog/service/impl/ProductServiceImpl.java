@@ -40,6 +40,7 @@ import com.shiwushop.catalog.auth.MerchantShopAccess;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.common.media.MediaAssetAccess;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.catalog.entity.status.ProductStatus;
 import com.shiwushop.catalog.service.CategoryService;
 import com.shiwushop.catalog.service.ProductService;
@@ -144,6 +145,7 @@ public class ProductServiceImpl implements ProductService {
 
         insertProductImages(product.getId(), imageIds, dto.getCoverMediaId());
         queueSearchRefresh(product.getId());
+        BusinessEventLog.committed("catalog", "product_draft_created", "product", product.getId());
         return new MerchantProductVO(
                 product.getId(),
                 product.getShopId(),
@@ -196,6 +198,7 @@ public class ProductServiceImpl implements ProductService {
 
             updateProductImages(productId, dto, imageIds, coverId);
             queueSearchRefresh(productId);
+            BusinessEventLog.committed("catalog", "product_updated", "product", productId);
 
             Product updated = productMapper.selectById(productId);
             return new MerchantProductVO(
@@ -310,6 +313,7 @@ public class ProductServiceImpl implements ProductService {
 
         try {
             deleteProductOptions(productId);
+            BusinessEventLog.committed("catalog", "product_options_replaced", "product", productId);
             return insertProductOptions(productId, dto.getOptions());
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(409, "规格重复或已被SKU引用",e);
@@ -398,6 +402,7 @@ public class ProductServiceImpl implements ProductService {
             throw new IllegalStateException("商家库存调整流水写入失败");
         }
         queueSearchRefresh(productId);
+        BusinessEventLog.committed("catalog", "sku_updated", "sku", skuId);
 
         return new MerchantSkuVO(
                 skuId,
@@ -447,6 +452,7 @@ public class ProductServiceImpl implements ProductService {
             skuOptionValueMapper.insertLink(sku.getId(), valueId);
         }
         queueSearchRefresh(productId);
+        BusinessEventLog.committed("catalog", "sku_created", "sku", sku.getId());
         return new MerchantSkuVO(
                 sku.getId(), productId, orderedIds, dto.getPrice(), dto.getStock(), false);
     }
@@ -524,6 +530,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, productId)
                 .set(Product::getStatus, status));
         queueSearchRefresh(productId);
+        BusinessEventLog.committed("catalog", "product_status_changed", "product", productId);
 
         return new ProductStatusVO(productId, status.name());
     }
@@ -648,6 +655,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.OFF_SALE));
         queueSearchRefresh(productId);
+        BusinessEventLog.committed("catalog", "product_admin_taken_down", "product", productId);
         return new ProductStatusVO(productId, ProductStatus.OFF_SALE.name());
     }
 }

@@ -10,6 +10,7 @@ import com.shiwushop.common.auth.*;
 import com.shiwushop.account.dto.user.LoginDTO;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.common.captcha.CaptchaService;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.account.vo.user.LoginVO;
 import com.shiwushop.account.vo.user.UserInfoVO;
 
@@ -96,6 +97,7 @@ public class UserServiceImpl implements UserService {
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "账号已存在",e);
         }
+        BusinessEventLog.committed("account", "register", "user", account.getUserId());
     }
 
     /**
@@ -134,6 +136,7 @@ public class UserServiceImpl implements UserService {
         request.changeSessionId();
         session.setAttribute("userId", loginVO.getId());
         session.setAttribute("authVersion", accountAccess.requireActive(loginVO.getId()).getAuthVersion());
+        BusinessEventLog.committed("account", "login", "user", loginVO.getId());
         return loginVO;
     }
 
@@ -180,6 +183,7 @@ public class UserServiceImpl implements UserService {
                 new AccountAuthCache.State(AccountStatus.ACTIVE, account.getAuthVersion() + 1));
         if (userAccountMapper.changePassword(userId, account.getAuthVersion(), hash) != 1)
             throw new BusinessException(409, "账号已变更，请重新登录");
+        BusinessEventLog.committed("account", "password_changed", "user", userId);
     }
 
 }

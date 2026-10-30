@@ -14,6 +14,7 @@ import com.shiwushop.common.Result;
 import com.shiwushop.account.auth.AuthRiskLimiter;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.common.captcha.CaptchaRateLimiter;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.common.captcha.CaptchaService;
 import com.shiwushop.account.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -84,7 +85,9 @@ public class UserController {
     public Result<Void> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
+            Long userId = SessionUser.currentId(request);
             session.invalidate();
+            if (userId != null) BusinessEventLog.committed("account", "logout", "user", userId);
         }
         return Result.success();
     }

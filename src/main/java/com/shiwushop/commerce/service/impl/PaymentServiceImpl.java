@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.commerce.vo.payment.PaymentStartVO;
 import com.shiwushop.commerce.vo.payment.PaymentStatusVO;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.commerce.entity.order.OrderItem;
@@ -356,6 +357,7 @@ public class PaymentServiceImpl implements PaymentService {
             productMapper.increaseSoldCount(item.getProductId(), item.getQuantity());
         }
         queueProductRefreshes(items);
+        BusinessEventLog.committed("commerce", "order_paid", "order", order.getId());
     }
 
     /** 锁定订单并把仍待支付的尝试标记关闭；已支付订单不受影响。 */
@@ -387,6 +389,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!matchesExpectedAttempt(latest, expected) || !closeForCancellation(latest, confirmedClosed)) return;
         if (orderMapper.markCancelled(orderId) != 1) return;
         restoreStock(orderId);
+        BusinessEventLog.committed("commerce", "order_cancelled", "order", orderId);
     }
 
     /** 确认渠道核对期间没有产生另一笔支付尝试。 */

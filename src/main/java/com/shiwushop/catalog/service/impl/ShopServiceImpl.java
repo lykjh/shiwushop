@@ -13,6 +13,7 @@ import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.catalog.auth.MerchantShopAccess;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.common.media.MediaAssetAccess;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.catalog.entity.shop.Shop;
 import com.shiwushop.account.entity.status.AccountRole;
 import com.shiwushop.account.entity.status.AccountStatus;
@@ -86,6 +87,7 @@ public class ShopServiceImpl implements ShopService {
             userAccountMapper.updateById(owner);
         }
         queueSearchRefresh(shop.getId());
+        BusinessEventLog.committed("catalog", "shop_created", "shop", shop.getId());
         return toVO(shop);
     }
 
@@ -120,6 +122,7 @@ public class ShopServiceImpl implements ShopService {
             newOwner.setRole(AccountRole.MERCHANT);
             userAccountMapper.updateById(newOwner);
         }
+        BusinessEventLog.committed("catalog", "shop_owner_changed", "shop", shopId);
         return toVO(shop);
     }
 
@@ -138,6 +141,7 @@ public class ShopServiceImpl implements ShopService {
         queueSearchRefresh(shopId);
 
         Shop updatedShop = shopMapper.selectById(shopId);
+        BusinessEventLog.committed("catalog", "shop_status_changed", "shop", shopId);
         return toVO(updatedShop);
     }
 
@@ -216,6 +220,7 @@ public class ShopServiceImpl implements ShopService {
 
         Shop updated = shopMapper.selectById(shopId);
         queueSearchRefresh(shopId);
+        BusinessEventLog.committed("catalog", "shop_profile_updated", "shop", shopId);
         return toVO(updated);
 
     }

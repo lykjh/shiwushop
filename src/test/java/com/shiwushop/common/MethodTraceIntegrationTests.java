@@ -1,6 +1,7 @@
 package com.shiwushop.common;
 
 import com.shiwushop.common.logging.MethodTraceAspect;
+import com.shiwushop.common.logging.HttpRequestLogFilter;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -29,9 +30,13 @@ class MethodTraceIntegrationTests {
     @Test
     void tracesControllerAndCacheDuringRealRequest() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(MethodTraceAspect.class);
+        Logger httpLogger = (Logger) LoggerFactory.getLogger(HttpRequestLogFilter.class);
         ListAppender<ILoggingEvent> events = new ListAppender<>();
+        ListAppender<ILoggingEvent> httpEvents = new ListAppender<>();
         events.start();
+        httpEvents.start();
         logger.addAppender(events);
+        httpLogger.addAppender(httpEvents);
         try {
             String requestId = mockMvc.perform(get("/products").param("size", "1"))
                     .andExpect(status().isOk()).andReturn().getResponse().getHeader("X-Request-Id");
@@ -43,9 +48,13 @@ class MethodTraceIntegrationTests {
                     "PublicProductServiceImpl.publicList outcome=success", "ProductMapper.selectPublicPage outcome=success");
             assertThat(events.list).anySatisfy(event ->
                     assertThat(event.getMDCPropertyMap().get("requestId")).isEqualTo(requestId));
+            assertThat(httpEvents.list).anySatisfy(event ->
+                    assertThat(event.getFormattedMessage()).contains("module=catalog", "requestId=" + requestId));
         } finally {
             logger.detachAppender(events);
+            httpLogger.detachAppender(httpEvents);
             events.stop();
+            httpEvents.stop();
         }
     }
 }

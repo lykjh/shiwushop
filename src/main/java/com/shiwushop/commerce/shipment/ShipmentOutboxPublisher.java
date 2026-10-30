@@ -5,6 +5,7 @@ import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -56,7 +57,7 @@ public class ShipmentOutboxPublisher {
 
     /** 取得 RabbitMQ 接收与路由确认后标记已投递；失败按次数退避重试。 */
     private boolean publish(OutboxEventMapper.ShipmentConfirmEvent event, String token) {
-        try {
+        try (MDC.MDCCloseable ignored = MDC.putCloseable("eventId", event.getId().toString())) {
             Shipment shipment = shipments.selectById(event.getShipmentId());
             if (shipment == null) {
                 outbox.markDead(event.getId(), token);
@@ -74,7 +75,9 @@ public class ShipmentOutboxPublisher {
             if (!correlation.getFuture().get(5, TimeUnit.SECONDS).isAck() || correlation.getReturned() != null) {
                 throw new IllegalStateException("RabbitMQ 未确认物流消息投递");
             }
-            outbox.markPublished(event.getId(), token, LocalDateTime.now(clock));
+            if (outbox.markPublished(event.getId(), token, LocalDateTime.now(clock)) == 1)
+                log.info("shipment_event outcome=published eventId={} shipmentId={}",
+                        event.getId(), event.getShipmentId());
             return true;
         } catch (Exception failure) {
             log.warn("物流 outbox 投递失败，eventId={}", event.getId(), failure);

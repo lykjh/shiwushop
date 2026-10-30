@@ -8,6 +8,7 @@ import com.shiwushop.commerce.vo.after_sale.AfterSaleVO;
 import com.shiwushop.commerce.vo.after_sale.AfterSaleSliceVO;
 import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.catalog.auth.MerchantShopAccess;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.commerce.entity.after_sale.AfterSaleCase;
@@ -157,6 +158,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             items.insert(line);
         }
         audit.record(buyerId, "AFTER_SALE_REQUESTED", sale.getId(), "买家申请售后", now);
+        BusinessEventLog.committed("commerce", "after_sale_requested", "after_sale", sale.getId());
         return sale.getId();
     }
 
@@ -251,6 +253,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                     request.approved() ? null : now) != 1) throw new BusinessException(409, "审核状态冲突");
             audit.record(merchantId, request.approved() ? "AFTER_SALE_APPROVED" : "AFTER_SALE_REJECTED",
                     caseId, "商家审核售后", now);
+            BusinessEventLog.committed("commerce", request.approved() ? "after_sale_approved" : "after_sale_rejected",
+                    "after_sale", caseId);
         });
         return view(caseId);
     }
@@ -283,6 +287,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             if (cases.transition(caseId, AfterSaleStatus.WAITING_RETURN, AfterSaleStatus.WAITING_RECEIPT) != 1)
                 throw new BusinessException(409, "退货状态冲突");
             audit.record(buyerId, "RETURN_SHIPPED", caseId, "买家填写退货运单", now);
+            BusinessEventLog.committed("commerce", "return_shipped", "after_sale", caseId);
         });
         return view(caseId);
     }
@@ -307,6 +312,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 throw new BusinessException(409, "退货签收状态冲突");
             if (request.restockable()) restoreStock(caseId, "RETURN_RECEIPT");
             audit.record(merchantId, "RETURN_RECEIVED", caseId, "商家确认收到退货", now);
+            BusinessEventLog.committed("commerce", "return_received", "after_sale", caseId);
         });
         return view(caseId);
     }
@@ -390,6 +396,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         attempt.setRequestedAt(LocalDateTime.now(clock));
         refunds.insert(attempt);
         audit.record(merchantId, "REFUND_REQUESTED", caseId, "商家发起退款", attempt.getRequestedAt());
+        BusinessEventLog.committed("commerce", "refund_requested", "refund", attempt.getId());
         return new RefundContext(attempt, paid, true);
     }
 
@@ -472,6 +479,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 }
             }
             audit.record(null, "REFUND_SUCCEEDED", sale.getId(), "支付宝退款成功", now);
+            BusinessEventLog.committed("commerce", "refund_succeeded", "refund", current.getId());
         });
     }
 

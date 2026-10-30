@@ -13,6 +13,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.method.HandlerMethod;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -35,10 +36,21 @@ public class HttpRequestLogFilter extends OncePerRequestFilter {
         } finally {
             // 记录匹配的路由模板，避免把 URL 中的交易号或用户输入写进日志。
             Object route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-            log.info("http method={} route={} status={} durationMs={} requestId={}",
+            Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+            String module = handler instanceof HandlerMethod method
+                    ? moduleOf(method.getBeanType().getPackageName()) : "unmapped";
+            log.info("http method={} route={} status={} durationMs={} requestId={} module={}",
                     request.getMethod(), route == null ? "[unmapped]" : route,
-                    response.getStatus(), (System.nanoTime() - started) / 1_000_000, requestId);
+                    response.getStatus(), (System.nanoTime() - started) / 1_000_000, requestId, module);
             MDC.remove("requestId");
         }
+    }
+
+    private static String moduleOf(String packageName) {
+        if (packageName.startsWith("com.shiwushop.account.")) return "account";
+        if (packageName.startsWith("com.shiwushop.catalog.")) return "catalog";
+        if (packageName.startsWith("com.shiwushop.commerce.")) return "commerce";
+        if (packageName.startsWith("com.shiwushop.common.media.")) return "media";
+        return "common";
     }
 }

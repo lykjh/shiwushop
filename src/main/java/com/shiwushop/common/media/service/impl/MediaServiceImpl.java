@@ -2,6 +2,7 @@ package com.shiwushop.common.media.service.impl;
 
 import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.common.media.entity.MediaAsset;
 import com.shiwushop.common.media.mapper.MediaAssetMapper;
 import com.shiwushop.common.media.service.MediaService;
@@ -94,6 +95,7 @@ public class MediaServiceImpl implements MediaService {
             asset.setStatus("READY");
             assets.insert(asset);
             saved = true;
+            BusinessEventLog.committed("media", "image_uploaded", "media", asset.getId());
             return asset.getId();
         } catch (BusinessException e) {
             throw e;

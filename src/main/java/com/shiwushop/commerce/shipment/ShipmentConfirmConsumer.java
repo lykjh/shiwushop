@@ -4,6 +4,8 @@ import com.shiwushop.common.outbox.ConsumedEventMapper;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.commerce.service.ShipmentService;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
+import com.shiwushop.common.logging.BusinessEventLog;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -26,11 +28,14 @@ public class ShipmentConfirmConsumer {
     @RabbitListener(queues = ShipmentMessagingConfig.WORK_QUEUE)
     @Transactional
     public void handle(String eventIdText) {
-        Long eventId = Long.valueOf(eventIdText);
-        OutboxEventMapper.ShipmentConfirmEvent event = outbox.selectShipmentEvent(eventId);
-        if (event == null) throw new IllegalArgumentException("未知物流事件");
-        // 消费记录和收货状态同事务提交；MQ 重投时只执行一次确认。
-        if (consumed.insertOnce(CONSUMER, eventId, LocalDateTime.now(clock)) == 0) return;
-        shipmentService.confirmDue(event.getShipmentId());
+        try (MDC.MDCCloseable ignored = MDC.putCloseable("eventId", eventIdText)) {
+            Long eventId = Long.valueOf(eventIdText);
+            OutboxEventMapper.ShipmentConfirmEvent event = outbox.selectShipmentEvent(eventId);
+            if (event == null) throw new IllegalArgumentException("未知物流事件");
+            // 消费记录和收货状态同事务提交；MQ 重投时只执行一次确认。
+            if (consumed.insertOnce(CONSUMER, eventId, LocalDateTime.now(clock)) == 0) return;
+            shipmentService.confirmDue(event.getShipmentId());
+            BusinessEventLog.committed("commerce", "shipment_event_consumed", "event", eventId);
+        }
     }
 }

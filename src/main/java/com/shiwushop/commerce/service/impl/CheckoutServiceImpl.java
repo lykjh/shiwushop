@@ -24,6 +24,7 @@ import com.shiwushop.commerce.mapper.order.OrderMapper;
 import com.shiwushop.commerce.service.CheckoutService;
 import com.shiwushop.commerce.vo.order.CheckoutVO;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -198,6 +199,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             if (line.item().getId() != null) cartItemMapper.deleteById(line.item().getId());
         }
         checkoutRequestMapper.linkOrder(requestId, order.getId());
+        BusinessEventLog.committed("commerce", "order_created", "order", order.getId());
         return new CheckoutVO.PlacedOrder(order.getId(), shopId, shopTotal, "UNPAID");
     }
 

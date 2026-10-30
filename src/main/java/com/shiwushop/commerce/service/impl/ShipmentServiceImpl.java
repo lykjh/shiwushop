@@ -4,6 +4,7 @@ import com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO;
 import com.shiwushop.commerce.vo.shipment.ShipmentVO;
 import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.catalog.auth.MerchantShopAccess;
 import com.shiwushop.commerce.entity.order.Order;
 import com.shiwushop.commerce.entity.shipment.Shipment;
@@ -83,6 +84,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         // 发货和待投递事件同事务提交，MQ 暂不可用时仍可稍后补投。
         outboxEventMapper.insertShipmentAutoConfirm(shipment.getId(), now);
         auditMapper.record(userId, "SHIPMENT_CREATED", shipment.getId(), "商家发货", now);
+        BusinessEventLog.committed("commerce", "shipment_created", "shipment", shipment.getId());
         return toVO(shipment);
     }
 
@@ -134,6 +136,7 @@ public class ShipmentServiceImpl implements ShipmentService {
             shipment.setStatus(ShipmentStatus.CONFIRMED);
             shipment.setConfirmedAt(now);
             shipment.setConfirmSource(ConfirmSource.BUYER);
+            BusinessEventLog.committed("commerce", "shipment_confirmed_by_buyer", "shipment", shipment.getId());
         }
         return toVO(shipment);
     }
@@ -154,6 +157,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (shipmentMapper.refundedAmount(order.getId()).compareTo(order.getTotalAmount()) >= 0) return;
         if (shipmentMapper.confirm(shipment.getId(), ConfirmSource.SYSTEM, now) == 1) {
             auditMapper.record(null, "SHIPMENT_CONFIRMED_BY_SYSTEM", shipment.getId(), "到期自动确认收货", now);
+            BusinessEventLog.committed("commerce", "shipment_confirmed_by_system", "shipment", shipment.getId());
         }
     }
 

@@ -10,6 +10,7 @@ import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.common.pagination.PageSpec;
+import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.catalog.entity.review.ProductReview;
 import com.shiwushop.catalog.mapper.review.ProductReviewMapper;
 import com.shiwushop.common.outbox.OutboxEventMapper;
@@ -71,6 +72,7 @@ public class ReviewServiceImpl implements ReviewService {
             throw new IllegalStateException("评价汇总写入失败");
         for (int i = 0; i < images.size(); i++) reviews.insertImage(review.getId(), images.get(i), "ORIGINAL", i);
         refreshSearch(eligibility.getProductId());
+        BusinessEventLog.committed("catalog", "review_created", "review", review.getId());
         return review.getId();
     }
 
@@ -93,6 +95,7 @@ public class ReviewServiceImpl implements ReviewService {
         for (Long image : images) media.requireReadyOwned(image, buyerId, "追评图片无效或不属于当前用户");
         if (reviews.addFollowUp(reviewId, content) != 1) throw new BusinessException(409, "评价不可追评或已追评");
         for (int i = 0; i < images.size(); i++) reviews.insertImage(reviewId, images.get(i), "FOLLOW_UP", i);
+        BusinessEventLog.committed("catalog", "review_followed_up", "review", reviewId);
     }
 
     /** 软删除本人评价；被计入公开评分时同步扣减汇总，并刷新搜索结果。 */
@@ -105,6 +108,7 @@ public class ReviewServiceImpl implements ReviewService {
             if (reviews.softDelete(reviewId) != 1) throw new IllegalStateException("评价删除失败");
             if (Boolean.TRUE.equals(review.getCountedInSummary())) removeFromSummary(review);
             refreshSearch(review.getProductId());
+            BusinessEventLog.committed("catalog", "review_deleted", "review", reviewId);
         }
     }
 
@@ -118,6 +122,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (review == null || !reviews.isPublicReview(reviewId)) throw new BusinessException(404, "评价不存在");
         if (reporterId.equals(review.getBuyerUserId())) throw new BusinessException(409, "不能举报自己的评价");
         reviews.insertReport(reviewId, reporterId, reason);
+        BusinessEventLog.committed("catalog", "review_reported", "review", reviewId);
     }
 
     /** 用评价举报 ID 游标返回待处理列表，多读一条判断是否还有下一页。 */
@@ -157,6 +162,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (reviews.resolveReport(reportId, adminId, decision) != 1)
             throw new BusinessException(409, "举报已处理");
         reviews.insertModerationAudit(report.getReviewId(), reportId, adminId, decision, reason);
+        BusinessEventLog.committed("catalog", "review_report_resolved", "report", reportId);
     }
 
     /** 锁定评价并确认作者身份；无权限时用 404 隐藏评价存在性。 */

@@ -43,7 +43,7 @@ logging:
   file:
     name: ${SHOP_LOG_FILE:./logs/shiwushop.log}
   pattern:
-    level: "%5p [requestId=%X{requestId:-}]"
+    level: "%5p [requestId=%X{requestId:-} eventId=%X{eventId:-}]"
   logback:
     rollingpolicy:
       max-file-size: 20MB
