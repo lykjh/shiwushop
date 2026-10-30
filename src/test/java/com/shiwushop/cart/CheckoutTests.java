@@ -23,6 +23,7 @@ import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.account.dto.user.RegisterDTO;
 import com.shiwushop.commerce.dto.cart.CheckoutDTO;
 import com.shiwushop.commerce.service.CartService;
+import com.shiwushop.commerce.service.CheckoutService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.account.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,7 @@ class CheckoutTests {
     @Autowired private OrderMapper orderMapper;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private CartService cartService;
+    @Autowired private CheckoutService checkoutService;
     private final ObjectMapper om = new ObjectMapper();
 
     @Test
@@ -109,7 +111,7 @@ class CheckoutTests {
         CheckoutDTO directCall = new CheckoutDTO();
         directCall.setCartItemIds(ids);
         assertEquals(400, assertThrows(BusinessException.class,
-                () -> cartService.checkoutSelected(fixture.buyer.getId(), directCall)).getCode());
+                () -> checkoutService.checkoutSelected(fixture.buyer.getId(), directCall)).getCode());
         assertEquals(requestsBefore, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM checkout_requests WHERE user_id=?", Integer.class, fixture.buyer.getId()));
     }
