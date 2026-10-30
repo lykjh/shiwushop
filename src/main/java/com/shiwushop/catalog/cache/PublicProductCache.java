@@ -3,7 +3,7 @@ package com.shiwushop.catalog.cache;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.catalog.dto.product.PublicProductQuery;
 import com.shiwushop.catalog.vo.product.PublicProductPageVO;
-import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.PublicProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,7 +35,7 @@ public class PublicProductCache {
             "if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end; " +
                     "redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3]); return 1",
             Long.class);
-    private final ProductService products;
+    private final PublicProductService products;
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
     private final Semaphore fallbackSlot = new Semaphore(1);

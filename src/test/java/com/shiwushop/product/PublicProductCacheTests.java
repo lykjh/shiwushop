@@ -4,7 +4,7 @@ import com.shiwushop.catalog.dto.product.PublicProductQuery;
 import com.shiwushop.catalog.vo.product.PublicProductPageVO;
 import com.shiwushop.catalog.vo.product.PublicProductVO;
 import com.shiwushop.catalog.cache.PublicProductCache;
-import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.PublicProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,7 +34,7 @@ class PublicProductCacheTests {
     @Autowired private PublicProductCache cache;
     @Autowired private StringRedisTemplate redis;
     @Autowired private ObjectMapper json;
-    @MockitoBean private ProductService products;
+    @MockitoBean private PublicProductService products;
 
     @Test
     void reusesPublicPageAndRequeriesAfterBoundedTtl() throws Exception {
@@ -58,7 +58,7 @@ class PublicProductCacheTests {
 
     @Test
     void skipsRedisForFilteredAndCursorRequests() {
-        ProductService source = mock(ProductService.class);
+        PublicProductService source = mock(PublicProductService.class);
         StringRedisTemplate unused = mock(StringRedisTemplate.class);
         PublicProductCache isolated = new PublicProductCache(source, unused, json);
         PublicProductQuery filtered = new PublicProductQuery(1L, null, null, null, null, 20, null);
@@ -73,7 +73,7 @@ class PublicProductCacheTests {
 
     @Test
     void redisFailureFallsBackToDatabaseResult() {
-        ProductService source = mock(ProductService.class);
+        PublicProductService source = mock(PublicProductService.class);
         StringRedisTemplate unavailable = mock(StringRedisTemplate.class);
         PublicProductCache isolated = new PublicProductCache(source, unavailable, json);
         ReflectionTestUtils.setField(isolated, "ttlSeconds", 1L);
@@ -87,7 +87,7 @@ class PublicProductCacheTests {
 
     @Test
     void redisFailureLimitsConcurrentDatabaseFallbacks() throws Exception {
-        ProductService source = mock(ProductService.class);
+        PublicProductService source = mock(PublicProductService.class);
         StringRedisTemplate unavailable = mock(StringRedisTemplate.class);
         PublicProductCache isolated = new PublicProductCache(source, unavailable, json);
         ReflectionTestUtils.setField(isolated, "waitMillis", 1000L);
@@ -118,7 +118,7 @@ class PublicProductCacheTests {
 
     @Test
     void expiredLeaseCannotOverwriteNewerCache() throws Exception {
-        ProductService source = mock(ProductService.class);
+        PublicProductService source = mock(PublicProductService.class);
         PublicProductCache isolated = new PublicProductCache(source, redis, json);
         ReflectionTestUtils.setField(isolated, "ttlSeconds", 5L);
         ReflectionTestUtils.setField(isolated, "lockSeconds", 30L);

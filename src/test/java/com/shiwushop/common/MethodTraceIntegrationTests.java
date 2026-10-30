@@ -40,7 +40,7 @@ class MethodTraceIntegrationTests {
                     .reduce("", (left, right) -> left + "\n" + right);
             assertThat(AopUtils.isAopProxy(productController)).isTrue();
             assertThat(messages).contains("ProductController.list outcome=success", "PublicProductCache.list outcome=success",
-                    "ProductServiceImpl.publicList outcome=success", "ProductMapper.selectPublicPage outcome=success");
+                    "PublicProductServiceImpl.publicList outcome=success", "ProductMapper.selectPublicPage outcome=success");
             assertThat(events.list).anySatisfy(event ->
                     assertThat(event.getMDCPropertyMap().get("requestId")).isEqualTo(requestId));
         } finally {

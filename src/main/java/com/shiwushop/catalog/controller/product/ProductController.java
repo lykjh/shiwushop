@@ -7,7 +7,7 @@ import com.shiwushop.catalog.vo.product.PublicProductPageVO;
 import com.shiwushop.common.Result;
 import com.shiwushop.catalog.cache.PublicProductCache;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.PublicProductService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class ProductController {
 
-    private final ProductService productService;
+    private final PublicProductService productService;
     private final PublicProductCache publicProductCache;
 
     @GetMapping

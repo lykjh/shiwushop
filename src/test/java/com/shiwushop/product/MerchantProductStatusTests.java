@@ -19,6 +19,7 @@ import com.shiwushop.catalog.mapper.product.SkuOptionValueMapper;
 import com.shiwushop.catalog.mapper.shop.ShopMapper;
 
 import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.PublicProductService;
 
 import com.shiwushop.catalog.entity.status.ProductStatus;
 
@@ -59,6 +60,7 @@ class MerchantProductStatusTests {
     @Autowired private MockMvc mockMvc;
     @Autowired private UserService userService;
     @Autowired private ProductService productService;
+    @Autowired private PublicProductService publicProductService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ShopMapper shopMapper;
     @Autowired private CategoryMapper categoryMapper;
@@ -72,7 +74,7 @@ class MerchantProductStatusTests {
     @Test
     void rejectsNullProductIdsBeforeQueries() {
         BusinessException publicError = assertThrows(BusinessException.class,
-                () -> productService.publicDetail(null));
+                () -> publicProductService.publicDetail(null));
         assertEquals(400, publicError.getCode());
         assertEquals("商品ID必须大于0", publicError.getMessage());
 

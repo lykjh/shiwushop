@@ -23,22 +23,15 @@ import com.shiwushop.catalog.dto.product.MerchantProductUpdateDTO;
 import com.shiwushop.catalog.dto.product.ProductOptionSaveDTO;
 import com.shiwushop.catalog.dto.product.ProductOptionsUpdateDTO;
 import com.shiwushop.catalog.dto.product.ProductStatusUpdateDTO;
-import com.shiwushop.catalog.dto.product.PublicProductQuery;
 import com.shiwushop.catalog.dto.sku.MerchantSkuCreateDTO;
 import com.shiwushop.catalog.dto.sku.MerchantSkuUpdateDTO;
-import com.shiwushop.catalog.vo.brand.BrandPublicVO;
-import com.shiwushop.catalog.vo.category.CategoryDetailVO;
 import com.shiwushop.catalog.vo.product.MerchantProductDetailVO;
 import com.shiwushop.catalog.vo.product.MerchantProductPageVO;
 import com.shiwushop.catalog.vo.product.MerchantProductVO;
 import com.shiwushop.catalog.vo.product.ProductOptionVO;
 import com.shiwushop.catalog.vo.product.ProductOptionValueVO;
 import com.shiwushop.catalog.vo.product.ProductStatusVO;
-import com.shiwushop.catalog.vo.product.PublicProductDetailVO;
-import com.shiwushop.catalog.vo.product.PublicProductPageVO;
-import com.shiwushop.catalog.vo.product.PublicProductVO;
 import com.shiwushop.catalog.vo.sku.MerchantSkuVO;
-import com.shiwushop.catalog.vo.sku.PublicSkuVO;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -48,8 +41,6 @@ import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.catalog.entity.status.ProductStatus;
-import com.shiwushop.catalog.vo.query.product.PublicProductRow;
-import com.shiwushop.catalog.vo.query.product.SkuOptionValueRow;
 import com.shiwushop.catalog.service.CategoryService;
 import com.shiwushop.catalog.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +56,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+/** 商家和管理员的商品变更入口；公开读取由 PublicProductServiceImpl 负责。 */
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -81,6 +73,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductOptionValueMapper valueMapper;
     private final SkuOptionValueMapper skuOptionValueMapper;
     private final OutboxEventMapper outboxEventMapper;
+    private final ProductOptionReader optionReader;
 
     private void queueSearchRefresh(Long productId) {
         if (outboxEventMapper.insertSearchProductRefresh(productId) != 1) {
@@ -112,154 +105,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private record OwnedProduct(Product product, Shop shop) { }
-
-    @Override
-    public PublicProductPageVO publicList(PublicProductQuery query) {
-        validatePublicFilters(query);
-        List<PublicProductRow> rows = selectPublicRows(query, query.size() + 1);
-        boolean hasMore = rows.size() > query.size();
-        List<PublicProductVO> items = rows.subList(0, Math.min(query.size(), rows.size()))
-                .stream()
-                .map(row -> new PublicProductVO(
-                        row.getId(), row.getName(), row.getCoverMediaId(),
-                        row.getBrandId() == null ? null
-                                : new PublicProductVO.Brand(row.getBrandId(), row.getBrandName()),
-                        new PublicProductVO.Shop(row.getShopId(), row.getShopName()),
-                        row.getStartingPrice(), row.getSoldCount(), Boolean.TRUE.equals(row.getSoldOut())))
-                .toList();
-        return new PublicProductPageVO(items, query.size(), hasMore,
-                hasMore ? items.getLast().id() : null);
-    }
-
-    private void validatePublicFilters(PublicProductQuery query) {
-        PageSpec.of(1, query.size());
-        if (query.afterId() != null && query.afterId() <= 0) {
-            throw new BusinessException(400, "游标参数错误");
-        }
-        validatePriceRange(query.minPrice(), query.maxPrice());
-        validatePublicCategory(query.categoryId());
-        validatePublicBrand(query.brandId());
-        validatePublicShop(query.shopId());
-    }
-
-    private void validatePriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        if ((minPrice != null && minPrice.signum() < 0)
-                || (maxPrice != null && maxPrice.signum() < 0)
-                || (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0)) {
-            throw new BusinessException(400, "价格区间错误");
-        }
-    }
-
-    private void validatePublicCategory(Long categoryId) {
-        if (categoryId != null) {
-            if (categoryId <= 0) {
-                throw new BusinessException(400, "分类ID必须大于0");
-            }
-            categoryService.detail(categoryId);
-        }
-    }
-
-    private void validatePublicBrand(Long brandId) {
-        if (brandId != null) {
-            if (brandId <= 0) {
-                throw new BusinessException(400, "品牌ID必须大于0");
-            }
-            if (brandMapper.selectById(brandId) == null) {
-                throw new BusinessException(404, "品牌不存在");
-            }
-        }
-    }
-
-    private void validatePublicShop(Long shopId) {
-        if (shopId != null) {
-            if (shopId <= 0) {
-                throw new BusinessException(400, "店铺ID必须大于0");
-            }
-            if (shopMapper.selectById(shopId) == null) {
-                throw new BusinessException(404, "店铺不存在");
-            }
-        }
-    }
-
-    private List<PublicProductRow> selectPublicRows(PublicProductQuery query, int limit) {
-        if (query.shopId() != null) {
-            return productMapper.selectPublicShopPage(query.categoryId(), query.brandId(), query.shopId(),
-                    query.minPrice(), query.maxPrice(), query.afterId(), limit);
-        }
-        if (query.categoryId() != null) {
-            return productMapper.selectPublicFilteredPage(query.categoryId(), query.brandId(), query.shopId(),
-                    query.minPrice(), query.maxPrice(),
-                    query.afterId(), limit);
-        }
-        if (query.brandId() != null) {
-            return productMapper.selectPublicBrandPage(null, query.brandId(), null,
-                    query.minPrice(), query.maxPrice(),
-                    query.afterId(), limit);
-        }
-        return productMapper.selectPublicPage(null, null, null,
-                query.minPrice(), query.maxPrice(), query.afterId(), limit);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PublicProductDetailVO publicDetail(Long id) {
-        requireProductId(id);
-        Product product = productMapper.selectById(id);
-        if(product==null){
-            throw new BusinessException(404, "商品不存在");
-        }
-
-        if (product.getStatus() != ProductStatus.ON_SALE) {
-            throw new BusinessException(404, "商品不存在");
-        }
-
-        Shop shop=product.getShopId()==null?null:shopMapper.selectById(product.getShopId());
-        if(shop==null||!Integer.valueOf(1).equals(shop.getEnabled())){
-            throw new BusinessException(404, "店铺不存在");
-        }
-
-        PublicProductDetailVO vo = new PublicProductDetailVO();
-        CategoryDetailVO categoryDetail=categoryService.detail(product.getCategoryId());
-        vo.setId(product.getId());
-        vo.setName(product.getName());
-        vo.setDescription(product.getDescription());
-        List<ProductImage> images = productImageMapper.selectList(new LambdaQueryWrapper<ProductImage>()
-                .eq(ProductImage::getProductId, product.getId())
-                        .orderByAsc(ProductImage::getSortOrder));
-        vo.setImageMediaIds(images.stream().map(ProductImage::getMediaId).toList());
-        vo.setCoverMediaId(images.stream()
-                .filter(image -> Integer.valueOf(1).equals(image.getIsCover()))
-                .map(ProductImage::getMediaId).findFirst().orElse(null));
-        vo.setCategoryPath(categoryDetail.getPath());
-        vo.setShop(new PublicProductVO.Shop(shop.getId(), shop.getName()));
-        Long brandId = productMapper.selectBrandId(id);
-        if (brandId != null) {
-            Brand brand = brandMapper.selectById(brandId);
-            vo.setBrand(new BrandPublicVO(brand.getId(), brand.getName(), brand.getLogoMediaId()));
-        }
-        vo.setSoldCount(Objects.requireNonNullElse(productMapper.getSoldCount(id), 0L));
-
-
-        vo.setOptions(loadOptions(id));
-
-        List<Sku> skuRows=skuMapper.selectList(
-                new LambdaQueryWrapper<Sku>()
-                        .eq(Sku::getProductId, id)
-                        .orderByAsc(Sku::getId)
-        );
-        Map<Long, List<Long>> skuValues = loadSkuValueIds(skuRows);
-        List<PublicSkuVO> skus=skuRows.stream().map(sku -> {
-            PublicSkuVO skuVO = new PublicSkuVO();
-            skuVO.setId(sku.getId());
-            skuVO.setOptionValueIds(skuValues.getOrDefault(sku.getId(), List.of()));
-            skuVO.setPrice(sku.getPrice());
-            skuVO.setAvailable(sku.getStock() != null && sku.getStock() > 0);
-            return skuVO;
-        }).toList();
-
-        vo.setSkus(skus);
-        return vo;
-    }
 
     @Override
     @Transactional
@@ -718,13 +563,13 @@ public class ProductServiceImpl implements ProductService {
         Long coverMediaId = images.stream().filter(image -> Integer.valueOf(1).equals(image.getIsCover()))
                 .map(ProductImage::getMediaId).findFirst().orElse(null);
 
-        List<ProductOptionVO> options = loadOptions(productId);
+        List<ProductOptionVO> options = optionReader.loadOptions(productId);
 
         List<Sku> skuRows = skuMapper.selectList(
                         new LambdaQueryWrapper<Sku>()
                                 .eq(Sku::getProductId, productId)
                                 .orderByAsc(Sku::getId));
-        Map<Long, List<Long>> skuValues = loadSkuValueIds(skuRows);
+        Map<Long, List<Long>> skuValues = optionReader.loadSkuValueIds(skuRows);
         List<MerchantSkuVO> skus = skuRows.stream()
                 .map(sku -> new MerchantSkuVO(
                         sku.getId(),
@@ -739,37 +584,6 @@ public class ProductServiceImpl implements ProductService {
                 product.getId(), product.getShopId(), product.getCategoryId(),
                 productMapper.selectBrandId(productId), product.getName(), product.getDescription(),
                 coverMediaId, product.getStatus().name(), imageMediaIds, options, skus);
-    }
-
-    private List<ProductOptionVO> loadOptions(Long productId) {
-        List<ProductOption> options = optionMapper.selectList(
-                new LambdaQueryWrapper<ProductOption>()
-                        .eq(ProductOption::getProductId, productId)
-                        .orderByAsc(ProductOption::getSortOrder, ProductOption::getId));
-        if (options.isEmpty()) return List.of();
-        Map<Long, List<ProductOptionValueVO>> values = new HashMap<>();
-        for (ProductOptionValue value : valueMapper.selectList(
-                new LambdaQueryWrapper<ProductOptionValue>()
-                        .in(ProductOptionValue::getOptionId, options.stream().map(ProductOption::getId).toList())
-                        .orderByAsc(ProductOptionValue::getSortOrder, ProductOptionValue::getId))) {
-            values.computeIfAbsent(value.getOptionId(), ignored -> new ArrayList<>())
-                    .add(new ProductOptionValueVO(value.getId(), value.getValueName()));
-        }
-        return options.stream().map(option -> new ProductOptionVO(
-                option.getId(), option.getName(), values.getOrDefault(option.getId(), List.of()))).toList();
-    }
-
-    private Map<Long, List<Long>> loadSkuValueIds(List<Sku> skus) {
-        Map<Long, List<Long>> values = new HashMap<>();
-        List<Long> ids = skus.stream().map(Sku::getId).toList();
-        // 控制 IN 列表大小，详情包含大量 SKU 时仍按少量批次读取。
-        for (int start = 0; start < ids.size(); start += 200) {
-            for (SkuOptionValueRow row : skuOptionValueMapper.selectSkuValues(
-                    ids.subList(start, Math.min(start + 200, ids.size())))) {
-                values.computeIfAbsent(row.getSkuId(), ignored -> new ArrayList<>()).add(row.getValueId());
-            }
-        }
-        return values;
     }
 
     @Override

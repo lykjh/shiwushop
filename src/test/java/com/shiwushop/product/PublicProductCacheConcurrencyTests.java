@@ -2,7 +2,7 @@ package com.shiwushop.product;
 
 import com.shiwushop.catalog.cache.PublicProductCache;
 import com.shiwushop.catalog.dto.product.PublicProductQuery;
-import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.PublicProductService;
 import com.shiwushop.catalog.vo.product.PublicProductPageVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 class PublicProductCacheConcurrencyTests {
     @Test
     void concurrentHomePageMissesLoadTheDatabaseOnce() throws Exception {
-        ProductService products = mock(ProductService.class);
+        PublicProductService products = mock(PublicProductService.class);
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
         @SuppressWarnings("unchecked")
         ValueOperations<String, String> values = mock(ValueOperations.class);
