@@ -3,7 +3,7 @@ package com.shiwushop.catalog.controller.review;
 import com.shiwushop.catalog.vo.review.PublicReviewPageVO;
 import com.shiwushop.catalog.vo.review.ReviewSummaryVO;
 import com.shiwushop.common.Result;
-import com.shiwushop.catalog.service.ReviewService;
+import com.shiwushop.catalog.service.PublicReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 public class ProductReviewController {
-    private final ReviewService reviews;
+    private final PublicReviewService reviews;
 
     @GetMapping("/products/{productId}/reviews")
     public Result<PublicReviewPageVO> list(@PathVariable Long productId,

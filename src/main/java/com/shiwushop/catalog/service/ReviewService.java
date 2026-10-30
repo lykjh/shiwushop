@@ -5,8 +5,6 @@ import com.shiwushop.catalog.dto.review.ReviewFollowUpDTO;
 import com.shiwushop.catalog.dto.review.ReviewReportDTO;
 import com.shiwushop.catalog.dto.review.ReviewReportDecisionDTO;
 import com.shiwushop.catalog.vo.review.PendingReviewReportPageVO;
-import com.shiwushop.catalog.vo.review.PublicReviewPageVO;
-import com.shiwushop.catalog.vo.review.ReviewSummaryVO;
 
 public interface ReviewService {
     Long create(Long buyerId, Long orderId, Long orderItemId, ReviewCreateDTO request);
@@ -15,6 +13,4 @@ public interface ReviewService {
     void report(Long reporterId, Long reviewId, ReviewReportDTO request);
     PendingReviewReportPageVO pendingReports(Long afterId, int size);
     void resolveReport(Long adminId, Long reportId, ReviewReportDecisionDTO request);
-    PublicReviewPageVO listPublic(Long productId, Long afterId, int size);
-    ReviewSummaryVO summary(Long productId);
 }

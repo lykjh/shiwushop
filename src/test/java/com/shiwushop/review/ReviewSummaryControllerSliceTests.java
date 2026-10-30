@@ -1,7 +1,7 @@
 package com.shiwushop.review;
 
 import com.shiwushop.catalog.controller.review.ProductReviewController;
-import com.shiwushop.catalog.service.ReviewService;
+import com.shiwushop.catalog.service.PublicReviewService;
 import com.shiwushop.catalog.vo.review.ReviewSummaryVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class ReviewSummaryControllerSliceTests {
-    private final ReviewService reviews = mock(ReviewService.class);
+    private final PublicReviewService reviews = mock(PublicReviewService.class);
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ProductReviewController(reviews)).build();
 
     @Test

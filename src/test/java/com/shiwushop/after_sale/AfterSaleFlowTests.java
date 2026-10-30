@@ -11,6 +11,7 @@ import com.shiwushop.commerce.payment.SdkAlipayGateway;
 import com.shiwushop.commerce.mapper.payment.RefundAttemptMapper;
 import com.shiwushop.commerce.service.AfterSaleService;
 import com.shiwushop.catalog.service.ReviewService;
+import com.shiwushop.catalog.service.PublicReviewService;
 import com.shiwushop.catalog.dto.review.ReviewCreateDTO;
 import com.shiwushop.commerce.service.ShipmentService;
 import com.shiwushop.commerce.dto.shipment.ShipmentCreateDTO;
@@ -41,6 +42,7 @@ class AfterSaleFlowTests {
     @Autowired private AfterSaleService service;
     @Autowired private ShipmentService shipments;
     @Autowired private ReviewService reviews;
+    @Autowired private PublicReviewService publicReviews;
     @MockitoBean private SdkAlipayGateway gateway;
 
     @Test
@@ -52,7 +54,7 @@ class AfterSaleFlowTests {
         shipments.confirmByBuyer(fixture.buyer(), fixture.orderId());
         reviews.create(fixture.buyer(), fixture.orderId(), fixture.itemId(),
                 new ReviewCreateDTO(5, "退款前的真实评价", List.of()));
-        assertEquals(1, reviews.summary(productId).reviewCount());
+        assertEquals(1, publicReviews.summary(productId).reviewCount());
 
         when(gateway.configured()).thenReturn(true);
         when(gateway.refund(eq(fixture.outTradeNo()), eq(fixture.tradeNo()), anyString(),
@@ -64,9 +66,9 @@ class AfterSaleFlowTests {
                             new AfterSaleCreateDTO.Item(fixture.itemId(), 1))));
             service.review(fixture.merchant(), fixture.shopId(), sale.id(), new AfterSaleReviewDTO(true, null));
             assertEquals("REFUNDED", service.refund(fixture.merchant(), fixture.shopId(), sale.id()).status());
-            assertEquals(n == 0 ? 1 : 0, reviews.summary(productId).reviewCount());
+            assertEquals(n == 0 ? 1 : 0, publicReviews.summary(productId).reviewCount());
             assertEquals("REFUNDED", service.refund(fixture.merchant(), fixture.shopId(), sale.id()).status());
-            assertEquals(n == 0 ? 1 : 0, reviews.summary(productId).reviewCount());
+            assertEquals(n == 0 ? 1 : 0, publicReviews.summary(productId).reviewCount());
         }
         assertEquals(0, jdbc.queryForObject("SELECT rating_sum FROM product_review_summaries WHERE product_id=?",
                 Integer.class, productId));

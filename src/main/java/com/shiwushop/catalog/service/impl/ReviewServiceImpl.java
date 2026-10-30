@@ -6,9 +6,6 @@ import com.shiwushop.catalog.dto.review.ReviewReportDTO;
 import com.shiwushop.catalog.dto.review.ReviewReportDecisionDTO;
 import com.shiwushop.catalog.vo.review.PendingReviewReportPageVO;
 import com.shiwushop.catalog.vo.review.PendingReviewReportVO;
-import com.shiwushop.catalog.vo.review.PublicReviewPageVO;
-import com.shiwushop.catalog.vo.review.PublicReviewVO;
-import com.shiwushop.catalog.vo.review.ReviewSummaryVO;
 import com.shiwushop.account.auth.AccountAccess;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
@@ -17,7 +14,6 @@ import com.shiwushop.catalog.entity.review.ProductReview;
 import com.shiwushop.catalog.mapper.review.ProductReviewMapper;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.catalog.vo.query.review.ReviewEligibility;
-import com.shiwushop.catalog.vo.query.review.ReviewImageRow;
 import com.shiwushop.catalog.vo.query.review.ReviewReportRow;
 import com.shiwushop.catalog.service.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -148,35 +142,6 @@ public class ReviewServiceImpl implements ReviewService {
         if (reviews.resolveReport(reportId, adminId, decision) != 1)
             throw new BusinessException(409, "举报已处理");
         reviews.insertModerationAudit(report.getReviewId(), reportId, adminId, decision, reason);
-    }
-
-    @Transactional(readOnly = true)
-    public PublicReviewPageVO listPublic(Long productId, Long afterId, int size) {
-        if (productId == null || productId <= 0 || afterId != null && afterId <= 0)
-            throw new BusinessException(400, "商品ID或游标无效");
-        PageSpec.of(1, size);
-        if (!reviews.isPublicProduct(productId)) throw new BusinessException(404, "商品不存在");
-        List<ProductReview> rows = reviews.selectPublicPage(productId, afterId, size + 1);
-        boolean hasMore = rows.size() > size;
-        if (hasMore) rows = rows.subList(0, size);
-        if (rows.isEmpty()) return new PublicReviewPageVO(List.of(), false, null);
-        Map<Long, List<ReviewImageRow>> images = reviews.selectPublicImages(rows.stream().map(ProductReview::getId).toList())
-                .stream().collect(Collectors.groupingBy(ReviewImageRow::getReviewId));
-        List<PublicReviewVO> items = rows.stream().map(row -> {
-            List<ReviewImageRow> photos = images.getOrDefault(row.getId(), List.of());
-            return new PublicReviewVO(row.getId(), row.getRating(), row.getContent(), row.getFollowUp(),
-                    row.getCreatedAt(), row.getFollowUpAt(),
-                    photos.stream().filter(image -> "ORIGINAL".equals(image.getPhase())).map(ReviewImageRow::getMediaId).toList(),
-                    photos.stream().filter(image -> "FOLLOW_UP".equals(image.getPhase())).map(ReviewImageRow::getMediaId).toList());
-        }).toList();
-        return new PublicReviewPageVO(items, hasMore, hasMore ? items.getLast().id() : null);
-    }
-
-    @Transactional(readOnly = true)
-    public ReviewSummaryVO summary(Long productId) {
-        if (productId == null || productId <= 0) throw new BusinessException(400, "商品ID无效");
-        if (!reviews.isPublicProduct(productId)) throw new BusinessException(404, "商品不存在");
-        return reviews.selectSummary(productId);
     }
 
     private ProductReview ownedForUpdate(Long buyerId, Long reviewId) {
