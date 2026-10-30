@@ -22,6 +22,7 @@ public class ShipmentExpiryJob {
     @Value("${shop.shipment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
+    /** 在单轮时间预算内逐个确认到期运单，失败项留待下一轮。 */
     @Scheduled(initialDelayString = "${shop.shipment.scan-delay-ms}",
             fixedDelayString = "${shop.shipment.scan-delay-ms}", scheduler = "shipmentExpiryScheduler")
     public void confirmDue() {

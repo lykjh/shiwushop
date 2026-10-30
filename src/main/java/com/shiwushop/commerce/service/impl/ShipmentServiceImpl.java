@@ -36,6 +36,10 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final AccountAccess accountAccess;
     private final Clock businessClock;
 
+    /**
+     * 锁定店铺和已支付订单，创建运单、自动确认事件及审计记录。
+     * 相同运单重复提交返回原记录；售后未结或全额退款时拒绝发货。
+     */
     @Override
     @Transactional
     public ShipmentVO ship(Long userId, Long shopId, Long orderId, ShipmentCreateDTO request) {
@@ -82,6 +86,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         return toVO(shipment);
     }
 
+    /** 核对店铺归属后查看运单；尚未发货时返回未发货状态。 */
     @Override
     public ShipmentVO merchantDetail(Long userId, Long shopId, Long orderId) {
         requirePositive(shopId);
@@ -94,6 +99,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         return toVO(orderId, shipmentMapper.selectByOrderId(orderId));
     }
 
+    /** 核对买家与订单归属后查看运单，避免泄露其他用户的物流信息。 */
     @Override
     public ShipmentVO buyerDetail(Long userId, Long orderId) {
         requirePositive(orderId);
@@ -105,6 +111,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         return toVO(orderId, shipmentMapper.selectByOrderId(orderId));
     }
 
+    /** 锁定订单和运单后确认收货；重复确认保持原结果并只记录一次审计。 */
     @Override
     @Transactional
     public ShipmentVO confirmByBuyer(Long userId, Long orderId) {
@@ -131,6 +138,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         return toVO(shipment);
     }
 
+    /** 到期自动确认未退款的已发货订单；与买家确认使用相同锁顺序防重复。 */
     @Override
     @Transactional
     public void confirmDue(Long shipmentId) {
@@ -149,11 +157,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
     }
 
+    /** 每轮最多取 50 个达到自动确认时间的运单 ID，交给后台逐个处理。 */
     @Override
     public List<Long> dueShipmentIds() {
         return shipmentMapper.selectDueIds(LocalDateTime.now(businessClock), 50);
     }
 
+    /** 清理运单字段首尾空白并校验必填和长度。 */
     private static String clean(String value, int maxLength) {
         String clean = value == null ? "" : value.strip();
         if (clean.isEmpty() || clean.length() > maxLength) {
@@ -162,15 +172,18 @@ public class ShipmentServiceImpl implements ShipmentService {
         return clean;
     }
 
+    /** 拒绝空值和非正数业务 ID。 */
     private static void requirePositive(Long id) {
         if (id == null || id <= 0) throw new BusinessException(400, "ID必须大于0");
     }
 
+    /** 统一转换查询响应；无运单时显式给出 NOT_SHIPPED。 */
     private static ShipmentVO toVO(Long orderId, Shipment shipment) {
         return shipment == null ? new ShipmentVO(orderId, "NOT_SHIPPED", null, null,
                 null, null, null, null) : toVO(shipment);
     }
 
+    /** 将运单状态、追踪信息和确认来源转换为对外响应。 */
     private static ShipmentVO toVO(Shipment shipment) {
         return new ShipmentVO(shipment.getOrderId(), shipment.getStatus().name(),
                 shipment.getCarrierName(), shipment.getTrackingNo(), shipment.getShippedAt(),

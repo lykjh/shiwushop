@@ -85,6 +85,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     @Value("${shop.payment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
+    /** 校验售后明细与请求键，在订单锁下计算可退件数和金额后创建申请。 */
     @Override
     public AfterSaleVO create(Long buyerId, Long orderId, String requestKey, AfterSaleCreateDTO request) {
         accountAccess.checkActive(buyerId);
@@ -159,6 +160,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return sale.getId();
     }
 
+    /** 幂等重试时比较原申请与本次提交的商品 ID 和数量。 */
     private boolean sameItems(Long caseId, List<AfterSaleCreateDTO.Item> requested) {
         List<AfterSaleItem> existing = items.selectForCase(caseId);
         if (existing.size() != requested.size()) return false;
@@ -171,6 +173,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return true;
     }
 
+    /** 只列出买家所属订单的售后申请，按 ID 游标分页。 */
     @Override
     public AfterSaleSliceVO buyerList(Long buyerId, Long orderId, Long beforeId, int size) {
         buyerOrder(buyerId, orderId);
@@ -178,6 +181,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return slice(cases.selectBuyerIds(orderId, cursor(beforeId), limit + 1), limit);
     }
 
+    /** 核对店铺归属后按状态和游标列出本店售后申请。 */
     @Override
     public AfterSaleSliceVO merchantList(Long merchantId, Long shopId, Long beforeId,
                                          String status, int size) {
@@ -188,6 +192,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return slice(cases.selectMerchantIds(shopId, cursor(beforeId), filter, limit + 1), limit);
     }
 
+    /** 多取一条判断下一页，逐条组装售后详情及下一页游标。 */
     private AfterSaleSliceVO slice(List<Long> ids, int limit) {
         List<Long> page = ids.stream().limit(limit).toList();
         List<AfterSaleVO> rows = page.stream().map(this::view).toList();
@@ -195,11 +200,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return new AfterSaleSliceVO(rows, next);
     }
 
+    /** 校验售后分页游标；首页使用最大 ID 作为起点。 */
     private static Long cursor(Long beforeId) {
         if (beforeId != null) requireId(beforeId);
         return beforeId == null ? Long.MAX_VALUE : beforeId;
     }
 
+    /** 解析售后状态筛选值，非法枚举返回参数错误。 */
     private static AfterSaleStatus status(String value) {
         try {
             return AfterSaleStatus.valueOf(value);
@@ -208,6 +215,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         }
     }
 
+    /** 仅允许订单买家读取对应售后详情。 */
     @Override
     public AfterSaleVO buyerDetail(Long buyerId, Long caseId) {
         AfterSaleCase sale = requireCase(caseId);
@@ -215,12 +223,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 仅允许所属店主读取对应售后详情。 */
     @Override
     public AfterSaleVO merchantDetail(Long merchantId, Long shopId, Long caseId) {
         merchantOrder(merchantId, shopId, requireCase(caseId).getOrderId());
         return view(caseId);
     }
 
+    /** 店主审核申请并推进售后状态；退货退款先等待寄回，退款申请进入退款中。 */
     @Override
     public AfterSaleVO review(Long merchantId, Long shopId, Long caseId, AfterSaleReviewDTO request) {
         if (request == null || request.approved() == null) throw new BusinessException(400, "审核结果不能为空");
@@ -245,6 +255,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 买家登记退货运单；相同运单重复提交返回原结果。 */
     @Override
     public AfterSaleVO sendReturn(Long buyerId, Long caseId, ReturnShipmentDTO request) {
         String carrier = text(request == null ? null : request.carrierName(), 80);
@@ -276,6 +287,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 店主确认退货签收；可重新销售时返还库存并记录流水。 */
     @Override
     public AfterSaleVO receiveReturn(Long merchantId, Long shopId, Long caseId, ReturnReceiptDTO request) {
         if (request == null || request.restockable() == null) throw new BusinessException(400, "请确认商品是否可重新销售");
@@ -299,6 +311,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 先提交本地退款尝试，再在事务外调用渠道；结果未知时保留请求号供核对。 */
     @Override
     public AfterSaleVO refund(Long merchantId, Long shopId, Long caseId) {
         // 先提交本地退款尝试，再调用外部渠道；超时也保留同一请求号供查询和重试。
@@ -322,6 +335,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 店主主动查询未确定的退款，并把渠道成功结果结算到售后状态。 */
     @Override
     public AfterSaleVO syncRefund(Long merchantId, Long shopId, Long caseId) {
         RefundContext context = tx().execute(status -> {
@@ -342,6 +356,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 锁定订单和售后申请，复用现有尝试或创建金额不超出原支付的退款请求。 */
     private RefundContext prepareRefund(Long merchantId, Long shopId, Long caseId) {
         AfterSaleCase found = requireCase(caseId);
         merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
@@ -378,10 +393,12 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return new RefundContext(attempt, paid, true);
     }
 
+    /** 查询退款渠道并尝试结算；供店主主动同步使用。 */
     private boolean queryAndSettle(RefundContext context) {
         return queryAndSettle(context, null);
     }
 
+    /** 查询渠道结果；自动对账时用租约令牌阻止过期任务写入。 */
     private boolean queryAndSettle(RefundContext context, String reconcileToken) {
         try {
             RefundGateway.Result result = gateway.query(context.payment().getOutTradeNo(),
@@ -404,6 +421,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         settleSuccess(context, result, fromQuery, null);
     }
 
+    /** 核对原支付与退款金额后，在订单锁下只结算一次并同步评价、库存和搜索。 */
     private void settleSuccess(RefundContext context, RefundGateway.Result result, boolean fromQuery,
                                String reconcileToken) {
         if (!context.payment().getOutTradeNo().equals(result.outTradeNo())
@@ -457,10 +475,12 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         });
     }
 
+    /** 将渠道结果不明的退款尝试留在待核对状态。 */
     private void markUnknown(Long attemptId) {
         markUnknown(attemptId, null);
     }
 
+    /** 持有有效对账租约时更新未知状态与最后核对时间。 */
     private void markUnknown(Long attemptId, String reconcileToken) {
         tx().executeWithoutResult(status -> {
             if (reconcileToken != null) {
@@ -472,6 +492,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         });
     }
 
+    /** 分批领取未决退款并向渠道对账；限制单轮数量和耗时，异常留待下轮。 */
     @Override
     public void reconcileUnknown() {
         // UNKNOWN 表示结果未确认，不能据此再次生成退款单或判定失败。
@@ -506,6 +527,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 refunds.oldestUnresolvedSeconds(before, LocalDateTime.now(clock)));
     }
 
+    /** 返还售后涉及的 SKU 库存并写库存流水和商品搜索刷新事件。 */
     private void restoreStock(Long caseId, String operation) {
         Set<Long> changedProductIds = new HashSet<>();
         for (AfterSaleItem line : items.selectForCase(caseId)) {
@@ -524,6 +546,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         }
     }
 
+    /** 组合售后申请、明细、退货运单及退款记录供接口返回。 */
     private AfterSaleVO view(Long caseId) {
         AfterSaleCase sale = requireCase(caseId);
         List<AfterSaleVO.Item> lines = items.selectForCase(caseId).stream()
@@ -540,6 +563,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                         attempt.getOutRequestNo(), attempt.getRequestedAt(), attempt.getResolvedAt()));
     }
 
+    /** 校验售后 ID 并读取申请，缺失时返回不存在。 */
     private AfterSaleCase requireCase(Long caseId) {
         requireId(caseId);
         AfterSaleCase sale = cases.selectById(caseId);
@@ -547,6 +571,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return sale;
     }
 
+    /** 校验买家账号及订单归属，防止跨用户查看或修改售后。 */
     private Order buyerOrder(Long buyerId, Long orderId) {
         accountAccess.checkActive(buyerId);
         requireId(orderId);
@@ -555,14 +580,17 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return order;
     }
 
+    /** 校验店主与订单归属，供只读售后操作使用。 */
     private Order merchantOrder(Long merchantId, Long shopId, Long orderId) {
         return merchantOrder(merchantId, shopId, orderId, false);
     }
 
+    /** 锁定店铺归属后校验订单，供售后状态写入使用。 */
     private Order merchantOrderForUpdate(Long merchantId, Long shopId, Long orderId) {
         return merchantOrder(merchantId, shopId, orderId, true);
     }
 
+    /** 根据是否写入选择店铺归属锁，再确认订单属于该店。 */
     private Order merchantOrder(Long merchantId, Long shopId, Long orderId, boolean lock) {
         requireId(shopId);
         if (lock) merchantAccess.requireOwnedForUpdate(merchantId, shopId, "店铺不存在");
@@ -572,6 +600,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return order;
     }
 
+    /** 要求最近支付尝试成功且金额与订单一致，作为可退金额依据。 */
     private PaymentAttempt paidAttempt(Order order) {
         PaymentAttempt paid = payments.selectLatest(order.getId());
         if (paid == null || paid.getStatus() != PaymentAttemptStatus.SUCCESS
@@ -581,6 +610,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return paid;
     }
 
+    /** 解析售后类型并拒绝未知枚举。 */
     private static AfterSaleType type(String value) {
         try {
             return AfterSaleType.valueOf(value == null ? "" : value);
@@ -589,22 +619,26 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         }
     }
 
+    /** 清理并校验必填文本的长度。 */
     private static String text(String value, int limit) {
         String clean = value == null ? "" : value.strip();
         if (clean.isEmpty() || clean.length() > limit) throw new BusinessException(400, "文本不能为空或超长");
         return clean;
     }
 
+    /** 清理可选文本，空白转为 null，超长则拒绝。 */
     private static String optionalText(String value, int limit) {
         String clean = value == null ? "" : value.strip();
         if (clean.length() > limit) throw new BusinessException(400, "文本超长");
         return clean.isEmpty() ? null : clean;
     }
 
+    /** 校验业务 ID 为正数。 */
     private static void requireId(Long id) {
         if (id == null || id <= 0) throw new BusinessException(400, "ID必须大于0");
     }
 
+    /** 为售后状态迁移建立短事务，外部退款调用在事务之外执行。 */
     private TransactionTemplate tx() { return new TransactionTemplate(transactionManager); }
     private record RefundContext(RefundAttempt attempt, PaymentAttempt payment, boolean newAttempt) {}
 }

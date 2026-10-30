@@ -30,6 +30,7 @@ public class ShipmentOutboxPublisher {
     @Value("${shop.shipment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
+    /** 按租约分批认领待投递的物流事件，单轮受数量和耗时预算限制。 */
     @Scheduled(initialDelayString = "${shop.shipment.scan-delay-ms}",
             fixedDelayString = "${shop.shipment.scan-delay-ms}", scheduler = "shipmentOutboxScheduler")
     public void publishPending() {
@@ -53,6 +54,7 @@ public class ShipmentOutboxPublisher {
                 outbox.oldestShipmentPendingSeconds(LocalDateTime.now(clock)));
     }
 
+    /** 取得 RabbitMQ 接收与路由确认后标记已投递；失败按次数退避重试。 */
     private boolean publish(OutboxEventMapper.ShipmentConfirmEvent event, String token) {
         try {
             Shipment shipment = shipments.selectById(event.getShipmentId());

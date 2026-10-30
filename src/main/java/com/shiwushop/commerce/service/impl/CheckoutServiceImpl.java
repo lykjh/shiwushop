@@ -58,6 +58,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final PrivacyCipher privacyCipher;
     private final Clock businessClock;
     private final CartAvailability availability;
+    /** 校验所选购物车项和幂等键，锁定归属条目后在一个事务内创建订单。 */
     @Override
     @Transactional
     public CheckoutVO checkoutSelected(Long userId, CheckoutDTO dto) {
@@ -85,6 +86,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         return placeOrders(userId, address, selected, dto.getConfirmedTotal(), requestId);
     }
 
+    /** 将直接购买转换为临时结算项；复用订单、库存及幂等处理，不写购物车。 */
     @Override
     @Transactional
     public CheckoutVO checkoutDirect(Long userId, DirectCheckoutDTO dto) {
@@ -103,13 +105,17 @@ public class CheckoutServiceImpl implements CheckoutService {
         return placeOrders(userId, address, List.of(item), dto.getConfirmedTotal(), requestId);
     }
 
+    /** 只接受当前用户仍有效的地址，结算时据此生成订单收货快照。 */
     private Address ownedAddress(Long userId, Long addressId) {
         Address address = addressMapper.selectOwnedActive(userId, addressId);
         if (address == null) throw new BusinessException(404, "地址不存在");
         return address;
     }
 
-    /** 所有店铺订单共用当前事务；任一店铺失败时，订单、库存和购物车改动一起回滚。 */
+    /**
+     * 锁定并检查各 SKU，按店铺拆单并核对用户确认的总价。
+     * 所有店铺订单共用当前事务；任一店铺失败时，订单、库存和购物车改动一起回滚。
+     */
     private CheckoutVO placeOrders(Long userId, Address address, List<CartItem> selected,
                                    BigDecimal confirmedTotal, Long requestId) {
         Map<Long, List<CheckoutLine>> byShop = new LinkedHashMap<>();
@@ -150,6 +156,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         return new CheckoutVO(orders, total);
     }
 
+    /** 为一个店铺创建订单与收货快照、扣库存并记流水，结算购物车项随后删除。 */
     private CheckoutVO.PlacedOrder placeShopOrder(Long userId, Address address, Long shopId,
                                                   List<CheckoutLine> lines, Long requestId) {
         BigDecimal shopTotal = lines.stream()
@@ -194,7 +201,10 @@ public class CheckoutServiceImpl implements CheckoutService {
         return new CheckoutVO.PlacedOrder(order.getId(), shopId, shopTotal, "UNPAID");
     }
 
-    /** 同一幂等键只允许同一请求内容；负 ID 表示已有完成结果，可原样返回。 */
+    /**
+     * 记录并锁定结算请求，比较请求摘要，禁止相同幂等键用于不同内容。
+     * 负 ID 表示已有完成结果，可原样返回；处理中请求返回冲突。
+     */
     private Long beginCheckout(Long userId, String key, String content) {
         byte[] hash;
         try {
@@ -218,6 +228,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         return -id;
     }
 
+    /** 从已完成的幂等请求关联订单重建响应，重复提交不再扣库存或创建订单。 */
     private CheckoutVO completedCheckout(Long requestId) {
         List<CheckoutVO.PlacedOrder> orders = checkoutRequestMapper.selectOrders(requestId).stream()
                 .map(order -> new CheckoutVO.PlacedOrder(order.getId(), order.getShopId(),

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 class CartAvailability {
     private final ShopMapper shopMapper;
     private final CategoryService categoryService;
+    /** 查询店铺和分类状态后，返回该数量不可下单的原因；可购买时返回 null。 */
     String unavailableReason(Sku sku, Product product, int quantity) {
         if (sku == null || product == null) return "商品不存在";
         if (product.getStatus() != ProductStatus.ON_SALE) return "商品已下架";
@@ -31,6 +32,7 @@ class CartAvailability {
         return unavailableReason(sku, product, quantity, shop, visible);
     }
 
+    /** 复用调用方已装载的数据判定可售性，避免列表逐项重复查询。 */
     String unavailableReason(Sku sku, Product product, int quantity, Shop shop, boolean categoryVisible) {
         if (sku == null || product == null) return "商品不存在";
         if (product.getStatus() != ProductStatus.ON_SALE) return "商品已下架";

@@ -62,6 +62,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${shop.payment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
+    /** 锁定买家订单，复用待支付尝试或创建新尝试，并返回收银页地址。 */
     @Override
     @Transactional
     public PaymentStartVO start(Long userId, Long orderId) {
@@ -93,6 +94,7 @@ public class PaymentServiceImpl implements PaymentService {
                 "/payments/checkout/" + attempt.getOutTradeNo());
     }
 
+    /** 获取或恢复二维码生成租约；渠道调用在数据库事务外进行，结果再回写。 */
     @Override
     public String checkoutPage(String outTradeNo) {
         PaymentAttempt attempt = paymentMapper.selectByOutTradeNo(outTradeNo);
@@ -129,6 +131,7 @@ public class PaymentServiceImpl implements PaymentService {
         return PaymentQrPage.render(saved.qrCode(), saved.amount(), saved.payExpiresAt(), gateway.channel());
     }
 
+    /** 锁定订单与最新支付尝试，复用有效二维码或领取一次生成租约。 */
     private QrCheckout claimCheckout(PaymentAttempt attempt) {
         Order order = orderMapper.selectForUpdate(attempt.getOrderId());
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(attempt.getOrderId());
@@ -153,6 +156,7 @@ public class PaymentServiceImpl implements PaymentService {
         return new QrCheckout(null, latest.getAmount(), order.getPayExpiresAt(), token, recover);
     }
 
+    /** 核对租约、订单和二维码有效期后保存渠道结果，拒绝迟到写回。 */
     private QrCheckout saveCheckoutQr(PaymentAttempt attempt, String token, AlipayGateway.QrCode qrCode) {
         Order order = orderMapper.selectForUpdate(attempt.getOrderId());
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(attempt.getOrderId());
@@ -185,12 +189,14 @@ public class PaymentServiceImpl implements PaymentService {
     private record QrCheckout(String qrCode, BigDecimal amount, LocalDateTime payExpiresAt,
                               String token, boolean recover) {}
 
+    /** 返回当前买家订单及最近一次支付尝试状态，不请求支付渠道。 */
     @Override
     public PaymentStatusVO status(Long userId, Long orderId) {
         Order order = ownedOrder(userId, orderId);
         return statusOf(order);
     }
 
+    /** 对待支付尝试主动查渠道并同步结果，再返回最新订单状态。 */
     @Override
     public PaymentStatusVO sync(Long userId, Long orderId) {
         Order order = ownedOrder(userId, orderId);
@@ -205,6 +211,7 @@ public class PaymentServiceImpl implements PaymentService {
         return statusOf(ownedOrder(userId, orderId));
     }
 
+    /** 验签并核对商户、商户单号与金额，按支付或关闭通知更新订单。 */
     @Override
     public void notifyPaid(Map<String, String> form) {
         // 回调必须先验签，再核对商户身份、订单号和金额，不能仅凭“支付成功”字段入账。
@@ -231,6 +238,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 每轮扫描最多 50 个过期订单，在时间预算内逐个核对并记录处理量。 */
     @Override
     public void expireDueOrders() {
         long started = System.nanoTime();
@@ -252,6 +260,7 @@ public class PaymentServiceImpl implements PaymentService {
                 orderMapper.oldestExpiredSeconds(LocalDateTime.now(businessClock)));
     }
 
+    /** 领取单笔订单的到期处理租约，完成后按令牌释放以防并发扫描。 */
     @Override
     public void expireOrder(Long orderId) {
         String token = UUID.randomUUID().toString();
@@ -264,6 +273,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 先查询或关闭渠道交易；只有确认未支付且已关闭时才取消订单。 */
     private void expireClaimedOrder(Long orderId, String token) {
         // 到期不等于渠道已关闭；未知支付结果必须留待下次扫描，不能直接归还库存。
         Order order = orderMapper.selectById(orderId);
@@ -299,6 +309,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 根据渠道查询结果确认支付或关闭尝试，未知状态留待后续核对。 */
     private void applyQueryResult(PaymentAttempt attempt, AlipayGateway.TradeResult result) {
         if (!TRADE_NOT_FOUND.equals(result.status())) checkedResult(attempt, result);
         if (paid(result.status())) confirmPaid(attempt, result);
@@ -307,10 +318,12 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 普通回调或主动同步的支付确认入口，不要求持有到期扫描租约。 */
     private void confirmPaid(PaymentAttempt attempt, AlipayGateway.TradeResult result) {
         confirmPaid(attempt, result, null);
     }
 
+    /** 核对交易身份与成功状态后，在短事务内完成支付状态迁移。 */
     private void confirmPaid(PaymentAttempt attempt, AlipayGateway.TradeResult result, String expiryToken) {
         checkedResult(attempt, result);
         if (!paid(result.status()) || result.tradeNo() == null || result.tradeNo().isBlank()) {
@@ -345,6 +358,7 @@ public class PaymentServiceImpl implements PaymentService {
         queueProductRefreshes(items);
     }
 
+    /** 锁定订单并把仍待支付的尝试标记关闭；已支付订单不受影响。 */
     private void markClosed(PaymentAttempt attempt) {
         new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> {
             Order order = orderMapper.selectForUpdate(attempt.getOrderId());
@@ -354,6 +368,7 @@ public class PaymentServiceImpl implements PaymentService {
         });
     }
 
+    /** 在独立事务中再次核对取消条件并归还库存。 */
     private void cancel(Long orderId, PaymentAttempt expected, boolean confirmedClosed, String expiryToken) {
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 ignored -> cancelInTransaction(orderId, expected, confirmedClosed, expiryToken));
@@ -374,10 +389,12 @@ public class PaymentServiceImpl implements PaymentService {
         restoreStock(orderId);
     }
 
+    /** 确认渠道核对期间没有产生另一笔支付尝试。 */
     private boolean matchesExpectedAttempt(PaymentAttempt latest, PaymentAttempt expected) {
         return expected == null ? latest == null : latest != null && expected.getId().equals(latest.getId());
     }
 
+    /** 仅在渠道已确认关闭时关闭待支付尝试，供订单取消使用。 */
     private boolean closeForCancellation(PaymentAttempt latest, boolean confirmedClosed) {
         if (latest == null || latest.getStatus() == PaymentAttemptStatus.CLOSED) return true;
         if (latest.getStatus() != PaymentAttemptStatus.PENDING || !confirmedClosed) return false;
@@ -387,6 +404,7 @@ public class PaymentServiceImpl implements PaymentService {
         return true;
     }
 
+    /** 逐项返还已取消订单的库存，写库存流水并触发搜索刷新。 */
     private void restoreStock(Long orderId) {
         List<OrderItem> items = orderItemMapper.selectForOrder(orderId);
         if (items.isEmpty()) throw new BusinessException(409, "订单明细缺失");
@@ -401,6 +419,7 @@ public class PaymentServiceImpl implements PaymentService {
         queueProductRefreshes(items);
     }
 
+    /** 为受库存或销量变化影响的商品各写一条搜索刷新事件。 */
     private void queueProductRefreshes(List<OrderItem> items) {
         items.stream().map(OrderItem::getProductId).distinct().forEach(productId -> {
             if (outboxEventMapper.insertSearchProductRefresh(productId) != 1) {
@@ -409,16 +428,19 @@ public class PaymentServiceImpl implements PaymentService {
         });
     }
 
+    /** 仅未支付且仍在支付截止时间内的订单允许发起支付。 */
     private boolean isPayable(Order order) {
         return order != null && order.getStatus() == OrderStatus.UNPAID && order.getPayExpiresAt() != null
                 && LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
     }
 
+    /** 判断订单是否未支付且已到支付截止时间。 */
     private boolean isExpiredUnpaid(Order order) {
         return order != null && order.getStatus() == OrderStatus.UNPAID && order.getPayExpiresAt() != null
                 && !LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
     }
 
+    /** 核对渠道查询返回的商户单号和金额，防止错误交易入账。 */
     private void checkedResult(PaymentAttempt attempt, AlipayGateway.TradeResult result) {
         if (!attempt.getOutTradeNo().equals(result.outTradeNo())
                 || result.amount() == null || attempt.getAmount().compareTo(result.amount()) != 0) {
@@ -426,6 +448,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 按十进制金额比较通知金额，格式非法时视为不匹配。 */
     private boolean sameAmount(BigDecimal expected, String value) {
         if (value == null) return false;
         try {
@@ -435,10 +458,12 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /** 识别渠道的两种支付成功状态。 */
     private boolean paid(String status) {
         return "TRADE_SUCCESS".equals(status) || "TRADE_FINISHED".equals(status);
     }
 
+    /** 组合订单状态与最近支付尝试，供买家轮询。 */
     private PaymentStatusVO statusOf(Order order) {
         PaymentAttempt attempt = paymentMapper.selectLatest(order.getId());
         return new PaymentStatusVO(order.getId(), order.getStatus().name(), order.getPayExpiresAt(),
@@ -446,6 +471,7 @@ public class PaymentServiceImpl implements PaymentService {
                         attempt.getChannel(), attempt.getStatus().name(), attempt.getPaidAt()));
     }
 
+    /** 按买家 ID 查询有效账号的订单，隐藏其他用户的订单。 */
     private Order ownedOrder(Long userId, Long orderId) {
         accountAccess.checkActive(userId);
         Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
@@ -454,14 +480,17 @@ public class PaymentServiceImpl implements PaymentService {
         return order;
     }
 
+    /** 渠道未配置时拒绝需要与支付平台交互的操作。 */
     private void requireGateway() {
         if (!gateway.configured()) throw new BusinessException(503, "支付渠道未配置");
     }
 
+    /** 阻止旧商户配置下的支付尝试使用当前渠道配置继续处理。 */
     private void requireCurrentGateway(PaymentAttempt attempt) {
         if (!currentGateway(attempt)) throw new BusinessException(409, "支付渠道配置已变化");
     }
 
+    /** 对比支付尝试记录的渠道、应用和商户身份。 */
     private boolean currentGateway(PaymentAttempt attempt) {
         return gateway.channel().equals(attempt.getChannel())
                 && gateway.appId().equals(attempt.getAppId())

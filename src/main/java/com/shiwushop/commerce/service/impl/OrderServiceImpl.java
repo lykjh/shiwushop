@@ -33,6 +33,7 @@ public class OrderServiceImpl implements OrderService {
     private final AccountAccess accountAccess;
     private final MerchantShopAccess merchantShopAccess;
     private final PrivacyCipher privacyCipher;
+    /** 仅向订单买家返回详情；通过归属检查后才解密下单时的收货快照。 */
     @Override
     public OrderDetailVO detail(Long userId, Long orderId) {
         accountAccess.checkActive(userId);
@@ -48,6 +49,7 @@ public class OrderServiceImpl implements OrderService {
         return toDetailVO(order, shop);
     }
 
+    /** 按创建时间和 ID 游标列出买家订单，并拒绝其他买家的游标。 */
     @Override
     public OrderSliceVO list(Long userId, Long afterId, int size) {
         accountAccess.checkActive(userId);
@@ -59,6 +61,7 @@ public class OrderServiceImpl implements OrderService {
         return slice(rows, size);
     }
 
+    /** 核对店铺归属后按游标列出该店订单，阻止跨店游标混用。 */
     @Override
     public OrderSliceVO listMerchant(Long userId, Long shopId, Long afterId, int size) {
         SessionUser.requireId(userId);
@@ -74,6 +77,7 @@ public class OrderServiceImpl implements OrderService {
         return slice(rows, size);
     }
 
+    /** 解析分页游标；非法或不存在的订单 ID 直接返回参数错误。 */
     private Order cursor(Long afterId) {
         if (afterId == null) return null;
         if (afterId <= 0) throw new BusinessException(400, "订单游标无效");
@@ -82,12 +86,14 @@ public class OrderServiceImpl implements OrderService {
         return order;
     }
 
+    /** 利用多取的一行判断是否有下一页，并生成下一页游标。 */
     private OrderSliceVO slice(List<OrderSummaryVO> rows, int size) {
         boolean hasMore = rows.size() > size;
         List<OrderSummaryVO> items = hasMore ? rows.subList(0, size) : rows;
         return new OrderSliceVO(items, hasMore, hasMore ? items.getLast().getId() : null);
     }
 
+    /** 仅向当前店主返回本店订单详情，包含下单时的收货信息。 */
     @Override
     public OrderDetailVO detailMerchant(Long userId, Long shopId, Long orderId) {
         SessionUser.requireId(userId);
@@ -118,6 +124,7 @@ public class OrderServiceImpl implements OrderService {
                 itemsForOrder(order.getId()));
     }
 
+    /** 读取订单明细并按成交单价与数量计算每项小计。 */
     private List<OrderItemVO> itemsForOrder(Long orderId) {
         return orderItemMapper.selectForOrder(orderId).stream()
                 .map(item -> new OrderItemVO(item.getId(), item.getProductId(), item.getSkuId(),

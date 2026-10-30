@@ -41,6 +41,7 @@ public class CartServiceImpl implements CartService {
     private final AccountAccess accountAccess;
     private final CartAvailability availability;
 
+    /** 校验账号和 SKU 可售性后新增购物车项；重复 SKU 返回冲突，不会叠加数量。 */
     @Override
     public CartItemVO add(Long userId, CartAddDTO dto) {
         accountAccess.checkActive(userId);
@@ -64,6 +65,7 @@ public class CartServiceImpl implements CartService {
         return toVO(item);
     }
 
+    /** 批量读取购物车关联的商品、店铺、分类和规格，逐项标明当前不可购买原因。 */
     @Override
     public List<CartItemVO> list(Long userId) {
         accountAccess.checkActive(userId);
@@ -113,6 +115,7 @@ public class CartServiceImpl implements CartService {
         }).toList();
     }
 
+    /** 去重后每批最多查询 200 个 ID，避免购物车展示时为每项分别访问数据库。 */
     private <T> Map<Long, T> loadById(Collection<Long> ids,
                                        Function<Collection<Long>, List<T>> select,
                                        Function<T, Long> idOf) {
@@ -126,6 +129,7 @@ public class CartServiceImpl implements CartService {
         return result;
     }
 
+    /** 沿已批量装载的分类父链检查可见性；缺少分类也视为不可购买。 */
     private boolean categoryVisible(Long id, Map<Long, Category> categories) {
         Category current = categories.get(id);
         if (current == null) return false;
@@ -136,6 +140,7 @@ public class CartServiceImpl implements CartService {
         return true;
     }
 
+    /** 仅修改当前用户的购物车项；写入行数为零时报告该项已不存在。 */
     @Override
     public CartItemVO updateQuantity(Long userId, Long id, Integer quantity) {
         CartItem item = ownedItem(userId, id);
@@ -146,6 +151,7 @@ public class CartServiceImpl implements CartService {
         return toVO(item);
     }
 
+    /** 校验归属后删除购物车项；已被并发删除时返回不存在。 */
     @Override
     public void delete(Long userId, Long id) {
         ownedItem(userId, id);
@@ -154,6 +160,7 @@ public class CartServiceImpl implements CartService {
         }
     }
 
+    /** 按用户和条目 ID 联合查询，防止操作其他用户的购物车。 */
     private CartItem ownedItem(Long userId, Long id) {
         accountAccess.checkActive(userId);
         CartItem item = cartItemMapper.selectOne(new LambdaQueryWrapper<CartItem>()
@@ -165,6 +172,7 @@ public class CartServiceImpl implements CartService {
         return item;
     }
 
+    /** 将新建或修改的单项转换为响应，并重新计算当前可售状态。 */
     private CartItemVO toVO(CartItem item) {
         Sku sku = skuMapper.selectById(item.getSkuId());
         Product product = sku == null ? null : productMapper.selectById(sku.getProductId());

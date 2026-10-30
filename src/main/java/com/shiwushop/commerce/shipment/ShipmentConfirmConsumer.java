@@ -22,6 +22,7 @@ public class ShipmentConfirmConsumer {
     private final ShipmentService shipmentService;
     private final Clock clock;
 
+    /** 消费物流自动确认事件；去重记录和收货状态在同一事务提交。 */
     @RabbitListener(queues = ShipmentMessagingConfig.WORK_QUEUE)
     @Transactional
     public void handle(String eventIdText) {

@@ -79,6 +79,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         this.businessClock = businessClock;
     }
 
+    /** 检查支付身份、回调地址和私钥文件是否具备发起正式渠道请求的条件。 */
     @Override
     public boolean configured() {
         if (appId.isEmpty() || sellerId.isEmpty() || publicKey.isEmpty()
@@ -100,6 +101,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         return PRODUCTION_GATEWAY.equals(gatewayUrl) ? "ALIPAY" : "ALIPAY_SANDBOX";
     }
 
+    /** 以订单截止时间为上限向支付宝申请二维码，并预留一分钟防止过期竞争。 */
     @Override
     public QrCode qrCode(String outTradeNo, BigDecimal amount, LocalDateTime expiresAt) {
         // 向下取整后再留一分钟余量，避免渠道二维码晚于本地订单到期。
@@ -126,6 +128,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 使用支付宝 RSA2 公钥校验异步通知签名。 */
     @Override
     public boolean verify(Map<String, String> form) {
         if (!configured() || !"RSA2".equals(form.get("sign_type"))) return false;
@@ -136,6 +139,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 根据商户单号查询交易，区分渠道确认不存在与查询失败。 */
     @Override
     public TradeResult query(String outTradeNo) {
         try {
@@ -161,6 +165,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 请求支付宝关闭待付款交易，供订单到期处理使用。 */
     @Override
     public boolean close(String outTradeNo) {
         try {
@@ -175,6 +180,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 撤销可能尚未落单的渠道请求，并区分已关闭、无交易和未确定结果。 */
     @Override
     public CancelResult cancel(String outTradeNo) {
         try {
@@ -194,6 +200,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 使用固定退款请求号提交退款，返回渠道报告的资金变化和退款金额。 */
     @Override
     public RefundGateway.Result refund(String outTradeNo, String tradeNo, String outRequestNo, BigDecimal amount) {
         try {
@@ -213,6 +220,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 按原商户单号、交易号和退款请求号查询退款最终状态。 */
     @Override
     public RefundGateway.Result query(String outTradeNo, String tradeNo, String outRequestNo) {
         try {
@@ -232,6 +240,7 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
         }
     }
 
+    /** 延迟加载并复用 SDK 客户端；首次创建时读取私钥并设置连接和读取超时。 */
     private AlipayClient client() {
         if (!configured()) throw new BusinessException(503, "支付渠道未配置");
         if (client == null) {

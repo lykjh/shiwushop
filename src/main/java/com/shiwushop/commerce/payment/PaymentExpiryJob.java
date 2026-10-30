@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class PaymentExpiryJob {
     private final PaymentService paymentService;
 
+    /** 定期委托支付服务核对到期未付款订单。 */
     @Scheduled(initialDelayString = "${shop.payment.expiry-scan-delay-ms}",
             fixedDelayString = "${shop.payment.expiry-scan-delay-ms}", scheduler = "paymentExpiryScheduler")
     public void expireDueOrders() {
