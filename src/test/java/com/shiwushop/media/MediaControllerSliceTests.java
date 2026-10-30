@@ -1,7 +1,6 @@
 package com.shiwushop.media;
 
-import com.shiwushop.common.media.controller.MediaReadController;
-import com.shiwushop.common.media.controller.MediaUploadController;
+import com.shiwushop.common.media.controller.MediaController;
 import com.shiwushop.common.media.service.MediaReadService;
 import com.shiwushop.common.media.service.MediaService;
 import org.junit.jupiter.api.Test;
@@ -21,18 +20,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class MediaControllerSliceTests {
     private final MediaReadService service = mock(MediaReadService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new MediaReadController(service)).build();
+    private final MediaService uploads = mock(MediaService.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new MediaController(uploads, service)).build();
 
     @Test
     void uploadKeepsTheExistingMediaRoute() throws Exception {
-        MediaService uploads = mock(MediaService.class);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 3L);
         MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
         when(uploads.upload(3L, file)).thenReturn(8L);
 
-        MockMvcBuilders.standaloneSetup(new MediaUploadController(uploads)).build()
-                .perform(multipart("/media").file(file).session(session))
+        mvc.perform(multipart("/media").file(file).session(session))
                 .andExpect(status().isOk());
     }
 
