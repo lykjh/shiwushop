@@ -135,6 +135,20 @@ shop:
     notify-url: ${SHOP_ALIPAY_NOTIFY_URL:}
     gateway-url: ${SHOP_ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
 
+  sms:
+    access-key-id: ${SHOP_SMS_ACCESS_KEY_ID:}
+    access-key-secret: ${SHOP_SMS_ACCESS_KEY_SECRET:}
+    sign-name: ${SHOP_SMS_SIGN_NAME:阿里云短信测试}
+    template-code: ${SHOP_SMS_TEMPLATE_CODE:SMS_154950909}
+    lookup-key-base64: ${SHOP_SMS_LOOKUP_KEY_BASE64:}
+    cooldown-seconds: 60
+    send-window-seconds: 3600
+    code-ttl-seconds: 300
+    sends-per-window: 10
+    failures-per-code: 5
+    ip-tokens-per-second: 2
+    ip-burst: 20
+
 server:
   tomcat:
     max-swallow-size: 16MB

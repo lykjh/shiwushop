@@ -1,6 +1,6 @@
 # 手机验证码登录：开发前需求与边界设计
 
-状态：设计稿，尚未实现或验收。基于 2026-10-30 的 `shiwushop` 工作区。本文只覆盖会员手机号绑定与验证码登录；现有用户名密码登录继续使用。
+状态：服务端已实现，定向测试通过；真实短信渠道尚待接入验证。基于 2026-10-30 的 `shiwushop` 工作区。本文只覆盖会员手机号绑定与验证码登录；现有用户名密码登录继续使用。
 
 ## 1. 目标与用户流程
 
@@ -59,4 +59,12 @@
 
 验收用例：绑定与换绑唯一性；正确验证码登录后 `/users/me` 返回对应账号；错误、过期、跨用途、重放和并发提交被拒绝；停用账号及未绑定手机号不建立会话；改密和换绑后旧会话失效；共享 IP 下不同已绑定用户正常登录；额度、渠道失败、Redis 故障均返回预期状态。现有密码登录、注册、CSRF 和退出用例继续通过。
 
-上线边界：正式运行须具备保护短信验证码与 Session Cookie 传输的入口；在此之前仅用于本地或受控测试环境。当前 Demo 编译失败、`verify()` 恒为 `false`，尚未达到本设计的任何登录验收项。
+上线边界：正式运行须具备保护短信验证码与 Session Cookie 传输的入口；在此之前仅用于本地或受控测试环境。部署时配置 `SHOP_SMS_LOOKUP_KEY_BASE64`（随机 32 字节密钥的 Base64）、短信 AccessKey、签名、模板；摘要密钥一旦用于绑定必须妥善保留。既有 `user_private.phone_ciphertext` 不自动生成登录摘要，用户需要重新绑定。真实短信渠道的签名、模板及送达行为必须在受控环境验收。
+
+## 7. 实施与测试记录
+
+- 数据迁移 `V19__phone_login_lookup.sql` 在 `user_private` 新增唯一手机号摘要；绑定事务同时写入加密手机号并提升账号鉴权版本。
+- `SmsChallengeStore` 通过 Redis Lua 原子保留发送额度、激活挑战、计错并一次性消费验证码；渠道失败删除待确认挑战。IP 入口使用现有令牌桶。
+- `PhoneLookupTests` 验证用途隔离和密钥配置；`SmsChallengeStoreTests` 在隔离 Redis 验证并发、冷却和错误次数；`SmsLoginFlowTests` 在 MySQL、Redis 上验证绑定、登录、重放及错误分支；`SmsHttpSessionLiveTests` 用真实 HTTP 验证 CSRF、Cookie 与 Redis Session。
+- 命令：`mvn -q '-Dtest=PhoneLookupTests,SmsChallengeStoreTests,SmsLoginFlowTests,SmsHttpSessionLiveTests' test`；本地输出保存于 `logs/sms-targeted.log`。真实短信由测试替身代替，未发到外部号码。
+- 全量验证：`mvn -q '-Dspring.datasource.hikari.maximum-pool-size=2' '-Dspring.test.context.cache.maxSize=4' verify`；300 项运行、0 失败、0 错误、6 项按现有配置跳过，输出保存于 `logs/sms-verify-retry.log`。首次未限制测试连接池时，MySQL `Too many connections` 导致测试上下文启动失败，日志保存于 `logs/sms-verify.log`。

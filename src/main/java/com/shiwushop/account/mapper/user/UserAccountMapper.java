@@ -14,6 +14,11 @@ public interface UserAccountMapper extends BaseMapper<UserAccount> {
     int changePassword(@Param("userId") Long userId, @Param("version") int version,
                        @Param("hash") String hash);
 
+    /** 换绑手机号后撤销旧会话，与密码变更使用同一鉴权版本。 */
+    @Update("UPDATE user_accounts SET auth_version=auth_version+1 WHERE user_id=#{userId} " +
+            "AND auth_version=#{version} AND status='ACTIVE'")
+    int bumpAuthVersion(@Param("userId") Long userId, @Param("version") int version);
+
 
 
     @Select("""

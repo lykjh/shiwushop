@@ -4,6 +4,27 @@
       "name": "shop.shipment.rabbit-enabled",
       "type": "java.lang.Boolean",
       "description": "Enable RabbitMQ shipment messaging."
+    },
+
+    {
+      "name": "shop.sms.access-key-id",
+      "type": "java.lang.String",
+      "description": "阿里云短信 AccessKey ID."
+    },
+    {
+      "name": "shop.sms.access-key-secret",
+      "type": "java.lang.String",
+      "description": "阿里云短信 AccessKey Secret."
+    },
+    {
+      "name": "shop.sms.sign-name",
+      "type": "java.lang.String",
+      "description": "阿里云短信签名."
+    },
+    {
+      "name": "shop.sms.template-code",
+      "type": "java.lang.String",
+      "description": "阿里云短信模板 Code."
     }
   ]
 }

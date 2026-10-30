@@ -11,6 +11,10 @@
 | `GET` | `/users/csrf` | 公开 |
 | `POST` | `/users/register` | 公开 |
 | `POST` | `/users/login` | 公开 |
+| `POST` | `/users/sms/send` | 公开；手机号发送登录码，未绑定号码也返回相同成功结构 |
+| `POST` | `/users/sms/login` | 公开；手机号和 6 位验证码，成功建立 `MALLSESSION` |
+| `POST` | `/users/phone/bind/send` | 已登录；向新手机号发送绑定码 |
+| `POST` | `/users/phone/bind/confirm` | 已登录；当前密码、手机号和绑定码，成功后旧会话失效 |
 | `POST` | `/users/logout` | 登录及资源归属 |
 | `POST` | `/users/password` | 登录及资源归属 |
 | `GET` | `/users/me` | 登录及资源归属 |
