@@ -1,12 +1,12 @@
 package com.shiwushop.order;
 
 import com.shiwushop.commerce.controller.order.OrderController;
-import com.shiwushop.catalog.controller.shop.MerchantShopController;
+import com.shiwushop.commerce.controller.order.MerchantOrderController;
 import com.shiwushop.common.GlobalExceptionHandler;
 import com.shiwushop.commerce.service.OrderService;
-import com.shiwushop.catalog.service.ShopService;
 import com.shiwushop.commerce.vo.order.OrderSliceVO;
 import com.shiwushop.commerce.vo.order.OrderSummaryVO;
+import com.shiwushop.commerce.vo.order.OrderDetailVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,11 +46,24 @@ class OrderListControllerSliceTests {
         session.setAttribute("userId", 7L);
         when(orders.listMerchant(7L, 9L, 10L, 5))
                 .thenReturn(new OrderSliceVO(List.of(), false, null));
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MerchantShopController(
-                mock(ShopService.class), orders)).setControllerAdvice(new GlobalExceptionHandler()).build();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MerchantOrderController(orders))
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
 
         mvc.perform(get("/merchant/shops/9/orders?afterId=10&size=5").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasMore").value(false));
+    }
+
+    @Test
+    void merchantDetailKeepsTheExistingShopScopedRoute() throws Exception {
+        session.setAttribute("userId", 7L);
+        when(orders.detailMerchant(7L, 9L, 11L))
+                .thenReturn(new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, null, List.of()));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MerchantOrderController(orders))
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+
+        mvc.perform(get("/merchant/shops/9/orders/11").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(11));
     }
 }
