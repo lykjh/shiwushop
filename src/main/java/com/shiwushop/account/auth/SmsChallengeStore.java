@@ -37,6 +37,12 @@ public class SmsChallengeStore {
             if redis.call('HGET', KEYS[1], 'token') ~= ARGV[1] then return 0 end
             return redis.call('DEL', KEYS[1])
             """, Long.class);
+    private static final DefaultRedisScript<Long> CANCEL_BEFORE_SEND = new DefaultRedisScript<>("""
+            if redis.call('HGET', KEYS[3], 'token') ~= ARGV[1] then return 0 end
+            redis.call('DEL', KEYS[3], KEYS[1])
+            redis.call('ZREM', KEYS[2], ARGV[1])
+            return 1
+            """, Long.class);
     private static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
             if redis.call('HGET', KEYS[1], 'state') ~= 'active' then return 0 end
             if redis.call('HGET', KEYS[1], 'mac') == ARGV[1] then
@@ -92,6 +98,15 @@ public class SmsChallengeStore {
 
     public void abort(String digest, String purpose, String token) {
         redis.execute(ABORT, List.of(codeKey(digest, purpose)), token);
+    }
+
+    /** 全站额度拒绝时尚未发短信，撤销本次预留，避免白白占用手机号冷却额度。 */
+    public void cancelBeforeSend(String digest, String purpose, String token) {
+        String prefix = prefix(digest);
+        Long cancelled = redis.execute(CANCEL_BEFORE_SEND,
+                List.of(prefix + ":cooldown", prefix + ":sends", codeKey(digest, purpose)), token);
+        if (!Long.valueOf(1).equals(cancelled))
+            throw new BusinessException(503, "验证码服务暂时不可用");
     }
 
     /** 校验和删除在同一个 Redis 命令中执行，错误次数耗尽后删除挑战。 */

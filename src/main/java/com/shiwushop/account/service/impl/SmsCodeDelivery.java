@@ -21,7 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-/** 统一执行两种短信的入口限额、挑战预留、发送与失败回滚。 */
+/** 统一执行短信入口限额、挑战预留、发送与失败回滚。 */
 @Component
 @RequiredArgsConstructor
 class SmsCodeDelivery {
@@ -36,10 +36,13 @@ class SmsCodeDelivery {
 
     @Value("${shop.sms.ip-tokens-per-second:2}") private long ipTokensPerSecond;
     @Value("${shop.sms.ip-burst:20}") private long ipBurst;
+    @Value("${shop.sms.entry-global-tokens-per-second:1}") private long entryGlobalRate;
+    @Value("${shop.sms.entry-global-burst:20}") private long entryGlobalBurst;
 
     @PostConstruct
     void validateLimits() {
-        if (ipTokensPerSecond < 1 || ipBurst < 1) throw new IllegalArgumentException("短信入口限额参数无效");
+        if (ipTokensPerSecond < 1 || ipBurst < 1 || entryGlobalRate < 1 || entryGlobalBurst < 1)
+            throw new IllegalArgumentException("短信入口限额参数无效");
     }
 
     /** 渠道失败时删除预留挑战；发送额度仍视为已使用，避免反复冲击渠道。 */
@@ -61,6 +64,21 @@ class SmsCodeDelivery {
                 challenges.abort(digest, purpose, token);
                 log.info("sms purpose={} outcome=not_eligible", purpose);
                 return;
+            }
+        }
+        if ("entry".equals(purpose)) {
+            long globalRetry;
+            try {
+                globalRetry = limiter.tokenBucketRetrySeconds("shiwushop:sms:entry:global",
+                        entryGlobalRate, entryGlobalBurst);
+            } catch (RuntimeException e) {
+                challenges.cancelBeforeSend(digest, purpose, token);
+                throw e;
+            }
+            if (globalRetry > 0) {
+                challenges.cancelBeforeSend(digest, purpose, token);
+                throw new BusinessException(429, "验证码发送过于频繁",
+                        Map.of("retryAfterSeconds", globalRetry), null);
             }
         }
         try {

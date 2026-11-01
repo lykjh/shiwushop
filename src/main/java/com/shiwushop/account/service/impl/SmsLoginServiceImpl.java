@@ -50,6 +50,11 @@ public class SmsLoginServiceImpl implements SmsLoginService {
         }
         Long userId = bindings.findUserId(digest);
         if (userId == null) throw new BusinessException(401, "验证码无效或已过期");
+        return completeLogin(userId, request);
+    }
+
+    /** 两种短信入口共用账号状态校验及会话轮换。 */
+    LoginVO completeLogin(Long userId, HttpServletRequest request) {
         UserAccount account = accountAccess.requireActive(userId);
         AccountAuthCache.State state = authCache.current(userId);
         if (state == null || state.status() != AccountStatus.ACTIVE

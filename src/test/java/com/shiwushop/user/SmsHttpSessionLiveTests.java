@@ -119,6 +119,55 @@ class SmsHttpSessionLiveTests {
         }
     }
 
+    @Test
+    void firstUseCreatesRedisSessionOnlyAfterPasswordIsSet() throws Exception {
+        String phone = "139" + String.format("%08d", java.util.concurrent.ThreadLocalRandom.current()
+                .nextInt(100_000_000));
+        AtomicReference<String> code = new AtomicReference<>();
+        when(sender.configured()).thenReturn(true);
+        doAnswer(call -> { code.set(call.getArgument(1)); return null; })
+                .when(sender).send(anyString(), anyString());
+        CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        Long userId = null;
+        try (HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build()) {
+            String phoneBody = "{\"phone\":\"" + phone + "\"}";
+            assertEquals(403, client.send(post(uri("/users/sms/entry/send"), phoneBody, null),
+                    HttpResponse.BodyHandlers.ofString()).statusCode());
+            String csrf = json.readTree(client.send(HttpRequest.newBuilder(uri("/users/csrf")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).body()).path("data").asString();
+            assertEquals(200, client.send(post(uri("/users/sms/entry/send"), phoneBody, csrf),
+                    HttpResponse.BodyHandlers.ofString()).statusCode());
+            HttpResponse<String> verified = client.send(post(uri("/users/sms/entry/verify"),
+                    "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", csrf),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, verified.statusCode());
+            assertEquals("SET_PASSWORD_REQUIRED", json.readTree(verified.body()).path("data").path("state").asString());
+            String ticket = json.readTree(verified.body()).path("data").path("registrationTicket").asString();
+            assertEquals(401, client.send(HttpRequest.newBuilder(uri("/users/me")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode());
+            HttpResponse<String> registered = client.send(post(uri("/users/sms/entry/register"),
+                    "{\"phone\":\"" + phone + "\",\"registrationTicket\":\"" + ticket
+                            + "\",\"password\":\"Shop123!\"}", csrf), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, registered.statusCode());
+            userId = json.readTree(registered.body()).path("data").path("id").asLong();
+            HttpResponse<String> me = client.send(HttpRequest.newBuilder(uri("/users/me")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, me.statusCode());
+            assertEquals(phone.substring(0, 3) + "****" + phone.substring(7),
+                    json.readTree(me.body()).path("data").path("phoneMasked").asString());
+        } finally {
+            if (userId != null) {
+                jdbc.update("DELETE FROM user_private WHERE user_id=?", userId);
+                jdbc.update("DELETE FROM user_accounts WHERE user_id=?", userId);
+                jdbc.update("DELETE FROM users WHERE id=?", userId);
+                redis.delete("shiwushop:auth:state:" + userId);
+            }
+            String prefix = "shiwushop:sms:{" + lookup.digest(phone) + "}";
+            redis.delete(List.of(prefix + ":sends", prefix + ":cooldown", prefix + ":entry:code"));
+            redis.delete("shiwushop:sms:entry:global");
+        }
+    }
+
     private URI uri(String path) {
         return URI.create("http://127.0.0.1:" + port + path);
     }

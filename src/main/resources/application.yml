@@ -148,6 +148,9 @@ shop:
     failures-per-code: 5
     ip-tokens-per-second: 2
     ip-burst: 20
+    # 首次使用入口的全站发送预算，避免大量新号码持续消耗短信额度。
+    entry-global-tokens-per-second: 1
+    entry-global-burst: 20
 
 server:
   tomcat:

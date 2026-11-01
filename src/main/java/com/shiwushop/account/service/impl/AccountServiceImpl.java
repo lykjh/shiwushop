@@ -5,6 +5,8 @@ import com.shiwushop.account.auth.AccountAuthCache;
 import com.shiwushop.account.entity.status.AccountStatus;
 import com.shiwushop.account.entity.user.UserAccount;
 import com.shiwushop.account.mapper.user.UserAccountMapper;
+import com.shiwushop.account.mapper.user.PhoneBindingMapper;
+import com.shiwushop.account.privacy.PrivacyCipher;
 import com.shiwushop.account.service.AccountService;
 import com.shiwushop.account.vo.user.UserInfoVO;
 import com.shiwushop.common.BusinessException;
@@ -21,6 +23,8 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class AccountServiceImpl implements AccountService {
     private final UserAccountMapper userAccountMapper;
+    private final PhoneBindingMapper phoneBindings;
+    private final PrivacyCipher privacy;
     private final AccountAccess accountAccess;
     private final AccountAuthCache authCache;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -29,7 +33,13 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public UserInfoVO currentUser(Long userId) {
         UserAccount account = accountAccess.requireActive(userId);
-        return new UserInfoVO(account.getUserId(), account.getUsername(), account.getRole().name());
+        PhoneBindingMapper.PhonePrivate bound = phoneBindings.findPhone(userId);
+        String masked = null;
+        if (bound != null && bound.getCiphertext() != null) {
+            String phone = privacy.decrypt(userId, "login-phone", bound.getKeyVersion(), bound.getCiphertext());
+            masked = phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+        }
+        return new UserInfoVO(account.getUserId(), account.getUsername(), account.getRole().name(), masked);
     }
 
     /**
