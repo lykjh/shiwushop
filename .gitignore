@@ -2,6 +2,7 @@
 /.idea/
 /local-data/
 /logs/*.log*
+/logs/README.md
 /artifacts/
 /.env
 /.env.*
