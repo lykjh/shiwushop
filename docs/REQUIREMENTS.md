@@ -37,6 +37,8 @@
 - 商家可在自己店铺内创建、修改商品及 SKU、维护规格与状态，并查询自己的商品。管理员可调整商品公开状态。
 - 公开商品列表使用 Redis 缓存；失效后的回源仍以数据库可见性和价格数据为准。
 
+管理员商品下架由独立的 `AdminProductStatusService` 执行；商家商品状态仍由 `ProductService` 处理。管理员下架与搜索刷新事件保留在同一事务中。定向测试 7 项通过；全量回归 302 项运行、0 失败、0 错误、6 项按现有配置跳过。记录在 `logs/split-admin-product-targeted.log` 与 `logs/split-admin-product-verify.log`。
+
 实现依据：[商品控制器](../src/main/java/com/shiwushop/controller/product)、[ProductServiceImpl](../src/main/java/com/shiwushop/service/Impl/ProductServiceImpl.java)、[PublicProductCache](../src/main/java/com/shiwushop/catalog/cache/PublicProductCache.java)。
 
 ### F03 地址、购物车与结算

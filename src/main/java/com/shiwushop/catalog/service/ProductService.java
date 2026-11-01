@@ -36,9 +36,6 @@ public interface ProductService {
     /** 校验上架条件并切换商家商品的展示状态。 */
     ProductStatusVO updateMerchantProductStatus(Long userId, Long productId, ProductStatusUpdateDTO dto);
 
-    /** 管理员按审核规则强制下架指定商品。 */
-    ProductStatusVO adminTakeDown(Long productId, ProductStatusUpdateDTO dto);
-
     /** 返回商家管理页所需的商品、规格与 SKU 详情。 */
     MerchantProductDetailVO merchantDetail(Long userId, Long productId);
 

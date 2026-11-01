@@ -4,7 +4,7 @@ import com.shiwushop.catalog.dto.product.ProductStatusUpdateDTO;
 import com.shiwushop.catalog.vo.product.ProductStatusVO;
 
 import com.shiwushop.common.Result;
-import com.shiwushop.catalog.service.ProductService;
+import com.shiwushop.catalog.service.AdminProductStatusService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/admin/products")
 @RequiredArgsConstructor
 public class AdminProductStatusController {
-    private final ProductService productService;
+    private final AdminProductStatusService productService;
     private final AdminAuth adminAuth;
 
     /** 管理员对指定商品执行下架；具体状态转换交给商品服务。 */

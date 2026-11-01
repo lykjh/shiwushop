@@ -57,7 +57,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** 商家和管理员的商品变更入口；公开读取由 PublicProductServiceImpl 负责。 */
+/** 商家商品变更与管理查询；公开读取由 PublicProductServiceImpl 负责。 */
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -639,23 +639,4 @@ public class ProductServiceImpl implements ProductService {
                 coverMediaId, product.getStatus().name(), imageMediaIds, options, skus);
     }
 
-    /** 管理员只能把商品设为下架；更新状态后写入搜索刷新事件。 */
-    @Override
-    @Transactional
-    public ProductStatusVO adminTakeDown(Long productId, ProductStatusUpdateDTO dto) {
-        requireProductId(productId);
-        if (!ProductStatus.OFF_SALE.name().equals(dto.getStatus())) {
-            throw new BusinessException(400, "管理员只能下架商品");
-        }
-        if (productMapper.selectById(productId) == null) {
-            throw new BusinessException(404, "商品不存在");
-        }
-
-        productMapper.update(null, new LambdaUpdateWrapper<Product>()
-                .eq(Product::getId, productId)
-                .set(Product::getStatus, ProductStatus.OFF_SALE));
-        queueSearchRefresh(productId);
-        BusinessEventLog.committed("catalog", "product_admin_taken_down", "product", productId);
-        return new ProductStatusVO(productId, ProductStatus.OFF_SALE.name());
-    }
 }
