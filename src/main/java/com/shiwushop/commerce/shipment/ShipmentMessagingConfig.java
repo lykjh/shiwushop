@@ -33,9 +33,6 @@ public class ShipmentMessagingConfig {
     @Bean
     Queue shipmentDelayQueue() {
         return QueueBuilder.durable(DELAY_QUEUE)
-                .withArgument("x-queue-type", "quorum")
-                .withArgument("x-dead-letter-strategy", "at-least-once")
-                .withArgument("x-overflow", "reject-publish")
                 .deadLetterExchange(EXCHANGE).deadLetterRoutingKey(WORK_ROUTING).build();
     }
 
@@ -43,16 +40,13 @@ public class ShipmentMessagingConfig {
     @Bean
     Queue shipmentWorkQueue() {
         return QueueBuilder.durable(WORK_QUEUE)
-                .withArgument("x-queue-type", "quorum")
-                .withArgument("x-dead-letter-strategy", "at-least-once")
-                .withArgument("x-overflow", "reject-publish")
                 .deadLetterExchange(DEAD_EXCHANGE).deadLetterRoutingKey(DEAD_ROUTING).build();
     }
 
     /** 保留无法正常消费的物流事件，供人工排查。 */
     @Bean
     Queue shipmentDeadQueue() {
-        return QueueBuilder.durable(DEAD_QUEUE).withArgument("x-queue-type", "quorum").build();
+        return QueueBuilder.durable(DEAD_QUEUE).build();
     }
 
     /** 将延迟队列绑定到物流主交换机。 */

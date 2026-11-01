@@ -24,6 +24,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -39,13 +40,9 @@ class ShipmentMessagingTests {
     @Test
     void delayAndWorkQueuesHaveTheExpectedDeadLetterRoutes() {
         ShipmentMessagingConfig config = new ShipmentMessagingConfig();
-        for (var queue : List.of(config.shipmentDelayQueue(), config.shipmentWorkQueue(), config.shipmentDeadQueue())) {
-            assertEquals("quorum", queue.getArguments().get("x-queue-type"));
-        }
-        for (var queue : List.of(config.shipmentDelayQueue(), config.shipmentWorkQueue())) {
-            assertEquals("at-least-once", queue.getArguments().get("x-dead-letter-strategy"));
-            assertEquals("reject-publish", queue.getArguments().get("x-overflow"));
-        }
+        assertNull(config.shipmentDelayQueue().getArguments().get("x-queue-type"));
+        assertNull(config.shipmentWorkQueue().getArguments().get("x-queue-type"));
+        assertNull(config.shipmentDeadQueue().getArguments().get("x-queue-type"));
         assertEquals(ShipmentMessagingConfig.EXCHANGE,
                 config.shipmentDelayQueue().getArguments().get("x-dead-letter-exchange"));
         assertEquals(ShipmentMessagingConfig.WORK_ROUTING,
