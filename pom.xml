@@ -21,7 +21,7 @@
         <logback.version>1.6.5</logback.version>
         <tomcat.version>11.0.27</tomcat.version>
         <jackson-bom.version>3.1.8</jackson-bom.version>
-        <rabbit-amqp-client.version>5.33.0</rabbit-amqp-client.version>
+        <rabbit-amqp-client.version>5.33.1</rabbit-amqp-client.version>
         <mysql.version>9.6.0</mysql.version>
     </properties>
 

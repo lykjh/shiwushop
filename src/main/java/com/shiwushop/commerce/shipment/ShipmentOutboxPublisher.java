@@ -9,6 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -68,6 +69,8 @@ public class ShipmentOutboxPublisher {
             CorrelationData correlation = new CorrelationData(event.getId().toString());
             rabbit.convertAndSend(ShipmentMessagingConfig.EXCHANGE, ShipmentMessagingConfig.DELAY_ROUTING,
                     event.getId().toString(), message -> {
+                        // 死信转发保持原消息持久化属性，避免 broker 重启时丢失到期事件。
+                        message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
                         message.getMessageProperties().setExpiration(Long.toString(delay));
                         return message;
                     }, correlation);

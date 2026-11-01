@@ -10,6 +10,7 @@ import com.shiwushop.commerce.mapper.shipment.ShipmentMapper;
 import com.shiwushop.commerce.service.ShipmentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
@@ -38,6 +39,13 @@ class ShipmentMessagingTests {
     @Test
     void delayAndWorkQueuesHaveTheExpectedDeadLetterRoutes() {
         ShipmentMessagingConfig config = new ShipmentMessagingConfig();
+        for (var queue : List.of(config.shipmentDelayQueue(), config.shipmentWorkQueue(), config.shipmentDeadQueue())) {
+            assertEquals("quorum", queue.getArguments().get("x-queue-type"));
+        }
+        for (var queue : List.of(config.shipmentDelayQueue(), config.shipmentWorkQueue())) {
+            assertEquals("at-least-once", queue.getArguments().get("x-dead-letter-strategy"));
+            assertEquals("reject-publish", queue.getArguments().get("x-overflow"));
+        }
         assertEquals(ShipmentMessagingConfig.EXCHANGE,
                 config.shipmentDelayQueue().getArguments().get("x-dead-letter-exchange"));
         assertEquals(ShipmentMessagingConfig.WORK_ROUTING,
@@ -61,6 +69,7 @@ class ShipmentMessagingTests {
             MessagePostProcessor processor = call.getArgument(3);
             Message message = processor.postProcessMessage(new Message(new byte[0], new MessageProperties()));
             assertEquals("864000000", message.getMessageProperties().getExpiration());
+            assertEquals(MessageDeliveryMode.PERSISTENT, message.getMessageProperties().getDeliveryMode());
             CorrelationData correlation = call.getArgument(4);
             correlation.getFuture().complete(new CorrelationData.Confirm(true, null));
             return null;
