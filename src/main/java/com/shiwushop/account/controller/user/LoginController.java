@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 负责密码登录、会话和当前账号入口；短信登录由 SmsLogin 处理。 */
+/** 负责密码登录、会话和当前账号入口；短信登录由 SmsLoginController 处理。 */
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor

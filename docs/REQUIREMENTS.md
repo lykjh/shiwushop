@@ -28,6 +28,8 @@
 
 结构拆分验证：账号相关定向测试 28 项通过；完整回归使用 `mvn -q '-Dspring.datasource.hikari.maximum-pool-size=2' '-Dspring.test.context.cache.maxSize=4' verify`，300 项运行、0 失败、0 错误、6 项按现有配置跳过。输出保存在 `logs/split-user-auth-targeted.log` 与 `logs/split-user-auth-verify.log`。
 
+短信登录与手机号绑定分别由 `SmsLoginController`/`SmsLoginService` 和 `PhoneBindingController`/`PhoneBindingService` 负责；两条流程共用 `SmsCodeDelivery` 的发送额度、验证码预留及失败回滚。接口路径保持 `/users/sms/*` 和 `/users/phone/bind/*`。隔离 MySQL/Redis 下定向测试 8 项通过；全量回归 302 项运行、0 失败、0 错误、6 项按现有配置跳过。记录在 `logs/split-sms-targeted.log` 与 `logs/split-sms-verify.log`。
+
 ### F02 公开目录与商品
 
 - 游客可查看可见分类、品牌、启用店铺及可售商品；不可向公众暴露已下架商品或停用店铺的商品详情。
