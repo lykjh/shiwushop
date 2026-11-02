@@ -90,6 +90,10 @@
                         <spring.datasource.password>test-shiwushop</spring.datasource.password>
                         <spring.data.redis.port>16379</spring.data.redis.port>
                         <spring.config.import>optional:file:./target/no-local.yml</spring.config.import>
+                        <!-- Config import 仍会读取本地文件；测试必须显式隔离搜索开关和地址。 -->
+                        <shop.search.url>http://127.0.0.1:29200</shop.search.url>
+                        <shop.search.discovery-enabled>false</shop.search.discovery-enabled>
+                        <shop.search.worker-enabled>false</shop.search.worker-enabled>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
