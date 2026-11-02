@@ -66,7 +66,7 @@ class SmsCodeDelivery {
                 return;
             }
         }
-        if ("entry".equals(purpose)) {
+        if ("entry".equals(purpose) || "password-reset".equals(purpose)) {
             long globalRetry;
             try {
                 globalRetry = limiter.tokenBucketRetrySeconds("shiwushop:sms:entry:global",
