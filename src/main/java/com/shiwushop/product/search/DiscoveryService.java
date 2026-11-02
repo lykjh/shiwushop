@@ -1,0 +1,261 @@
+package com.shiwushop.product.search;
+
+import com.shiwushop.product.vo.product.PublicProductVO;
+import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.pagination.PageSpec;
+import com.shiwushop.product.entity.brand.Brand;
+import com.shiwushop.merchant.entity.shop.Shop;
+import com.shiwushop.product.mapper.brand.BrandMapper;
+import com.shiwushop.product.mapper.product.ProductMapper;
+import com.shiwushop.merchant.service.ShopService;
+import com.shiwushop.product.vo.query.product.PublicProductRow;
+import com.shiwushop.product.service.CategoryService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class DiscoveryService {
+    private final SearchGateway search;
+    private final DiscoveryCursor cursors;
+    private final ProductMapper products;
+    private final BrandMapper brands;
+    private final ShopService shops;
+    private final CategoryService categories;
+    private final ObjectMapper json;
+    private final boolean enabled;
+
+    /** 注入搜索网关与数据库核对依赖；配置开关控制发现接口是否对外提供服务。 */
+    public DiscoveryService(SearchGateway search, DiscoveryCursor cursors, ProductMapper products,
+                            BrandMapper brands, ShopService shops, CategoryService categories,
+                            ObjectMapper json,
+                            @Value("${shop.search.discovery-enabled:false}") boolean enabled) {
+        this.search = search;
+        this.cursors = cursors;
+        this.products = products;
+        this.brands = brands;
+        this.shops = shops;
+        this.categories = categories;
+        this.json = json;
+        this.enabled = enabled;
+    }
+
+    /**
+     * 搜索索引负责候选顺序，数据库负责最终可见性、价格和库存核对。
+     * 游标绑定查询、用户和 PIT；过滤失效命中后继续扫描候选以补满页面，结束时释放无用 PIT。
+     */
+    public DiscoveryPage list(DiscoveryQuery raw, String cursor, Long userId) {
+        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        DiscoveryQuery query = normalize(raw);
+        validate(query);
+        String fingerprint = json.writeValueAsString(query);
+        // 游标绑定筛选条件和访问身份，PIT 固定本轮滚动加载的索引视图。
+        DiscoveryCursor.State state = cursor == null ? null : cursors.decode(cursor, fingerprint, userId);
+        String pit = state == null ? search.openPit() : state.pit();
+        boolean keepPit = false;
+        try {
+            List<Object> position = state == null ? null : state.sort();
+            List<PublicProductVO> cards = new ArrayList<>();
+            List<Object> lastReturnedSort = null;
+            boolean hasMore = false;
+            boolean exhausted = false;
+            int scanned = 0;
+            int fetchSize = Math.min(100, Math.max(20, query.size() * 2));
+            while (!exhausted && scanned < 1000) {
+                Map<String, Object> body = request(query, pit, position, fetchSize);
+                JsonNode result = search.search(body);
+                String renewedPit = result.path("pit_id").asText();
+                if (!renewedPit.isBlank()) pit = renewedPit;
+                JsonNode hits = result.path("hits").path("hits");
+                if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+                List<Long> ids = new ArrayList<>();
+                for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
+                Map<Long, PublicProductRow> current = new HashMap<>();
+                if (!ids.isEmpty()) {
+                    for (PublicProductRow row : products.selectPublicCardsByIds(ids, query.categoryId(),
+                            query.brandId(), query.shopId(), query.minPrice(), query.maxPrice())) {
+                        current.put(row.getId(), row);
+                    }
+                }
+                // 已失效的索引命中会被过滤；继续扫描候选以尽量补足这一批。
+                for (JsonNode hit : hits) {
+                    scanned++;
+                    position = json.readValue(hit.path("sort").toString(), List.class);
+                    PublicProductRow row = current.get(hit.path("_source").path("id").asLong());
+                    if (row == null) continue;
+                    if (cards.size() == query.size()) {
+                        hasMore = true;
+                        break;
+                    }
+                    cards.add(toCard(row));
+                    lastReturnedSort = position;
+                }
+                if (hasMore) break;
+                exhausted = hits.size() < fetchSize;
+            }
+            if (!hasMore && !exhausted) throw new BusinessException(503, "搜索索引与商品数据差异过大，请稍后重试");
+            String next = hasMore ? cursors.encode(new DiscoveryCursor.State(pit, lastReturnedSort,
+                    fingerprint, userId, Instant.now().plusSeconds(120).getEpochSecond())) : null;
+            keepPit = hasMore;
+            return new DiscoveryPage(cards, hasMore, next);
+        } finally {
+            // 只有下一页游标会继续使用 PIT；异常或末页立即释放最新 ID。
+            if (!keepPit) search.closePit(pit);
+        }
+    }
+
+    /**
+     * 对前端已显示的商品 ID 重新核对搜索条件和数据库当前状态。
+     * 返回仍匹配的卡片和应移除的 ID，供返回列表时更新价格或下架状态。
+     */
+    public DiscoveryRefresh refresh(List<Long> ids, DiscoveryQuery raw) {
+        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        if (ids == null || ids.isEmpty() || ids.size() > 60 || ids.stream().anyMatch(id -> id == null || id <= 0))
+            throw new BusinessException(400, "商品ID数量或格式错误");
+        DiscoveryQuery query = normalize(raw);
+        validate(query);
+        List<Long> unique = new ArrayList<>(new LinkedHashSet<>(ids));
+        List<Long> matching = unique;
+        if (query.q() != null && !query.q().isBlank()) {
+            JsonNode hits = search.searchIndex("products", Map.of(
+                    "size", unique.size(), "_source", List.of("id"),
+                    "query", Map.of("bool", Map.of(
+                            "must", List.of(Map.of("multi_match", Map.of("query", query.q(),
+                                    "fields", List.of("name^6", "brandName^3", "shopName^3")))),
+                            "filter", List.of(Map.of("terms", Map.of("id", unique)))))))
+                    .path("hits").path("hits");
+            if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+            List<Long> found = new ArrayList<>();
+            for (JsonNode hit : hits) found.add(hit.path("_source").path("id").asLong());
+            matching = found;
+        }
+        Map<Long, PublicProductRow> rows = new HashMap<>();
+        if (!matching.isEmpty()) for (PublicProductRow row : products.selectPublicCardsByIds(matching,
+                query.categoryId(), query.brandId(), query.shopId(), query.minPrice(), query.maxPrice()))
+            rows.put(row.getId(), row);
+        return new DiscoveryRefresh(unique.stream().filter(rows::containsKey).map(id -> toCard(rows.get(id))).toList(),
+                unique.stream().filter(id -> !rows.containsKey(id)).toList());
+    }
+
+    /**
+     * 分别从商品、店铺和品牌索引取最多五个候选，再到数据库排除已失效的记录。
+     * 返回名称与站内跳转路径，避免直接展示过期索引中的实体。
+     */
+    public SearchSuggestions suggestions(String raw) {
+        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        String q = raw == null ? "" : raw.strip();
+        if (q.isEmpty() || q.codePointCount(0, q.length()) > 100)
+            throw new BusinessException(400, "搜索词长度必须在1到100个字符之间");
+        List<Long> productIds = suggestIds("products", q);
+        List<Long> shopIds = suggestIds("shops", q);
+        List<Long> brandIds = suggestIds("brands", q);
+        Map<Long, PublicProductRow> productRows = new HashMap<>();
+        if (!productIds.isEmpty()) for (PublicProductRow row : products.selectPublicCardsByIds(
+                productIds, null, null, null, null, null)) productRows.put(row.getId(), row);
+        Map<Long, Shop> shopRows = new HashMap<>();
+        if (!shopIds.isEmpty()) for (Shop row : shops.findByIds(shopIds)) shopRows.put(row.getId(), row);
+        Map<Long, Brand> brandRows = new HashMap<>();
+        if (!brandIds.isEmpty()) for (Brand row : brands.selectBatchIds(brandIds)) brandRows.put(row.getId(), row);
+        return new SearchSuggestions(
+                productIds.stream().filter(productRows::containsKey).map(id ->
+                        new SearchSuggestions.Entry(id, productRows.get(id).getName(), "/products/" + id)).toList(),
+                shopIds.stream().filter(id -> shopRows.containsKey(id) && Integer.valueOf(1).equals(shopRows.get(id).getEnabled()))
+                        .map(id -> new SearchSuggestions.Entry(id, shopRows.get(id).getName(), "/shops/" + id)).toList(),
+                brandIds.stream().filter(id -> brandRows.containsKey(id) && Integer.valueOf(1).equals(brandRows.get(id).getEnabled()))
+                        .map(id -> new SearchSuggestions.Entry(id, brandRows.get(id).getName(), "/brands/" + id)).toList());
+    }
+
+    /** 在指定搜索索引中按名称匹配候选 ID，并对名称精确匹配加权。 */
+    private List<Long> suggestIds(String index, String q) {
+        JsonNode hits = search.searchIndex(index, Map.of("size", 5, "_source", List.of("id"),
+                "query", Map.of("bool", Map.of(
+                        "must", List.of(Map.of("match", Map.of("name", q))),
+                        "should", List.of(Map.of("term", Map.of("name.exact", Map.of(
+                                "value", q, "boost", 10)))))))).path("hits").path("hits");
+        if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+        List<Long> ids = new ArrayList<>();
+        for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
+        return ids;
+    }
+
+    /** 去除搜索词首尾空白，保留其他筛选参数供后续校验和游标签名。 */
+    private DiscoveryQuery normalize(DiscoveryQuery query) {
+        return new DiscoveryQuery(query.q() == null ? null : query.q().strip(), query.categoryId(),
+                query.brandId(), query.shopId(), query.minPrice(), query.maxPrice(), query.size());
+    }
+
+    /** 校验搜索词、分页、筛选实体和价格区间，避免无效条件进入搜索请求。 */
+    private void validate(DiscoveryQuery q) {
+        PageSpec.of(1, q.size());
+        if (q.q() != null && q.q().codePointCount(0, q.q().length()) > 100) {
+            throw new BusinessException(400, "搜索词不能超过100个字符");
+        }
+        if (q.categoryId() != null) categories.detail(positive(q.categoryId()));
+        if (q.brandId() != null && brands.selectById(positive(q.brandId())) == null)
+            throw new BusinessException(404, "品牌不存在");
+        if (q.shopId() != null && shops.findById(positive(q.shopId())) == null)
+            throw new BusinessException(404, "店铺不存在");
+        if ((q.minPrice() != null && q.minPrice().signum() < 0)
+                || (q.maxPrice() != null && q.maxPrice().signum() < 0)
+                || (q.minPrice() != null && q.maxPrice() != null
+                    && q.minPrice().compareTo(q.maxPrice()) > 0)) {
+            throw new BusinessException(400, "价格区间错误");
+        }
+    }
+
+    /** 拒绝非正数筛选 ID，返回可直接用于后续查询的原值。 */
+    private long positive(Long id) {
+        if (id <= 0) throw new BusinessException(400, "筛选ID必须大于0");
+        return id;
+    }
+
+    /** 将筛选、关键词权重、PIT 和上一页排序位置组装为搜索引擎请求体。 */
+    private Map<String, Object> request(DiscoveryQuery q, String pit, List<Object> position, int size) {
+        List<Object> filters = new ArrayList<>();
+        if (q.categoryId() != null) filters.add(Map.of("term", Map.of("categoryPathIds", q.categoryId())));
+        if (q.brandId() != null) filters.add(Map.of("term", Map.of("brandId", q.brandId())));
+        if (q.shopId() != null) filters.add(Map.of("term", Map.of("shopId", q.shopId())));
+        if (q.minPrice() != null || q.maxPrice() != null) {
+            Map<String, BigDecimal> price = new LinkedHashMap<>();
+            if (q.minPrice() != null) price.put("gte", q.minPrice());
+            if (q.maxPrice() != null) price.put("lte", q.maxPrice());
+            filters.add(Map.of("range", Map.of("availablePrices", price)));
+        }
+        Map<String, Object> bool = new LinkedHashMap<>();
+        bool.put("filter", filters);
+        boolean hasQuery = q.q() != null && !q.q().isBlank();
+        if (hasQuery) {
+            bool.put("must", List.of(Map.of("multi_match", Map.of(
+                    "query", q.q(), "fields", List.of("name^6", "brandName^3", "shopName^3")))));
+            bool.put("should", List.of(Map.of("term", Map.of("name.exact", Map.of(
+                    "value", q.q(), "boost", 10)))));
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("size", size);
+        body.put("track_total_hits", false);
+        body.put("pit", Map.of("id", pit, "keep_alive", "2m"));
+        body.put("query", Map.of("bool", bool));
+        body.put("sort", hasQuery ? List.of(Map.of("_score", "desc"), Map.of("id", "desc"))
+                : List.of(Map.of("id", "desc")));
+        if (position != null) body.put("search_after", position);
+        return body;
+    }
+
+    /** 将数据库复核后的商品行转为公开商品卡片，避免直接信任索引中的价格。 */
+    private PublicProductVO toCard(PublicProductRow row) {
+        return new PublicProductVO(row.getId(), row.getName(), row.getCoverMediaId(),
+                row.getBrandId() == null ? null : new PublicProductVO.Brand(row.getBrandId(), row.getBrandName()),
+                new PublicProductVO.Shop(row.getShopId(), row.getShopName()),
+                row.getStartingPrice(), row.getSoldCount(), Boolean.TRUE.equals(row.getSoldOut()));
+    }
+}

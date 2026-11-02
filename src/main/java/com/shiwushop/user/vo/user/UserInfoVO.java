@@ -1,0 +1,4 @@
+package com.shiwushop.user.vo.user;
+
+public record UserInfoVO(Long id, String username, String role, String phoneMasked) {
+}

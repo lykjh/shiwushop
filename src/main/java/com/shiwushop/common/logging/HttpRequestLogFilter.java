@@ -47,10 +47,8 @@ public class HttpRequestLogFilter extends OncePerRequestFilter {
     }
 
     private static String moduleOf(String packageName) {
-        if (packageName.startsWith("com.shiwushop.account.")) return "account";
-        if (packageName.startsWith("com.shiwushop.catalog.")) return "catalog";
-        if (packageName.startsWith("com.shiwushop.commerce.")) return "commerce";
         if (packageName.startsWith("com.shiwushop.common.media.")) return "media";
-        return "common";
+        return packageName.startsWith("com.shiwushop.")
+                ? packageName.substring("com.shiwushop.".length()).split("\\.", 2)[0] : "common";
     }
 }

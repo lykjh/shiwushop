@@ -1,3 +1,7 @@
+/*
+*
+* */
+
 package com.shiwushop.common.auth;
 
 import com.shiwushop.common.BusinessException;
@@ -19,9 +23,20 @@ import java.util.UUID;
 @Component
 public class RateLimiter {
 
+    /**
+    KEYS[1]：Redis key（由 Java 侧 List.of(key) 传入）。
+    * INCR：把该 key 的值 +1。如果 key 不存在，视为 0，自增后为 1。
+    * 结果存到局部变量 count。
+    * */
     private static final DefaultRedisScript<Long> INCREMENT_WITH_EXPIRY=new DefaultRedisScript<>(
             "local count =redis.call('INCR',KEYS[1]);"+"if count == 1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]); end; return count",
             Long.class);
+    /**
+    *尝试从桶里取 1 个令牌。取到则返回 0（放行）；取不到则返回还需要等待的秒数（拒绝）。
+    * KEYS[1]：Redis key（由 Java 侧 List.of(key) 传入）。
+    * ARGV[1]：令牌生成速率（每秒令牌数）。
+    * ARGV[2]：令牌桶容量。
+    * */
     // 使用 Redis 时间和单键脚本，让所有应用实例共享同一个原子令牌桶。
     private static final DefaultRedisScript<Long> TOKEN_BUCKET = new DefaultRedisScript<>("""
             local now = redis.call('TIME')

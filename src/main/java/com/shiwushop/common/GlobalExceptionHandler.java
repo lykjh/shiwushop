@@ -20,6 +20,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,9 +49,12 @@ public class GlobalExceptionHandler {
 
     /** 数据服务不可用时返回 503，避免认证依赖故障被当作可放行。 */
     @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<Result<Object>> handleDataAccess(DataAccessException e) {
+    public ResponseEntity<?> handleDataAccess(DataAccessException e, HttpServletRequest request) {
         // Session 或限流所依赖的 Redis 故障时停止认证请求，并返回服务不可用。
         log.error("数据服务不可用: {}", e.getClass().getSimpleName());
+        if ("/payments/alipay/notify".equals(request.getRequestURI()) && "POST".equals(request.getMethod())) {
+            return ResponseEntity.status(503).body("failure");
+        }
         return ResponseEntity.status(503).body(Result.error(503, "数据服务暂时不可用"));
     }
 
@@ -69,6 +74,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Result<Object>> handleUnreadable() {
         return badRequest("请求体格式错误", null);
+    }
+
+    /** Spring MVC 在入口校验 Path 和查询参数，Service 不再重复校验相同参数。 */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Result<Object>> handleMethodValidation(HandlerMethodValidationException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(Result.error(e.getStatusCode().value(), "参数校验失败"));
     }
 
     /** URL 参数类型错误时标出字段名。 */
@@ -115,8 +126,11 @@ public class GlobalExceptionHandler {
 
     /** 记录未处理异常并向客户端隐藏内部堆栈细节。 */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Result<Object>> handleUnexpected(Exception e) {
+    public ResponseEntity<?> handleUnexpected(Exception e, HttpServletRequest request) {
         log.error("未处理的请求异常", e);
+        if ("/payments/alipay/notify".equals(request.getRequestURI()) && "POST".equals(request.getMethod())) {
+            return ResponseEntity.status(500).body("failure");
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Result.error(500, "服务器内部错误"));
     }
 

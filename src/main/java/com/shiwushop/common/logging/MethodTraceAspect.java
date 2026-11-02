@@ -3,6 +3,8 @@ package com.shiwushop.common.logging;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.AfterThrowing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,20 +25,26 @@ public class MethodTraceAspect {
         String owner = declaredBy.startsWith("com.shiwushop.") ? declaredBy
                 : ClassUtils.getUserClass(call.getTarget()).getName();
         String method = owner + "." + call.getSignature().getName();
-        String module = owner.startsWith("com.shiwushop.account.") ? "account"
-                : owner.startsWith("com.shiwushop.catalog.") ? "catalog"
-                : owner.startsWith("com.shiwushop.commerce.") ? "commerce"
-                : owner.startsWith("com.shiwushop.common.media.") ? "media" : "common";
+        String module = owner.startsWith("com.shiwushop.common.media.") ? "media"
+                : owner.startsWith("com.shiwushop.") ? owner.substring("com.shiwushop.".length()).split("\\.", 2)[0]
+                : "common";
+        boolean completed = false;
         try {
             Object result = call.proceed();
-            log.info("method={} outcome=success durationMs={} module={}", method,
-                    (System.nanoTime() - started) / 1_000_000, module);
+            completed = true;
             return result;
-        } catch (Throwable failure) {
-            // 仅记录异常类型，避免参数和异常消息携带账号、密码或交易数据。
-            log.warn("method={} outcome=failure error={} durationMs={} module={}", method,
-                    failure.getClass().getSimpleName(), (System.nanoTime() - started) / 1_000_000, module);
-            throw failure;
+        } finally {
+            if (completed) log.info("method={} outcome=success durationMs={} module={}", method,
+                    (System.nanoTime() - started) / 1_000_000, module);
+            else log.warn("method={} outcome=failure durationMs={} module={}", method,
+                    (System.nanoTime() - started) / 1_000_000, module);
         }
+    }
+
+    /** 由框架观察异常类型，业务异常继续原样传播，不捕获参数或异常消息。 */
+    @AfterThrowing(pointcut = "execution(public * com.shiwushop..*(..)) && !within(com.shiwushop.common.logging.MethodTraceAspect)",
+            throwing = "failure")
+    public void failed(JoinPoint call, Throwable failure) {
+        log.warn("method={} error={}", call.getSignature().toLongString(), failure.getClass().getSimpleName());
     }
 }

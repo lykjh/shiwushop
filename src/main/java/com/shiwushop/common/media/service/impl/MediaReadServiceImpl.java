@@ -1,6 +1,6 @@
 package com.shiwushop.common.media.service.impl;
 
-import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.common.auth.AccountSecurity;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.PublicMediaReference;
 import com.shiwushop.common.media.entity.MediaAsset;
@@ -22,7 +22,7 @@ public class MediaReadServiceImpl implements MediaReadService {
     private static final long MAX_BYTES = 10L * 1024 * 1024;
     private final MediaAssetMapper assets;
     private final PublicMediaReference publicReferences;
-    private final AccountAccess accounts;
+    private final AccountSecurity accounts;
 
     @Value("${shop.media.root:./local-data/media}")
     private String storageRoot;

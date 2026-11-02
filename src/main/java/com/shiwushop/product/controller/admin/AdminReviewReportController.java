@@ -1,0 +1,43 @@
+package com.shiwushop.product.controller.admin;
+
+import com.shiwushop.common.auth.AdminAuth;
+import jakarta.validation.Valid;
+import com.shiwushop.product.dto.review.ReviewReportDecisionDTO;
+import com.shiwushop.product.vo.review.PendingReviewReportPageVO;
+import com.shiwushop.common.Result;
+import com.shiwushop.product.service.ReviewService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Positive;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/admin/review-reports")
+@RequiredArgsConstructor
+public class AdminReviewReportController {
+    private final AdminAuth auth;
+    private final ReviewService reviews;
+
+    /** 管理员按游标查看待处理的评价举报。 */
+    @GetMapping
+    public Result<PendingReviewReportPageVO> pending(@RequestParam(required = false) @Positive Long afterId,
+                                                       @RequestParam(defaultValue = "20") @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(100) int size,
+                                                       HttpServletRequest http) {
+        auth.requireAdmin(http);
+        return Result.success(reviews.pendingReports(afterId, size));
+    }
+
+    /** 管理员对一条评价举报作出处理决定，并记录处理人。 */
+    @PostMapping("/{reportId}/resolve")
+    public Result<Void> resolve(@PathVariable @Positive Long reportId, @Valid @RequestBody ReviewReportDecisionDTO request,
+                                HttpServletRequest http) {
+        reviews.resolveReport(auth.requireAdmin(http), reportId, request);
+        return Result.success();
+    }
+}

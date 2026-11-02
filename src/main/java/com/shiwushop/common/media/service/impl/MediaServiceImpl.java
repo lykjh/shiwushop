@@ -1,14 +1,14 @@
 package com.shiwushop.common.media.service.impl;
 
-import com.shiwushop.account.auth.AccountAccess;
+import com.shiwushop.common.auth.AccountSecurity;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.common.media.entity.MediaAsset;
 import com.shiwushop.common.media.mapper.MediaAssetMapper;
 import com.shiwushop.common.media.service.MediaService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
@@ -25,18 +25,36 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /** 仅负责图片上传、解码和持久化；读取授权由 MediaReadServiceImpl 负责。 */
 @Service
-@RequiredArgsConstructor
+@Slf4j
 public class MediaServiceImpl implements MediaService {
     private static final long MAX_BYTES = 10L * 1024 * 1024;
     private static final long MAX_PIXELS = 20_000_000;
     private final MediaAssetMapper assets;
-    private final AccountAccess accounts;
-    private final Semaphore uploadSlots = new Semaphore(2);
+    private final AccountSecurity accounts;
+    private final Semaphore uploadSlots;
+    private final Semaphore admittedUploads;
+    private final long waitMillis;
+
+    /** 分别限制重处理并发和等待人数，防止批量请求立即被拒绝或无限占用请求线程。 */
+    public MediaServiceImpl(MediaAssetMapper assets, AccountSecurity accounts,
+            @Value("${shop.media.upload-max-concurrent:2}") int concurrent,
+            @Value("${shop.media.upload-max-waiting:16}") int waiting,
+            @Value("${shop.media.upload-wait-ms:10000}") long waitMillis) {
+        if (concurrent < 1 || waiting < 0 || waitMillis < 1)
+            throw new IllegalArgumentException("图片并发和等待时间必须为正，等待人数不得为负");
+        this.assets = assets;
+        this.accounts = accounts;
+        this.uploadSlots = new Semaphore(concurrent, true);
+        this.admittedUploads = new Semaphore(Math.addExact(concurrent, waiting), true);
+        this.waitMillis = waitMillis;
+    }
 
     @Value("${shop.media.root:./local-data/media}")
     private String storageRoot;
@@ -50,7 +68,7 @@ public class MediaServiceImpl implements MediaService {
         accounts.checkActive(userId);
         if (file == null || file.isEmpty()) throw new BusinessException(400, "图片不能为空");
         if (file.getSize() > MAX_BYTES) throw new BusinessException(413, "图片不能超过 10 MiB");
-        if (!uploadSlots.tryAcquire()) throw new BusinessException(429, "图片处理繁忙，请稍后重试");
+        acquireUploadSlot();
         Path originalFile = null;
         Path temporary = null;
         Path destination = null;
@@ -97,8 +115,6 @@ public class MediaServiceImpl implements MediaService {
             saved = true;
             BusinessEventLog.committed("media", "image_uploaded", "media", asset.getId());
             return asset.getId();
-        } catch (BusinessException e) {
-            throw e;
         } catch (IOException e) {
             throw new BusinessException(503, "图片暂时无法保存", e);
         } finally {
@@ -109,7 +125,29 @@ public class MediaServiceImpl implements MediaService {
                 deleteQuietly(destination);
             }
             uploadSlots.release();
+            admittedUploads.release();
         }
+    }
+
+    /** 有限人数按公平顺序等待处理许可；超时和中断都归还接收名额，尚未开始图片解码。 */
+    private void acquireUploadSlot() {
+        if (!admittedUploads.tryAcquire()) throw busy();
+        boolean acquired = false;
+        try {
+            acquired = uploadSlots.tryAcquire(waitMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(503, "图片上传等待已中断，请重试", error);
+        } finally {
+            if (!acquired) admittedUploads.release();
+        }
+        if (!acquired) throw busy();
+    }
+
+    /** 队列已满或等待超时时提供明确重试时间，调用方无需猜测何时重试。 */
+    private BusinessException busy() {
+        return new BusinessException(429, "图片处理繁忙，请稍后重试",
+                Map.of("retryAfterSeconds", 1), null);
     }
 
     /** 读取真实格式与尺寸，仅接收 JPEG/PNG 且像素不超过上限。 */
@@ -169,8 +207,9 @@ public class MediaServiceImpl implements MediaService {
     private static void deleteQuietly(Path path) {
         try {
             Files.deleteIfExists(path);
-        } catch (IOException ignored) {
-            // 删除失败的孤儿文件留给存储维护任务清理。
+        } catch (IOException error) {
+            // 清理失败不覆盖原始上传异常；残留文件由维护任务再次处理。
+            log.warn("图片临时文件清理失败 file={} error={}", path.getFileName(), error.getClass().getSimpleName());
         }
     }
 

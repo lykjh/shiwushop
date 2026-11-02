@@ -66,11 +66,6 @@ public class CaptchaServiceImpl implements CaptchaService {
             ImageCaptchaTrack track,
             String sessionId
     ) {
-        if (captchaId == null || captchaId.isBlank()
-                || captchaId.length() > 128 || track == null) {
-            throw new BusinessException(400, "滑块验证参数无效");
-        }
-
         ApiResponse<?> result = captchaApplication.matching(captchaId, track);
         if (result == null || !result.isSuccess()) {
             throw new BusinessException(400, "滑块验证失败，请重新获取");

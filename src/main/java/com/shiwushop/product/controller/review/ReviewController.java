@@ -1,0 +1,32 @@
+package com.shiwushop.product.controller.review;
+
+import jakarta.validation.Valid;
+import com.shiwushop.product.dto.review.ReviewCreateDTO;
+import com.shiwushop.common.Result;
+import com.shiwushop.common.auth.SessionUser;
+import com.shiwushop.product.service.ReviewService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Positive;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/orders/{orderId}/items/{orderItemId}/review")
+@RequiredArgsConstructor
+public class ReviewController {
+    private final ReviewService reviews;
+
+    /** 为本人订单中的指定订单项提交评价；评价资格和重复提交由评价服务校验。 */
+    @PostMapping
+    public Result<Created> create(@PathVariable @Positive Long orderId, @PathVariable @Positive Long orderItemId,
+                                  @Valid @RequestBody ReviewCreateDTO request, HttpServletRequest http) {
+        return Result.success(new Created(reviews.create(SessionUser.requireId(http), orderId, orderItemId, request)));
+    }
+
+    /** 新建评价成功后返回的评价 ID。 */
+    public record Created(Long id) { }
+}
