@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 手机验证码首次使用入口；手机号和邮箱各有独立流程。 */
+/** 手机验证码首次使用入口：已绑定账号登录，未绑定号码验证后设密码注册。 */
 @RestController
 @RequestMapping("/users/sms/entry")
 @RequiredArgsConstructor
