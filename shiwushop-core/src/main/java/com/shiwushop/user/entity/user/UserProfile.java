@@ -10,4 +10,6 @@ import lombok.Data;
 public class UserProfile {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String nickname;
+    private Long avatarMediaId;
 }

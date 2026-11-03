@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Param;
 public interface MediaAssetMapper {
     Long selectReadyOwnedForUpdate(@Param("mediaId") Long mediaId, @Param("userId") Long userId);
 
+    String selectOwnedStatusForUpdate(@Param("mediaId") Long mediaId, @Param("userId") Long userId);
+
     int insert(MediaAsset asset);
 
     MediaAsset selectReady(@Param("mediaId") Long mediaId);
