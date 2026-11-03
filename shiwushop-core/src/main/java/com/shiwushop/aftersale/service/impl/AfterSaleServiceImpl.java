@@ -35,6 +35,7 @@ import com.shiwushop.aftersale.mapper.refund.RefundAttemptMapper;
 import com.shiwushop.aftersale.mapper.shipment.ReturnShipmentMapper;
 import com.shiwushop.payment.service.RefundGateway;
 import com.shiwushop.aftersale.service.AfterSaleService;
+import com.shiwushop.aftersale.service.AfterSaleTimeoutService;
 import lombok.RequiredArgsConstructor;
 import com.shiwushop.trade.service.AfterSaleOrderService;
 import com.shiwushop.product.service.TradingProductService;
@@ -64,6 +65,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private static final int APPLY_DAYS_AFTER_CONFIRM = 7;
     private static final Duration RECONCILE_CLAIM_LEASE = Duration.ofMinutes(2);
     private final AfterSaleCaseMapper cases;
+    private final AfterSaleTimeoutService timeouts;
     private final ReturnDestinationMapper destinations;
     private final ShopReturnProfileService returnProfiles;
     private final AfterSaleItemMapper items;
@@ -149,6 +151,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             line.setCaseId(sale.getId());
             items.insert(line);
         }
+        timeouts.onStageChanged(sale.getId());
         audit.record(buyerId, "AFTER_SALE_REQUESTED", sale.getId(), "买家申请售后", now);
         BusinessEventLog.committed("aftersale", "after_sale_requested", "after_sale", sale.getId());
         return sale.getId();
@@ -260,6 +263,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             LocalDateTime now = LocalDateTime.now(clock);
             if (cases.review(caseId, next, merchantId, reviewReason, now,
                     request.approved() ? null : now) != 1) throw new BusinessException(409, "审核状态冲突");
+            timeouts.onStageChanged(caseId);
             audit.record(merchantId, request.approved() ? "AFTER_SALE_APPROVED" : "AFTER_SALE_REJECTED",
                     caseId, "商家审核售后", now);
             BusinessEventLog.committed("aftersale", request.approved() ? "after_sale_approved" : "after_sale_rejected",
@@ -282,6 +286,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 throw new BusinessException(409, "当前不能撤销售后申请");
             LocalDateTime now = LocalDateTime.now(clock);
             if (cases.withdraw(caseId, sale.getStatus(), now) != 1) throw new BusinessException(409, "售后状态冲突");
+            timeouts.onStageChanged(caseId);
             audit.record(buyerId, "AFTER_SALE_WITHDRAWN", caseId, "买家撤销售后", now);
             BusinessEventLog.committed("aftersale", "after_sale_withdrawn", "after_sale", caseId);
         });
@@ -315,6 +320,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             returns.insert(shipment);
             if (cases.transition(caseId, AfterSaleStatus.WAITING_RETURN, AfterSaleStatus.WAITING_RECEIPT) != 1)
                 throw new BusinessException(409, "退货状态冲突");
+            timeouts.onStageChanged(caseId);
             audit.record(buyerId, "RETURN_SHIPPED", caseId, "买家填写退货运单", now);
             BusinessEventLog.committed("aftersale", "return_shipped", "after_sale", caseId);
         });
@@ -338,6 +344,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             if (returns.markReceived(caseId, merchantId, now) != 1
                     || cases.transition(caseId, AfterSaleStatus.WAITING_RECEIPT, AfterSaleStatus.REFUNDING) != 1)
                 throw new BusinessException(409, "退货签收状态冲突");
+            timeouts.onStageChanged(caseId);
             if (request.restockable()) restoreStock(caseId, "RETURN_RECEIPT");
             audit.record(merchantId, "RETURN_RECEIVED", caseId, "商家确认收到退货", now);
             BusinessEventLog.committed("aftersale", "return_received", "after_sale", caseId);
@@ -426,6 +433,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         attempt.setStatus(RefundAttemptStatus.PENDING);
         attempt.setRequestedAt(LocalDateTime.now(clock));
         refunds.insert(attempt);
+        timeouts.onStageChanged(caseId);
         audit.record(merchantId, "REFUND_REQUESTED", caseId, "商家发起退款", attempt.getRequestedAt());
         BusinessEventLog.committed("aftersale", "refund_requested", "refund", attempt.getId());
         return new RefundContext(attempt, paid, true);

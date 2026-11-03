@@ -9,6 +9,7 @@ import com.shiwushop.aftersale.mapper.ReturnDestinationMapper;
 import com.shiwushop.aftersale.mapper.refund.RefundAttemptMapper;
 import com.shiwushop.aftersale.mapper.shipment.ReturnShipmentMapper;
 import com.shiwushop.aftersale.service.impl.AfterSaleServiceImpl;
+import com.shiwushop.aftersale.service.AfterSaleTimeoutService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.merchant.service.ShopReturnProfileService;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AfterSaleServiceImplTest {
     @Mock AfterSaleCaseMapper cases;
+    @Mock AfterSaleTimeoutService timeouts;
     @Mock AfterSaleItemMapper items;
     @Mock ReturnDestinationMapper destinations;
     @Mock ShopReturnProfileService returnProfiles;

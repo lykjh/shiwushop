@@ -46,6 +46,8 @@ public final class CommerceFixture implements AutoCloseable {
                 jdbc.update("DELETE FROM product_reviews WHERE id=?",review);
             }
             for(long sale:jdbc.queryForList("SELECT id FROM after_sale_cases WHERE order_id=?",Long.class,order)) {
+                jdbc.update("DELETE FROM after_sale_timeout_tasks WHERE case_id=?",sale);
+                jdbc.update("DELETE FROM after_sale_return_destinations WHERE case_id=?",sale);
                 jdbc.update("DELETE FROM refund_attempts WHERE case_id=?",sale);
                 jdbc.update("DELETE FROM return_shipments WHERE case_id=?",sale);
                 jdbc.update("DELETE FROM after_sale_items WHERE case_id=?",sale);
