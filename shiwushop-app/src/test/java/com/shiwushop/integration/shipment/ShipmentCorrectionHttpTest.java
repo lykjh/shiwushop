@@ -291,4 +291,63 @@ class ShipmentCorrectionHttpTest {
         assertEquals(0, history.path("currentVersion").asInt());
         assertEquals(0, history.path("items").size());
     }
+
+    @Test void merchantCanReadPendingThenRejectedApplicationWithoutInternalRemark() throws Exception {
+        long order = PaymentHttpFixture.paidOrder(fixture, jdbc);
+        String shipment = "/merchant/shops/" + fixture.catalog.shop + "/orders/" + order + "/shipment";
+        assertEquals(200, fixture.merchantClient.post(shipment,
+                Map.of("carrierName", "顺丰速运", "trackingNo", "SF100001")).statusCode());
+        var submitted = fixture.merchantClient.post(shipment + "/corrections", Map.of(
+                "originalVersion", 0, "carrierName", "中通快递", "trackingNo", "ZT100001", "reason", "录入错误"));
+        long id = json.readTree(submitted.body()).path("data").path("id").asLong();
+        String path = shipment + "/corrections/" + id;
+        var pending = fixture.merchantClient.get(path);
+        assertEquals(200, pending.statusCode(), pending.body());
+        assertEquals("PENDING", json.readTree(pending.body()).path("data").path("status").asString());
+        assertEquals(200, admin.post("/admin/shipment-corrections/" + id + "/decision",
+                Map.of("approved", false, "remark", "内部核查")).statusCode());
+        var rejected = fixture.merchantClient.get(path);
+        assertEquals(200, rejected.statusCode(), rejected.body());
+        var data = json.readTree(rejected.body()).path("data");
+        assertEquals(id, data.path("id").asLong());
+        assertEquals("REJECTED", data.path("status").asString());
+        assertFalse(data.has("remark"));
+    }
+
+    @Test void merchantCanReadApprovedApplication() throws Exception {
+        long order = PaymentHttpFixture.paidOrder(fixture, jdbc);
+        String shipment = "/merchant/shops/" + fixture.catalog.shop + "/orders/" + order + "/shipment";
+        assertEquals(200, fixture.merchantClient.post(shipment,
+                Map.of("carrierName", "顺丰速运", "trackingNo", "SF100001")).statusCode());
+        var submitted = fixture.merchantClient.post(shipment + "/corrections", Map.of(
+                "originalVersion", 0, "carrierName", "中通快递", "trackingNo", "ZT100001", "reason", "录入错误"));
+        long id = json.readTree(submitted.body()).path("data").path("id").asLong();
+        assertEquals(200, admin.post("/admin/shipment-corrections/" + id + "/decision", Map.of("approved", true)).statusCode());
+        var response = fixture.merchantClient.get(shipment + "/corrections/" + id);
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("APPROVED", json.readTree(response.body()).path("data").path("status").asString());
+    }
+
+    @Test void applicationStatusRejectsWrongOrderShopAndFormerOwner() throws Exception {
+        long order = PaymentHttpFixture.paidOrder(fixture, jdbc);
+        String shipment = "/merchant/shops/" + fixture.catalog.shop + "/orders/" + order + "/shipment";
+        assertEquals(200, fixture.merchantClient.post(shipment,
+                Map.of("carrierName", "顺丰速运", "trackingNo", "SF100001")).statusCode());
+        var submitted = fixture.merchantClient.post(shipment + "/corrections", Map.of(
+                "originalVersion", 0, "carrierName", "中通快递", "trackingNo", "ZT100001", "reason", "录入错误"));
+        long id = json.readTree(submitted.body()).path("data").path("id").asLong();
+        assertEquals(404, fixture.merchantClient.get("/merchant/shops/" + fixture.catalog.shop
+                + "/orders/" + Long.MAX_VALUE + "/shipment/corrections/" + id).statusCode());
+        try (var other = new com.shiwushop.support.CatalogFixture(jdbc)) {
+            assertEquals(404, fixture.merchantClient.get("/merchant/shops/" + other.shop
+                    + "/orders/" + order + "/shipment/corrections/" + id).statusCode());
+        }
+        var newOwner = accounts.create("MERCHANT", "Shop123!");
+        assertEquals(200, admin.request("PUT", "/admin/shops/" + fixture.catalog.shop + "/owner",
+                Map.of("ownerUserId", newOwner.id())).statusCode());
+        assertEquals(404, fixture.merchantClient.get(shipment + "/corrections/" + id).statusCode());
+        try (var newMerchant = CommerceFixture.login("http://127.0.0.1:" + port, newOwner)) {
+            assertEquals(200, newMerchant.get(shipment + "/corrections/" + id).statusCode());
+        }
+    }
 }

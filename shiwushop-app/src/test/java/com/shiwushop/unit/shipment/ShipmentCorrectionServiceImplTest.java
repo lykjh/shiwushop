@@ -80,4 +80,20 @@ class ShipmentCorrectionServiceImplTest {
         verify(corrections, never()).apply(anyLong(), anyInt(), anyString(), anyString());
         verify(corrections, never()).decide(anyLong(), anyString(), anyLong(), any(), any());
     }
+
+    @Test void merchantRequestReturnsOnlyStatusForMatchingShopAndOrder() {
+        var correction = new ShipmentCorrection(); correction.setId(5L); correction.setShopId(2L);
+        correction.setOrderId(3L); correction.setStatus("REJECTED"); correction.setRemark("内部备注");
+        when(corrections.find(5L)).thenReturn(correction);
+        var result = service.merchantRequest(1L, 2L, 3L, 5L);
+        assertEquals(5L, result.id());
+        assertEquals("REJECTED", result.status());
+        verify(ownership).requireOwned(1L, 2L, "店铺不存在");
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.merchantRequest(1L, 2L, 8L, 5L)).getCode());
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.merchantRequest(1L, 8L, 3L, 5L)).getCode());
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.merchantRequest(1L, 2L, 3L, 6L)).getCode());
+    }
 }

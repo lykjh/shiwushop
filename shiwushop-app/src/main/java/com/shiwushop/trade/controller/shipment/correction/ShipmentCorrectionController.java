@@ -53,6 +53,14 @@ public class ShipmentCorrectionController {
         return Result.success(corrections.merchantHistory(SessionUser.requireId(request), shopId, orderId));
     }
 
+    /** 当前店主读取本订单更正申请的状态。 */
+    @GetMapping("/merchant/shops/{shopId}/orders/{orderId}/shipment/corrections/{correctionId}")
+    public Result<ShipmentCorrectionRequestVO> merchantRequest(@PathVariable @Positive Long shopId,
+            @PathVariable @Positive Long orderId, @PathVariable @Positive Long correctionId,
+            HttpServletRequest request) {
+        return Result.success(corrections.merchantRequest(SessionUser.requireId(request), shopId, orderId, correctionId));
+    }
+
     /** 管理员按状态和游标读取申请。 */
     @GetMapping("/admin/shipment-corrections")
     public Result<ShipmentCorrectionAdminPageVO> list(

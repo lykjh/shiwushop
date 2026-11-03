@@ -127,6 +127,16 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
         return history(orderId);
     }
 
+    /** 当前店主仅可查看本店本订单申请的状态。 */
+    @Override
+    public ShipmentCorrectionRequestVO merchantRequest(Long userId, Long shopId, Long orderId, Long correctionId) {
+        shops.requireOwned(userId, shopId, "店铺不存在");
+        ShipmentCorrection correction = corrections.find(correctionId);
+        if (correction == null || !shopId.equals(correction.getShopId()) || !orderId.equals(correction.getOrderId()))
+            throw new BusinessException(404, "更正申请不存在");
+        return new ShipmentCorrectionRequestVO(correction.getId(), correction.getStatus());
+    }
+
     /** 一致快照内返回版本与已批准历史，不包含内部审批备注。 */
     private ShipmentCorrectionHistoryPageVO history(Long orderId) {
         Shipment shipment = shipments.selectByOrderId(orderId);

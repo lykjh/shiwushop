@@ -12,5 +12,6 @@ public interface ShipmentCorrectionService {
     ShipmentCorrectionRequestVO decide(Long userId, Long id, ShipmentCorrectionDecisionDTO body);
     ShipmentCorrectionHistoryPageVO buyerHistory(Long userId, Long orderId);
     ShipmentCorrectionHistoryPageVO merchantHistory(Long userId, Long shopId, Long orderId);
+    ShipmentCorrectionRequestVO merchantRequest(Long userId, Long shopId, Long orderId, Long correctionId);
     ShipmentCorrectionAdminPageVO adminList(ShipmentCorrectionStatus status, Long afterId, int size);
 }
