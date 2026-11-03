@@ -1,0 +1,30 @@
+ALTER TABLE shipments ADD COLUMN correction_version INT NOT NULL DEFAULT 0;
+
+CREATE TABLE shipment_corrections (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    shipment_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL,
+    shop_id BIGINT NOT NULL,
+    original_version INT NOT NULL,
+    old_carrier_name VARCHAR(80) NOT NULL,
+    old_tracking_no VARCHAR(100) NOT NULL,
+    new_carrier_name VARCHAR(80) NOT NULL,
+    new_tracking_no VARCHAR(100) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    requested_by BIGINT NOT NULL,
+    requested_at DATETIME NOT NULL,
+    status VARCHAR(10) NOT NULL,
+    decided_by BIGINT NULL,
+    decided_at DATETIME NULL,
+    remark VARCHAR(500) NULL,
+    pending_shipment_id BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'PENDING' THEN shipment_id ELSE NULL END) STORED,
+    UNIQUE KEY uk_shipment_corrections_pending (pending_shipment_id),
+    KEY idx_shipment_corrections_status_id (status, id),
+    KEY idx_shipment_corrections_order_id (order_id, id),
+    CONSTRAINT fk_shipment_corrections_shipment FOREIGN KEY (shipment_id) REFERENCES shipments(id),
+    CONSTRAINT fk_shipment_corrections_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_shipment_corrections_shop FOREIGN KEY (shop_id) REFERENCES shops(id),
+    CONSTRAINT fk_shipment_corrections_requester FOREIGN KEY (requested_by) REFERENCES users(id),
+    CONSTRAINT fk_shipment_corrections_decider FOREIGN KEY (decided_by) REFERENCES users(id),
+    CONSTRAINT ck_shipment_corrections_status CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

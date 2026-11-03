@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.List;
 import java.util.Collection;
@@ -33,6 +34,15 @@ import java.util.Collection;
 public class ShopServiceImpl implements ShopService {
     @Override
     public Shop findById(Long shopId) { return shopMapper.selectById(shopId); }
+
+    /** 由调用方事务持有店铺行锁，直到相关业务完成。 */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Shop lockById(Long shopId) {
+        Shop shop = shopMapper.selectForUpdate(shopId);
+        if (shop == null) throw new BusinessException(404, "店铺不存在");
+        return shop;
+    }
 
     @Override
     public List<Shop> findByIds(Collection<Long> shopIds) { return shopMapper.selectBatchIds(shopIds); }
