@@ -1,4 +1,5 @@
-package com.shiwushop.payment.service.impl;
+package com.shiwushop.unit.payment;
+import com.shiwushop.payment.service.impl.BillFileDownloader;
 import com.shiwushop.common.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -16,15 +17,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class BillFileDownloaderTests {
- @Test void rejectsUntrustedAddressWithoutNetwork() {
-  HttpClient client=mock(HttpClient.class); var downloader=new BillFileDownloader(client);
+ @Test void rejectsUntrustedAddressWithoutNetwork() throws Exception {
+  HttpClient client=mock(HttpClient.class); var downloader=downloader(client,Duration.ofSeconds(15));
   for(String url : List.of("http://dwbillcenter.alipay.com/x","https://dwbillcenter.alipay.com.evil.test/x",
        "https://user@dwbillcenter.alipay.com/x","https://dwbillcenter.alipay.com:444/x","https://127.0.0.1/x"))
    assertEquals(503,assertThrows(BusinessException.class,()->downloader.download(url)).getCode());
   verifyNoInteractions(client);
  }
  @Test void acceptsBoundedBodyAndRejectsRedirectOversizeAndErrorImages() throws Exception {
-  HttpClient client=mock(HttpClient.class); var downloader=new BillFileDownloader(client);
+  HttpClient client=mock(HttpClient.class); var downloader=downloader(client,Duration.ofSeconds(15));
   ReflectionTestUtils.setField(downloader,"maxBytes",4);
   @SuppressWarnings("unchecked") HttpResponse<byte[]> response=mock(HttpResponse.class);
   when(client.sendAsync(any(),any(HttpResponse.BodyHandler.class))).thenReturn(CompletableFuture.completedFuture(response));
@@ -61,7 +62,7 @@ class BillFileDownloaderTests {
            .GET().build();
    return delegate.sendAsync(local,call.getArgument(1));
   });
-  var downloader=new BillFileDownloader(client,Duration.ofSeconds(2));
+  var downloader=downloader(client,Duration.ofSeconds(2));
   try (var worker=Executors.newSingleThreadExecutor()) {
    var result=worker.submit(() -> assertThrows(BusinessException.class,
            () -> downloader.download("https://dwbillcenter.alipay.com/file")));
@@ -98,7 +99,7 @@ class BillFileDownloaderTests {
    return delegate.sendAsync(local,call.getArgument(1));
   });
   try (var worker=Executors.newSingleThreadExecutor()) {
-   var downloader=new BillFileDownloader(client,Duration.ofSeconds(2));
+   var downloader=downloader(client,Duration.ofSeconds(2));
    var result=worker.submit(() -> assertThrows(BusinessException.class,()->downloader.download("https://dwbillcenter.alipay.com/slow")));
    assertTrue(started.await(5,TimeUnit.SECONDS));
    assertEquals(503,result.get(4,TimeUnit.SECONDS).getCode());
@@ -109,4 +110,8 @@ class BillFileDownloaderTests {
   } finally { release.countDown(); server.stop(0); delegate.close(); }
  }
 
+ private static BillFileDownloader downloader(HttpClient client,Duration timeout) throws Exception {
+  return org.springframework.beans.BeanUtils.instantiateClass(
+      org.springframework.util.ReflectionUtils.accessibleConstructor(BillFileDownloader.class,HttpClient.class,Duration.class),client,timeout);
+ }
 }

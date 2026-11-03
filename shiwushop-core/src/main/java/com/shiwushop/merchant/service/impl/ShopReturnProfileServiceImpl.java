@@ -7,7 +7,7 @@ import com.shiwushop.merchant.dto.shop.ShopReturnProfileSaveDTO;
 import com.shiwushop.merchant.entity.shop.ShopReturnProfile;
 import com.shiwushop.merchant.mapper.shop.ShopReturnProfileMapper;
 import com.shiwushop.merchant.service.MerchantShopAccess;
-import com.shiwushop.merchant.service.ReturnDestinationSnapshot;
+import com.shiwushop.merchant.vo.shop.ReturnDestinationSnapshot;
 import com.shiwushop.merchant.service.ShopReturnProfileService;
 import com.shiwushop.merchant.vo.shop.ReturnDestinationVO;
 import com.shiwushop.merchant.vo.shop.ShopReturnProfileVO;

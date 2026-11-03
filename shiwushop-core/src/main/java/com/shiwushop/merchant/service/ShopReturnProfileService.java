@@ -1,5 +1,7 @@
 package com.shiwushop.merchant.service;
 
+import com.shiwushop.merchant.vo.shop.ReturnDestinationSnapshot;
+
 import com.shiwushop.merchant.dto.shop.ShopReturnProfileSaveDTO;
 import com.shiwushop.merchant.vo.shop.ReturnDestinationVO;
 import com.shiwushop.merchant.vo.shop.ShopReturnProfileVO;

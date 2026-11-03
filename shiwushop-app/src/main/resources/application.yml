@@ -125,10 +125,20 @@ shop:
     scan-budget-ms: ${SHOP_SHIPMENT_SCAN_BUDGET_MS:20000}
   privacy:
     key-v1-base64: ${SHOP_PRIVACY_KEY_V1_BASE64:}
+  aftersale:
+    # 期限在阶段进入时登记；调整期限时同步提升规则版本，已有待办保留原截止时间。
+    timeout-review-hours: 48
+    timeout-return-days: 7
+    timeout-receipt-days: 7
+    timeout-refund-hours: 24
+    timeout-rule-version: 1
+    timeout-scan-delay-ms: 60000
   payment:
     expiry-scan-delay-ms: 30000
     refund-scan-delay-ms: 60000
     scan-budget-ms: ${SHOP_PAYMENT_SCAN_BUDGET_MS:20000}
+    bill-root: ./local-data/payment-bills
+    bill-max-bytes: 10485760
   alipay:
     connect-timeout-ms: ${SHOP_ALIPAY_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${SHOP_ALIPAY_READ_TIMEOUT_MS:5000}

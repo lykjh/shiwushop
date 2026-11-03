@@ -15,7 +15,7 @@ import com.shiwushop.aftersale.entity.AfterSaleCase;
 import com.shiwushop.aftersale.entity.AfterSaleItem;
 import com.shiwushop.aftersale.entity.ReturnDestinationRecord;
 import com.shiwushop.aftersale.mapper.ReturnDestinationMapper;
-import com.shiwushop.merchant.service.ReturnDestinationSnapshot;
+import com.shiwushop.merchant.vo.shop.ReturnDestinationSnapshot;
 import com.shiwushop.merchant.service.ShopReturnProfileService;
 import com.shiwushop.trade.entity.order.Order;
 import com.shiwushop.trade.entity.order.OrderItem;
