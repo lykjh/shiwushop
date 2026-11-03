@@ -37,6 +37,11 @@
           AND (expiry_claim_until IS NULL OR expiry_claim_until &lt;= NOW(3))
         ORDER BY pay_expires_at, id LIMIT #{limit}
     </select>
+    <select id="selectCancellationIds" resultType="long">
+        SELECT id FROM orders WHERE status = 'UNPAID' AND cancel_queue_at IS NOT NULL
+          AND (expiry_claim_until IS NULL OR expiry_claim_until &lt;= NOW(3))
+        ORDER BY cancel_queue_at, id LIMIT #{limit}
+    </select>
     <select id="oldestExpiredSeconds" resultType="long">
         SELECT TIMESTAMPDIFF(SECOND, MIN(pay_expires_at), #{now}) FROM orders
         WHERE status = 'UNPAID' AND pay_expires_at IS NOT NULL AND pay_expires_at &lt;= #{now}

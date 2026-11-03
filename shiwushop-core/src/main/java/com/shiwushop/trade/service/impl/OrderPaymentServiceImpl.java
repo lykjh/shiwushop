@@ -32,6 +32,10 @@ import java.time.LocalDateTime;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +50,7 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     private static final Duration QR_CLAIM_LEASE = Duration.ofMinutes(2);
     // Longer than a single query/close/cancel sequence with configured SDK timeouts.
     private static final Duration EXPIRY_CLAIM_LEASE = Duration.ofMinutes(2);
+    private final AtomicBoolean cancellationFirst = new AtomicBoolean();
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final PaymentAttemptMapper paymentMapper;
@@ -56,6 +61,31 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     private final Clock businessClock;
     @Value("${shop.payment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
+
+    /** 保存取消意图后释放订单锁，再领取租约核对渠道。 */
+    @Override
+    public String cancelOrder(Long userId, Long orderId) {
+        accountAccess.checkActive(userId);
+        String state = new TransactionTemplate(transactionManager).execute(ignored -> {
+            Order order = orderMapper.selectForUpdate(orderId);
+            if (order == null || !userId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
+            if (order.getStatus() == OrderStatus.CANCELLED) return "CANCELLED";
+            if (order.getStatus() != OrderStatus.UNPAID) throw new BusinessException(409, "订单不可取消");
+            orderMapper.requestCancellation(orderId, LocalDateTime.now(businessClock));
+            return "CANCEL_PENDING";
+        });
+        if ("CANCELLED".equals(state)) return state;
+        try {
+            expireOrder(orderId);
+        } catch (BusinessException e) {
+            if (e.getCode() != 503) throw e;
+            log.warn("订单 {} 取消核对暂不可用，将在下次扫描重试", orderId);
+        }
+        Order order = ownedOrder(userId, orderId);
+        if (order.getStatus() == OrderStatus.CANCELLED) return "CANCELLED";
+        if (order.getStatus() != OrderStatus.UNPAID) throw new BusinessException(409, "订单不可取消");
+        return "CANCEL_PENDING";
+    }
 
     /** 锁定买家订单，复用待支付尝试或创建新尝试，并返回收银页地址。 */
     @Override
@@ -239,7 +269,18 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         long started = System.nanoTime();
         int processed = 0;
         int failed = 0;
-        for (Long orderId : orderMapper.selectExpiredIds(LocalDateTime.now(businessClock), 50)) {
+        List<Long> expired = orderMapper.selectExpiredIds(LocalDateTime.now(businessClock), 25);
+        List<Long> requested = orderMapper.selectCancellationIds(25);
+        List<Long> candidates = new ArrayList<>(50);
+        Set<Long> seen = new HashSet<>();
+        boolean first = cancellationFirst.getAndSet(!cancellationFirst.get());
+        for (int i = 0; i < Math.max(expired.size(), requested.size()); i++) {
+            List<Long> left = first ? requested : expired;
+            List<Long> right = first ? expired : requested;
+            if (i < left.size() && seen.add(left.get(i))) candidates.add(left.get(i));
+            if (i < right.size() && seen.add(right.get(i))) candidates.add(right.get(i));
+        }
+        for (Long orderId : candidates) {
             // Finish the current order, but leave new work for the next scan after the budget.
             if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis) break;
             processed++;
@@ -272,7 +313,7 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     private void expireClaimedOrder(Long orderId, String token) {
         // 到期不等于渠道已关闭；未知支付结果必须留待下次扫描，不能直接归还库存。
         Order order = orderMapper.selectById(orderId);
-        if (!isExpiredUnpaid(order)) return;
+        if (!isCancellationDue(order)) return;
         PaymentAttempt attempt = paymentMapper.selectLatest(orderId);
         if (attempt == null || attempt.getStatus() == PaymentAttemptStatus.CLOSED) {
             cancel(orderId, attempt, false, token);
@@ -295,13 +336,11 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         } else if ("WAIT_BUYER_PAY".equals(result.status())
                 && gateway.close(attempt.getOutTradeNo())) {
             cancel(orderId, attempt, true, token);
-        } else if (TRADE_NOT_FOUND.equals(result.status())) {
-            AlipayGateway.CancelResult cancelled = gateway.cancel(attempt.getOutTradeNo());
-            if (cancelled == AlipayGateway.CancelResult.CLOSED
-                    || (cancelled == AlipayGateway.CancelResult.NO_TRADE
-                    && Boolean.TRUE.equals(attempt.getQrTimeoutGuaranteed()))) {
-                cancel(orderId, attempt, true, token);
-            }
+        } else if (TRADE_NOT_FOUND.equals(result.status())
+                && isExpiredUnpaid(order) && Boolean.TRUE.equals(attempt.getQrTimeoutGuaranteed())
+                && (attempt.getQrClaimToken() == null || attempt.getQrExpiresAt() != null)
+                && (attempt.getQrExpiresAt() == null || !LocalDateTime.now(businessClock).isBefore(attempt.getQrExpiresAt()))) {
+            cancel(orderId, attempt, true, token);
         }
     }
 
@@ -379,11 +418,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
                                      String expiryToken) {
         Order order = orderMapper.selectForUpdate(orderId);
         if (orderMapper.ownsExpiry(orderId, expiryToken) != 1) return;
-        if (!isExpiredUnpaid(order)) return;
+        if (!isCancellationDue(order)) return;
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(orderId);
-        if (latest != null && latest.getStatus() == PaymentAttemptStatus.PENDING
-                && latest.getQrExpiresAt() != null
-                && LocalDateTime.now(businessClock).isBefore(latest.getQrExpiresAt().plusMinutes(1))) return;
         if (!matchesExpectedAttempt(latest, expected) || !closeForCancellation(latest, confirmedClosed)) return;
         if (orderMapper.markCancelled(orderId) != 1) return;
         restoreStock(orderId);
@@ -423,8 +459,14 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     /** 仅未支付且仍在支付截止时间内的订单允许发起支付。 */
     private boolean isPayable(Order order) {
-        return order != null && order.getStatus() == OrderStatus.UNPAID && order.getPayExpiresAt() != null
-                && LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
+        return order != null && order.getStatus() == OrderStatus.UNPAID && order.getCancelRequestedAt() == null
+                && order.getPayExpiresAt() != null && LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
+    }
+
+    /** 取消请求和自然到期共享持久化租约。 */
+    private boolean isCancellationDue(Order order) {
+        return order != null && order.getStatus() == OrderStatus.UNPAID
+                && (order.getCancelRequestedAt() != null || isExpiredUnpaid(order));
     }
 
     /** 判断订单是否未支付且已到支付截止时间。 */

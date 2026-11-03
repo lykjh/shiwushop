@@ -37,15 +37,19 @@ public interface OrderMapper extends BaseMapper<Order> {
     @Update("UPDATE orders SET status = 'CANCELLED' WHERE id = #{orderId} AND status = 'UNPAID'")
     int markCancelled(@Param("orderId") Long orderId);
 
+    @Update("UPDATE orders SET cancel_queue_at=COALESCE(cancel_queue_at, #{now}), cancel_requested_at=COALESCE(cancel_requested_at, #{now}) WHERE id=#{orderId} AND status='UNPAID'")
+    int requestCancellation(@Param("orderId") Long orderId, @Param("now") LocalDateTime now);
+
     List<Long> selectExpiredIds(@Param("now") java.time.LocalDateTime now,
                                 @Param("limit") int limit);
+    List<Long> selectCancellationIds(@Param("limit") int limit);
     Long oldestExpiredSeconds(@Param("now") java.time.LocalDateTime now);
 
     // Claim housekeeping does not change the order's business update time.
     @Update("""
             UPDATE orders SET expiry_claim_token=#{token}, updated_at=updated_at,
                               expiry_claim_until=DATE_ADD(NOW(3), INTERVAL #{leaseSeconds} SECOND)
-            WHERE id=#{orderId} AND status='UNPAID' AND pay_expires_at <= #{now}
+            WHERE id=#{orderId} AND status='UNPAID' AND (pay_expires_at <= #{now} OR cancel_requested_at IS NOT NULL)
               AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3))
             """)
     int claimExpiry(@Param("orderId") Long orderId, @Param("token") String token,
@@ -59,6 +63,7 @@ public interface OrderMapper extends BaseMapper<Order> {
 
     @Update("""
             UPDATE orders SET expiry_claim_token=NULL, expiry_claim_until=NULL,
+                cancel_queue_at=CASE WHEN status='UNPAID' AND cancel_requested_at IS NOT NULL THEN NOW(3) ELSE cancel_queue_at END,
                 updated_at=updated_at
             WHERE id=#{orderId} AND expiry_claim_token=#{token}
             """)

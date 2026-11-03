@@ -12,6 +12,7 @@ import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.common.privacy.PrivacyCipher;
 import com.shiwushop.trade.entity.order.Order;
+import com.shiwushop.trade.entity.status.OrderStatus;
 import com.shiwushop.merchant.entity.shop.Shop;
 import com.shiwushop.trade.mapper.order.OrderMapper;
 import com.shiwushop.trade.mapper.order.OrderItemMapper;
@@ -112,6 +113,7 @@ public class OrderServiceImpl implements OrderService {
         String detail = privacyCipher.decrypt(buyerId, "orders:detail", version, order.getDetailCiphertext());
         return new OrderDetailVO(order.getId(), order.getShopId(),
                 shop == null ? null : shop.getName(), order.getStatus().name(), order.getTotalAmount(),
+                order.getStatus() == OrderStatus.UNPAID && order.getCancelRequestedAt() != null,
                 new OrderDetailVO.AddressSnapshot(consignee, phone,
                         order.getProvince() + order.getCity() + order.getDistrict() + detail),
                 itemsForOrder(order.getId()));

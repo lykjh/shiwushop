@@ -7,6 +7,8 @@ import com.shiwushop.trade.vo.payment.PaymentCheckoutVO;
 import java.util.Map;
 
 public interface OrderPaymentService {
+    /** 请求取消本人订单，返回 CANCELLED 或 CANCEL_PENDING。 */
+    String cancelOrder(Long userId, Long orderId);
     /** 为本人订单创建或复用支付尝试并返回站内收银台地址。 */
     PaymentStartVO start(Long userId, Long orderId);
     /** 按商户订单号准备有效二维码及付款展示数据，页面渲染交给 Web 入口。 */

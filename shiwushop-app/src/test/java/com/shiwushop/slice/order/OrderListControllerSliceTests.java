@@ -67,11 +67,14 @@ class OrderListControllerSliceTests {
     void merchantDetailKeepsTheExistingShopScopedRoute() throws Exception {
         session.setAttribute("userId", 7L);
         when(orders.detailMerchant(7L, 9L, 11L))
-                .thenReturn(new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, null, List.of()));
+                .thenReturn(new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, false, null, List.of()));
 
 
         mvc.perform(get("/merchant/shops/9/orders/11").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(11));
+                .andExpect(jsonPath("$.data.id").value(11))
+                .andExpect(jsonPath("$.data.status").value("UNPAID"))
+                .andExpect(jsonPath("$.data.shopName").value("示例店铺"))
+                .andExpect(jsonPath("$.data.cancelPending").value(false));
     }
 }

@@ -101,6 +101,171 @@ class PaymentFlowTests {
     }
 
     @Test
+    void cancellationWithoutAttemptReturnsStockOnceAndIsIdempotent() throws Exception {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        f.sku().setStock(1);
+        skuMapper.updateById(f.sku());
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).session(session(f.buyer())))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("CANCELLED"));
+        }
+        assertEquals(3, skuMapper.selectById(f.sku().getId()).getStock());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+    }
+
+    @Test
+    void cancellationNotFoundBeforeDeadlineRemainsPendingAndBlocksPayment() throws Exception {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        var attempt = pendingAttempt(f, true);
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
+        mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).session(session(f.buyer())))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.status").value("CANCEL_PENDING"));
+        assertNotNull(orderMapper.selectById(f.order().getId()).getCancelRequestedAt());
+        mockMvc.perform(get("/orders/{id}", f.order().getId()).session(session(f.buyer())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("UNPAID"))
+                .andExpect(jsonPath("$.data.cancelPending").value(true));
+        assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
+        mockMvc.perform(post("/orders/{id}/payment", f.order().getId()).session(session(f.buyer())))
+                .andExpect(status().isConflict());
+        mockMvc.perform(get("/payments/checkout/{outTradeNo}", attempt.getOutTradeNo()))
+                .andExpect(status().isConflict());
+        when(gateway.query(any())).thenAnswer(call -> new AlipayGateway.TradeResult("NOT_FOUND", call.getArgument(0), null, null));
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("TRADE_CLOSED", attempt.getOutTradeNo(), null, new BigDecimal("20.00")));
+        paymentService.expireDueOrders();
+        assertEquals(OrderStatus.CANCELLED, orderMapper.selectById(f.order().getId()).getStatus());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void cancellationDuringQrGenerationKeepsStockUntilChannelClosed() throws Exception {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        paymentService.start(f.buyer().getId(), f.order().getId());
+        String trade = paymentMapper.selectLatest(f.order().getId()).getOutTradeNo();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        when(gateway.qrCode(any(), any(), any())).thenAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return new AlipayGateway.QrCode("https://qr.alipay.com/late", LocalDateTime.now(businessClock).plusMinutes(14));
+        });
+        when(gateway.query(trade)).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", trade, null, null));
+        var qr = CompletableFuture.supplyAsync(() -> {
+            try { paymentService.checkoutPage(trade); return 200; }
+            catch (BusinessException e) { return e.getCode(); }
+        });
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            assertEquals("CANCEL_PENDING", paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
+            assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+        } finally { release.countDown(); }
+        assertEquals(409, qr.get(5, TimeUnit.SECONDS));
+        assertNull(paymentMapper.selectByOutTradeNo(trade).getQrCode());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void cancellationGatewayWaitReleasesOrderLockAndSecondCancellationSharesLease() throws Exception {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        paymentService.start(f.buyer().getId(), f.order().getId());
+        String trade = paymentMapper.selectLatest(f.order().getId()).getOutTradeNo();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        when(gateway.query(trade)).thenAnswer(call -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return new AlipayGateway.TradeResult("WAIT_BUYER_PAY", trade, null, new BigDecimal("20.00"));
+        });
+        when(gateway.close(trade)).thenReturn(true);
+        var first = CompletableFuture.supplyAsync(() -> paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            assertEquals("CANCEL_PENDING", paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
+            paymentService.expireOrder(f.order().getId());
+        } finally { release.countDown(); }
+        assertEquals("CANCELLED", first.get(5, TimeUnit.SECONDS));
+        verify(gateway, times(1)).query(trade);
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void paidCallbackWinsWhileCancellationQueryIsBlocked() throws Exception {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        paymentService.start(f.buyer().getId(), f.order().getId());
+        String trade = paymentMapper.selectLatest(f.order().getId()).getOutTradeNo();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        when(gateway.query(trade)).thenAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return new AlipayGateway.TradeResult("WAIT_BUYER_PAY", trade, null, new BigDecimal("20.00"));
+        });
+        when(gateway.close(trade)).thenReturn(true);
+        when(gateway.verify(anyMap())).thenReturn(true);
+        var cancellation = CompletableFuture.supplyAsync(() -> {
+            try { paymentService.cancelOrder(f.buyer().getId(), f.order().getId()); return 200; }
+            catch (BusinessException e) { return e.getCode(); }
+        });
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            paymentService.notifyPaid(Map.of("out_trade_no", trade, "trade_no", "paid-" + f.order().getId(),
+                    "trade_status", "TRADE_SUCCESS", "total_amount", "20.00", "app_id", "sandbox-app", "seller_id", "sandbox-seller"));
+        } finally { release.countDown(); }
+        assertEquals(409, cancellation.get(5, TimeUnit.SECONDS));
+        assertEquals(OrderStatus.PAID, orderMapper.selectById(f.order().getId()).getStatus());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+    }
+
+    @Test
+    void cancellationQueryPaidAndGatewayTimeoutKeepCorrectState() {
+        Fixture paid = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        var attempt = pendingAttempt(paid, true);
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("TRADE_SUCCESS", attempt.getOutTradeNo(), "paid-" + paid.order().getId(), new BigDecimal("20.00")));
+        assertEquals(409, assertThrows(BusinessException.class, () -> paymentService.cancelOrder(paid.buyer().getId(), paid.order().getId())).getCode());
+        assertEquals(OrderStatus.PAID, orderMapper.selectById(paid.order().getId()).getStatus());
+        Fixture pending = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
+        var timedOut = pendingAttempt(pending, true);
+        when(gateway.query(timedOut.getOutTradeNo())).thenThrow(new BusinessException(503, "渠道暂不可用"));
+        assertEquals("CANCEL_PENDING", paymentService.cancelOrder(pending.buyer().getId(), pending.order().getId()));
+        assertEquals(OrderStatus.UNPAID, orderMapper.selectById(pending.order().getId()).getStatus());
+        assertNotNull(orderMapper.selectById(pending.order().getId()).getCancelRequestedAt());
+    }
+
+    @Test
+    void notFoundAfterDeadlineWithUnresolvedQrLeaseKeepsStock() {
+        Fixture f = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
+        var attempt = pendingAttempt(f, true);
+        attempt.setQrClaimToken("unfinished-qr");
+        attempt.setQrClaimExpiresAt(LocalDateTime.now(businessClock).minusMinutes(5));
+        paymentMapper.updateById(attempt);
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
+        paymentService.expireOrder(f.order().getId());
+        assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
+        assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(attempt.getId()).getStatus());
+    }
+
+    @Test
+    void cancellationQueueRotatesMoreThanTwoHundredWhileBothScansUseRangeIndexes() {
+        Fixture f = fixture(LocalDateTime.now(businessClock).plusDays(1));
+        String digits = "(SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
+        String columns = "user_id,shop_id,total_amount,status,pay_expires_at,consignee_ciphertext,phone_ciphertext,province,city,district,detail_ciphertext,shipping_key_version";
+        jdbc.update("INSERT INTO orders (" + columns + ") SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version FROM orders o CROSS JOIN " + digits + " a CROSS JOIN " + digits + " b CROSS JOIN " + digits + " c CROSS JOIN " + digits + " d WHERE o.id=?", f.order().getId());
+        jdbc.update("INSERT INTO orders (" + columns + ",cancel_requested_at,cancel_queue_at) SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version,'2001-01-01','2001-01-01' FROM orders o CROSS JOIN " + digits + " a CROSS JOIN " + digits + " b CROSS JOIN (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2) c WHERE o.id=? AND (c.n * 100 + b.n * 10 + a.n) < 210", f.order().getId());
+        jdbc.update("INSERT INTO payment_attempts (order_id,channel,out_trade_no,app_id,seller_id,amount,status) SELECT id,'ALIPAY_SANDBOX',CONCAT('fair-',id),'sandbox-app','sandbox-seller',20,'PENDING' FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'", f.buyer().getId());
+        when(gateway.configured()).thenReturn(false);
+        var expiryPlan = jdbc.queryForList("EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND pay_expires_at <= NOW() AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY pay_expires_at,id LIMIT 25");
+        var queuePlan = jdbc.queryForList("EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND cancel_queue_at IS NOT NULL AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY cancel_queue_at,id LIMIT 25");
+        System.out.println("W04 expiry EXPLAIN " + expiryPlan);
+        System.out.println("W04 cancel EXPLAIN " + queuePlan);
+        assertEquals("idx_orders_expiry_scan", expiryPlan.getFirst().get("key"));
+        assertEquals("idx_orders_cancel_queue", queuePlan.getFirst().get("key"));
+        assertEquals("range", expiryPlan.getFirst().get("type"));
+        assertEquals("range", queuePlan.getFirst().get("type"));
+        for (int i = 0; i < 9; i++) paymentService.expireDueOrders();
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'", Integer.class, f.buyer().getId()));
+        assertEquals(210, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_requested_at='2001-01-01'", Integer.class, f.buyer().getId()));
+    }
+
+    @Test
     void productionGatewayUsesProductionChannelAndPage() throws Exception {
         Fixture fixture = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         when(gateway.channel()).thenReturn("ALIPAY");
@@ -454,7 +619,6 @@ class PaymentFlowTests {
         com.shiwushop.trade.entity.payment.PaymentAttempt safe = pendingAttempt(guarded, true);
         when(gateway.query(safe.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", safe.getOutTradeNo(), null, null));
-        when(gateway.cancel(safe.getOutTradeNo())).thenReturn(AlipayGateway.CancelResult.NO_TRADE);
 
         paymentService.expireOrder(guarded.order().getId());
         paymentService.expireOrder(guarded.order().getId());
@@ -471,7 +635,6 @@ class PaymentFlowTests {
         com.shiwushop.trade.entity.payment.PaymentAttempt unsafe = pendingAttempt(legacy, false);
         when(gateway.query(unsafe.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", unsafe.getOutTradeNo(), null, null));
-        when(gateway.cancel(unsafe.getOutTradeNo())).thenReturn(AlipayGateway.CancelResult.NO_TRADE);
         paymentService.expireOrder(legacy.order().getId());
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(legacy.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(unsafe.getId()).getStatus());
@@ -484,7 +647,6 @@ class PaymentFlowTests {
         paymentMapper.updateById(qrStillValid);
         when(gateway.query(qrStillValid.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", qrStillValid.getOutTradeNo(), null, null));
-        when(gateway.cancel(qrStillValid.getOutTradeNo())).thenReturn(AlipayGateway.CancelResult.NO_TRADE);
         paymentService.expireOrder(awaitingQr.order().getId());
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(awaitingQr.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(qrStillValid.getId()).getStatus());
@@ -512,9 +674,10 @@ class PaymentFlowTests {
         paymentService.expireOrder(fixture.order().getId());
         assertPendingWithoutReturn(fixture, attempt);
 
+        attempt.setQrTimeoutGuaranteed(false);
+        paymentMapper.updateById(attempt);
         doReturn(new AlipayGateway.TradeResult(
                 "NOT_FOUND", outTradeNo, null, null)).when(gateway).query(outTradeNo);
-        when(gateway.cancel(outTradeNo)).thenReturn(AlipayGateway.CancelResult.UNRESOLVED);
         paymentService.expireOrder(fixture.order().getId());
         assertPendingWithoutReturn(fixture, attempt);
 

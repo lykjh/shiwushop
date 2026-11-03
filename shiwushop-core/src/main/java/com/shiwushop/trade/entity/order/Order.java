@@ -37,6 +37,7 @@ public class Order {
     private Integer shippingKeyVersion;
     private OrderStatus status;
     private LocalDateTime payExpiresAt;
+    private LocalDateTime cancelRequestedAt;
     private LocalDateTime paidAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
