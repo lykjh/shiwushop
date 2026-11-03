@@ -10,7 +10,7 @@ import java.time.Clock;
 import java.time.ZoneId;
 
 @MapperScan({"com.shiwushop.user.mapper", "com.shiwushop.product.mapper", "com.shiwushop.merchant.mapper",
-        "com.shiwushop.trade.mapper", "com.shiwushop.aftersale.mapper",
+        "com.shiwushop.trade.mapper", "com.shiwushop.aftersale.mapper", "com.shiwushop.payment.mapper",
         "com.shiwushop.common.media.mapper", "com.shiwushop.common.outbox"})
 @SpringBootApplication
 @EnableScheduling
