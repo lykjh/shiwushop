@@ -34,6 +34,15 @@
                WHERE sale.order_id = shipment.order_id) &lt; order_head.total_amount
         ORDER BY shipment.auto_confirm_at, shipment.id LIMIT 1
     </select>
+    <select id="dueCount" resultType="long">
+        SELECT COUNT(*) FROM shipments shipment
+        JOIN orders order_head ON order_head.id = shipment.order_id
+        WHERE shipment.status = 'SHIPPED' AND shipment.auto_confirm_at &lt;= #{now}
+          AND (SELECT COALESCE(SUM(attempt.amount), 0)
+               FROM after_sale_cases sale
+               JOIN refund_attempts attempt ON attempt.case_id = sale.id AND attempt.status = 'SUCCESS'
+               WHERE sale.order_id = shipment.order_id) &lt; order_head.total_amount
+    </select>
 
     <select id="refundedAmount" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(attempt.amount), 0)

@@ -1,0 +1,99 @@
+name: shiwushop-rocket-20261103
+services:
+  rabbit-fault:
+    profiles: [fault]
+    image: rabbitmq:4.4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: rocket-test
+      RABBITMQ_DEFAULT_PASS: rocket-test
+    ports:
+      - "127.0.0.1:25672:5672"
+    volumes:
+      - rabbit-fault-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  init-permissions:
+    image: mqredis-rocketmq:5.5.1
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command: ["chown 3000:3000 /data/store /data/logs"]
+    volumes:
+      - broker-store:/data/store
+      - broker-logs:/data/logs
+  namesrv:
+    image: mqredis-rocketmq:5.5.1
+    command: ["sh", "/opt/rocketmq/bin/mqnamesrv"]
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx256m -Xmn64m"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/9876"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  broker:
+    image: mqredis-rocketmq:5.5.1
+    command: ["sh", "/opt/rocketmq/bin/mqbroker", "-n", "namesrv:9876", "-c", "/etc/rocketmq/broker.conf"]
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -Xmn128m -XX:MaxDirectMemorySize=1g"
+    volumes:
+      - ./broker.conf:/etc/rocketmq/broker.conf:ro
+      - broker-store:/home/rocketmq/store
+      - broker-logs:/home/rocketmq/logs
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/10911"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  proxy:
+    image: mqredis-rocketmq:5.5.1
+    restart: on-failure:3
+    command: ["sh", "/opt/rocketmq/bin/mqproxy", "-n", "namesrv:9876", "-pc", "/etc/rocketmq/proxy.json"]
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx256m -Xmn64m -XX:MaxDirectMemorySize=128m"
+    ports:
+      - "127.0.0.1:28081:28081"
+    volumes:
+      - ./proxy.json:/etc/rocketmq/proxy.json:ro
+    depends_on:
+      broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/28081"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  mysql:
+    image: mysql:8.0
+    command: ["--default-time-zone=+08:00"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rocket-test-root
+      MYSQL_DATABASE: shiwushop_rocket
+      MYSQL_USER: shiwushop
+      MYSQL_PASSWORD: test-shiwushop
+    ports:
+      - "127.0.0.1:23306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./test-init.sql:/docker-entrypoint-initdb.d/rocket-test.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -procket-test-root --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:26379:6379"
+volumes:
+  rabbit-fault-data:
+  broker-store:
+  broker-logs:
+  mysql-data:

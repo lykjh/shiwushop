@@ -40,6 +40,8 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 
 logging:
+  # noshade SDK 自带 logback.xml；显式使用 Boot 原配置，保留应用日志路径/滚动/MDC。
+  config: classpath:logback-spring.xml
   file:
     name: ${SHOP_LOG_FILE:./logs/shiwushop.log}
   pattern:
@@ -121,6 +123,10 @@ shop:
       ip-ua-failure-ratio: 0.5
   shipment:
     rabbit-enabled: ${SHOP_SHIPMENT_RABBIT_ENABLED:false}
+    rabbit-publisher-enabled: ${SHOP_SHIPMENT_RABBIT_PUBLISHER_ENABLED:true}
+    rocket-enabled: ${SHOP_SHIPMENT_ROCKET_ENABLED:false}
+    rocket-publisher-enabled: ${SHOP_SHIPMENT_ROCKET_PUBLISHER_ENABLED:true}
+    rocket-endpoints: ${SHOP_SHIPMENT_ROCKET_ENDPOINTS:}
     scan-delay-ms: 30000
     scan-budget-ms: ${SHOP_SHIPMENT_SCAN_BUDGET_MS:20000}
   privacy:

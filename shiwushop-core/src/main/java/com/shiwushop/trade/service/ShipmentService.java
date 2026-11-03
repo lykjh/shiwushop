@@ -13,8 +13,8 @@ public interface ShipmentService {
     ShipmentVO buyerDetail(Long userId, Long orderId);
     /** 买家确认本人订单收货。 */
     ShipmentVO confirmByBuyer(Long userId, Long orderId);
-    /** 后台任务对一条到期物流执行自动确认。 */
-    void confirmDue(Long shipmentId);
+    /** 自动确认到期物流；false 仅表示仍需等待原截止，终态或确认完成返回 true。 */
+    boolean confirmDue(Long shipmentId);
     /** 查询到达自动确认时间的物流 ID，供后台任务逐条处理。 */
     List<Long> dueShipmentIds();
 }

@@ -7,13 +7,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface OutboxEventMapper {
-    int insertShipmentAutoConfirm(@Param("shipmentId") Long shipmentId, @Param("now") LocalDateTime now);
+    int insertShipmentAutoConfirm(@Param("shipmentId") Long shipmentId, @Param("nextAttemptAt") LocalDateTime nextAttemptAt);
     int insertSearchProductRefresh(@Param("productId") Long productId);
     int insertSearchShopRefresh(@Param("shopId") Long shopId);
     int insertSearchBrandRefresh(@Param("brandId") Long brandId);
     int insertSearchCategoryRefresh(@Param("categoryId") Long categoryId);
     List<ShipmentConfirmEvent> selectPendingShipmentEvents(@Param("now") LocalDateTime now, @Param("limit") int limit);
     Long oldestShipmentPendingSeconds(@Param("now") LocalDateTime now);
+    long futureShipmentCount(@Param("now") LocalDateTime now);
+    long eligibleShipmentCount(@Param("now") LocalDateTime now);
+    int deferShipmentEvent(@Param("eventId") Long eventId, @Param("token") String token,
+                           @Param("nextAttemptAt") LocalDateTime nextAttemptAt);
     ShipmentConfirmEvent selectShipmentEvent(@Param("eventId") Long eventId);
     int claimShipmentEvent(@Param("eventId") Long eventId, @Param("token") String token,
                            @Param("now") LocalDateTime now, @Param("until") LocalDateTime until);

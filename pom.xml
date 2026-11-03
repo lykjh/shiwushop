@@ -24,6 +24,10 @@
         <jackson-bom.version>3.1.8</jackson-bom.version>
         <rabbit-amqp-client.version>5.33.1</rabbit-amqp-client.version>
         <mysql.version>9.6.0</mysql.version>
+        <!-- Rocket 原生客户端使用未重定位依赖；修复 tracestate 解析公告 GHSA-ccrj-gw8r-854m。 -->
+        <opentelemetry.version>1.67.0</opentelemetry.version>
+        <!-- 1.85.1 的 shaded Netty 4.2.17 修复本次查出的 4.2.15 公告。 -->
+        <grpc-java.version>1.85.1</grpc-java.version>
     </properties>
     <!-- 只统一版本；各子模块按真实使用声明依赖，避免核心被动引入 Web 和渠道 SDK。 -->
     <dependencyManagement>

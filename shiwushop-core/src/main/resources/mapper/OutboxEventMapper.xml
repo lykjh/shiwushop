@@ -5,7 +5,7 @@
         INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload,
                                    status, attempts, next_attempt_at)
         VALUES ('SHIPMENT_AUTO_CONFIRM', 'SHIPMENT', #{shipmentId},
-                JSON_OBJECT('shipmentId', #{shipmentId}), 'PENDING', 0, #{now})
+                JSON_OBJECT('shipmentId', #{shipmentId}), 'PENDING', 0, #{nextAttemptAt})
     </insert>
 
     <insert id="insertSearchProductRefresh">
@@ -44,9 +44,24 @@
         ORDER BY id LIMIT #{limit}
     </select>
     <select id="oldestShipmentPendingSeconds" resultType="long">
-        SELECT TIMESTAMPDIFF(SECOND, MIN(created_at), #{now}) FROM outbox_events
-        WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING'
+        SELECT TIMESTAMPDIFF(SECOND, MIN(next_attempt_at), #{now}) FROM outbox_events
+        WHERE event_type = 'SHIPMENT_AUTO_CONFIRM' AND status = 'PENDING' AND next_attempt_at &lt;= #{now}
     </select>
+    <select id="futureShipmentCount" resultType="long">
+        SELECT COUNT(*) FROM outbox_events event
+        JOIN shipments shipment ON shipment.id = event.aggregate_id
+        WHERE event.event_type = 'SHIPMENT_AUTO_CONFIRM' AND event.status = 'PENDING'
+          AND shipment.auto_confirm_at &gt; DATE_ADD(#{now}, INTERVAL 23 HOUR)
+    </select>
+    <select id="eligibleShipmentCount" resultType="long">
+        SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SHIPMENT_AUTO_CONFIRM'
+          AND status = 'PENDING' AND next_attempt_at &lt;= #{now}
+    </select>
+    <update id="deferShipmentEvent">
+        UPDATE outbox_events SET next_attempt_at = #{nextAttemptAt}, claim_token = NULL, claim_until = NULL
+        WHERE id = #{eventId} AND event_type = 'SHIPMENT_AUTO_CONFIRM'
+          AND status = 'PENDING' AND claim_token = #{token}
+    </update>
 
     <select id="selectShipmentEvent" resultType="com.shiwushop.common.outbox.OutboxEventMapper$ShipmentConfirmEvent">
         SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events

@@ -55,6 +55,7 @@ class ShipmentRabbitLiveTests {
         jdbc.update("UPDATE shipments SET auto_confirm_at=? WHERE id=?", LocalDateTime.now().plusSeconds(3), shipmentId);
         Long eventId = jdbc.queryForObject("SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Long.class, shipmentId);
+        jdbc.update("UPDATE outbox_events SET next_attempt_at=NOW() WHERE id=?", eventId);
         long publishDeadline = System.nanoTime() + 10_000_000_000L;
         String publishStatus = "PENDING";
         while (System.nanoTime() < publishDeadline && !"PUBLISHED".equals(publishStatus)) {
@@ -241,6 +242,7 @@ class ShipmentRabbitLiveTests {
         jdbc.update("UPDATE shipments SET auto_confirm_at=? WHERE id=?", LocalDateTime.now().plusSeconds(3), shipmentId);
         Long eventId = jdbc.queryForObject("SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Long.class, shipmentId);
+        jdbc.update("UPDATE outbox_events SET next_attempt_at=NOW() WHERE id=?", eventId);
         boolean stopped = false;
         try {
             docker("stop", container);

@@ -1,11 +1,16 @@
 {
   "properties": [
     {
+      "name": "shop.shipment.rocket-preflight-verified",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Deployment entrypoint attestation after live timer and Broker/Proxy limit checks; never persist true in application configuration."
+    },
+    {
       "name": "shop.shipment.rabbit-enabled",
       "type": "java.lang.Boolean",
       "description": "Enable RabbitMQ shipment messaging."
     },
-
     {
       "name": "shop.sms.access-key-id",
       "type": "java.lang.String",
@@ -25,6 +30,31 @@
       "name": "shop.sms.template-code",
       "type": "java.lang.String",
       "description": "阿里云短信模板 Code."
+    },
+    {
+      "name": "shop.shipment.rocket-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable native RocketMQ gRPC shipment transport."
+    },
+    {
+      "name": "shop.shipment.rocket-endpoints",
+      "type": "java.lang.String",
+      "description": "Proxy gRPC DNS endpoints; this client combination is verified with DNS names, not NameServer."
+    },
+    {
+      "name": "shop.shipment.rabbit-publisher-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Stop legacy publishing while draining Rabbit deliveries."
+    },
+    {
+      "name": "shop.shipment.rocket-publisher-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Stop Rocket publishing while draining accepted deliveries."
+    },
+    {
+      "name": "shop.shipment.expiry-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Keep true outside isolated MQ trigger tests."
     }
   ]
 }
