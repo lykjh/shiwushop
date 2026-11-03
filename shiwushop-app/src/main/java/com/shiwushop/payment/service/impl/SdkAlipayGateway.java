@@ -1,6 +1,11 @@
 package com.shiwushop.payment.service.impl;
 
 import com.shiwushop.payment.service.AlipayGateway;
+import com.shiwushop.payment.service.BillDownloadGateway;
+import com.alipay.api.domain.AlipayDataDataserviceBillDownloadurlQueryModel;
+import com.alipay.api.request.AlipayDataDataserviceBillDownloadurlQueryRequest;
+import com.alipay.api.response.AlipayDataDataserviceBillDownloadurlQueryResponse;
+import java.time.LocalDate;
 import com.shiwushop.payment.service.RefundGateway;
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
@@ -42,7 +47,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
+public class SdkAlipayGateway implements AlipayGateway, RefundGateway, BillDownloadGateway {
     private static final String SANDBOX_GATEWAY = "https://openapi-sandbox.dl.alipaydev.com/gateway.do";
     private static final String SANDBOX_GATEWAY_ALT = "https://openapi.alipaydev.com/gateway.do";
     private static final String PRODUCTION_GATEWAY = "https://openapi.alipay.com/gateway.do";
@@ -101,6 +106,23 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway {
     @Override public String sellerId() { return sellerId; }
     @Override public String channel() {
         return PRODUCTION_GATEWAY.equals(gatewayUrl) ? "ALIPAY" : "ALIPAY_SANDBOX";
+    }
+
+    /** 从受信 SDK 请求业务账单下载地址，不记录签名链接。 */
+    @Override
+    public String billDownloadUrl(LocalDate date) {
+        try {
+            AlipayDataDataserviceBillDownloadurlQueryModel model = new AlipayDataDataserviceBillDownloadurlQueryModel();
+            model.setBillType("trade"); model.setBillDate(date.toString()); model.setSecure("true");
+            AlipayDataDataserviceBillDownloadurlQueryRequest request = new AlipayDataDataserviceBillDownloadurlQueryRequest();
+            request.setBizModel(model);
+            AlipayDataDataserviceBillDownloadurlQueryResponse response = client().execute(request);
+            if (!response.isSuccess() || response.getBillDownloadUrl() == null || response.getBillDownloadUrl().isBlank())
+                throw new BusinessException(503, "支付宝账单暂不可取得");
+            return response.getBillDownloadUrl();
+        } catch (AlipayApiException e) {
+            throw new BusinessException(503, "支付宝账单暂不可取得", e);
+        }
     }
 
     /** 以订单截止时间为上限向支付宝申请二维码，并预留一分钟防止过期竞争。 */
