@@ -43,4 +43,11 @@ class AfterSaleControllerTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "not-a-number", "9223372036854775808"})
+    void rejectsInvalidWithdrawalId(String id) throws Exception {
+        mvc.perform(post("/after-sales/" + id + "/withdraw").with(csrf()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
 }

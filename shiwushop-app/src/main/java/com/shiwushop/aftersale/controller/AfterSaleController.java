@@ -51,6 +51,12 @@ public class AfterSaleController {
         return Result.success(service.buyerDetail(SessionUser.requireId(request), caseId));
     }
 
+    /** 买家撤销符合条件的售后申请。 */
+    @PostMapping("/after-sales/{caseId}/withdraw")
+    public Result<AfterSaleVO> withdraw(@PathVariable @Positive Long caseId, HttpServletRequest request) {
+        return Result.success(service.withdraw(SessionUser.requireId(request), caseId));
+    }
+
     /** 买家提交退货物流信息，服务层检查售后当前是否允许退货。 */
     @PostMapping("/after-sales/{caseId}/return-shipment")
     public Result<AfterSaleVO> sendReturn(@PathVariable @Positive Long caseId, @Valid @RequestBody ReturnShipmentDTO body,

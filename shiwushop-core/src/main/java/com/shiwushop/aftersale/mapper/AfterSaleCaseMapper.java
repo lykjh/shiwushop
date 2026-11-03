@@ -30,5 +30,8 @@ public interface AfterSaleCaseMapper extends BaseMapper<AfterSaleCase> {
     int transition(@Param("id") Long id, @Param("expected") AfterSaleStatus expected,
                    @Param("next") AfterSaleStatus next);
 
+    @Update("UPDATE after_sale_cases SET status='CLOSED', finished_at=#{now} WHERE id=#{id} AND status=#{expected}")
+    int withdraw(@Param("id") Long id, @Param("expected") AfterSaleStatus expected, @Param("now") LocalDateTime now);
+
     int markRefunded(@Param("id") Long id, @Param("now") LocalDateTime now);
 }

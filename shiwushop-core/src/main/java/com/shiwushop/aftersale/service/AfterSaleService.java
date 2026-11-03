@@ -16,10 +16,14 @@ public interface AfterSaleService {
     AfterSaleSliceVO merchantList(Long merchantId, Long shopId, Long beforeId, String status, int size);
     /** 买家查看本人售后申请详情。 */
     AfterSaleVO buyerDetail(Long buyerId, Long caseId);
+    /** 管理员查看售后申请详情。 */
+    AfterSaleVO adminDetail(Long adminId, Long caseId);
     /** 商家查看所属店铺售后申请详情。 */
     AfterSaleVO merchantDetail(Long merchantId, Long shopId, Long caseId);
     /** 商家审核买家的售后申请。 */
     AfterSaleVO review(Long merchantId, Long shopId, Long caseId, AfterSaleReviewDTO request);
+    /** 买家撤销尚未寄回或发起退款的售后。 */
+    AfterSaleVO withdraw(Long buyerId, Long caseId);
     /** 买家登记退货物流信息。 */
     AfterSaleVO sendReturn(Long buyerId, Long caseId, ReturnShipmentDTO request);
     /** 商家登记退货签收情况。 */

@@ -13,6 +13,10 @@ import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.common.pagination.PageSpec;
 import com.shiwushop.aftersale.entity.AfterSaleCase;
 import com.shiwushop.aftersale.entity.AfterSaleItem;
+import com.shiwushop.aftersale.entity.ReturnDestinationRecord;
+import com.shiwushop.aftersale.mapper.ReturnDestinationMapper;
+import com.shiwushop.merchant.service.ReturnDestinationSnapshot;
+import com.shiwushop.merchant.service.ShopReturnProfileService;
 import com.shiwushop.trade.entity.order.Order;
 import com.shiwushop.trade.entity.order.OrderItem;
 import com.shiwushop.trade.entity.payment.PaymentAttempt;
@@ -60,6 +64,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private static final int APPLY_DAYS_AFTER_CONFIRM = 7;
     private static final Duration RECONCILE_CLAIM_LEASE = Duration.ofMinutes(2);
     private final AfterSaleCaseMapper cases;
+    private final ReturnDestinationMapper destinations;
+    private final ShopReturnProfileService returnProfiles;
     private final AfterSaleItemMapper items;
     private final ReturnShipmentMapper returns;
     private final RefundAttemptMapper refunds;
@@ -209,6 +215,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 管理员可读取售后详情与历史退货目的地。 */
+    @Override
+    public AfterSaleVO adminDetail(Long adminId, Long caseId) {
+        accountAccess.requireAdmin(adminId);
+        return view(caseId);
+    }
+
     /** 仅允许所属店主读取对应售后详情。 */
     @Override
     public AfterSaleVO merchantDetail(Long merchantId, Long shopId, Long caseId) {
@@ -230,6 +243,20 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                     ? sale.getType() == AfterSaleType.RETURN_REFUND
                     ? AfterSaleStatus.WAITING_RETURN : AfterSaleStatus.REFUNDING
                     : AfterSaleStatus.REJECTED;
+            if (request.approved() && sale.getType() == AfterSaleType.RETURN_REFUND) {
+                ReturnDestinationSnapshot snapshot = returnProfiles.snapshotForReturn(shopId);
+                ReturnDestinationRecord destination = new ReturnDestinationRecord();
+                destination.setCaseId(caseId);
+                destination.setShopId(snapshot.shopId());
+                destination.setKeyVersion(snapshot.keyVersion());
+                destination.setConsigneeCiphertext(snapshot.consigneeCiphertext());
+                destination.setPhoneCiphertext(snapshot.phoneCiphertext());
+                destination.setProvince(snapshot.province());
+                destination.setCity(snapshot.city());
+                destination.setDistrict(snapshot.district());
+                destination.setDetailCiphertext(snapshot.detailCiphertext());
+                destinations.insert(destination);
+            }
             LocalDateTime now = LocalDateTime.now(clock);
             if (cases.review(caseId, next, merchantId, reviewReason, now,
                     request.approved() ? null : now) != 1) throw new BusinessException(409, "审核状态冲突");
@@ -237,6 +264,26 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                     caseId, "商家审核售后", now);
             BusinessEventLog.committed("aftersale", request.approved() ? "after_sale_approved" : "after_sale_rejected",
                     "after_sale", caseId);
+        });
+        return view(caseId);
+    }
+
+    /** 买家撤销未寄回或发起退款的申请；订单和售后锁保护预留释放及状态变更。 */
+    @Override
+    public AfterSaleVO withdraw(Long buyerId, Long caseId) {
+        tx().executeWithoutResult(status -> {
+            AfterSaleCase found = requireCase(caseId);
+            buyerOrder(buyerId, found.getOrderId());
+            orderAccess.lock(found.getOrderId());
+            AfterSaleCase sale = cases.selectForUpdate(caseId);
+            if (sale.getStatus() == AfterSaleStatus.CLOSED) return;
+            if ((sale.getStatus() != AfterSaleStatus.REQUESTED && sale.getStatus() != AfterSaleStatus.WAITING_RETURN)
+                    || returns.selectByCaseId(caseId) != null || refunds.selectLatest(caseId) != null)
+                throw new BusinessException(409, "当前不能撤销售后申请");
+            LocalDateTime now = LocalDateTime.now(clock);
+            if (cases.withdraw(caseId, sale.getStatus(), now) != 1) throw new BusinessException(409, "售后状态冲突");
+            audit.record(buyerId, "AFTER_SALE_WITHDRAWN", caseId, "买家撤销售后", now);
+            BusinessEventLog.committed("aftersale", "after_sale_withdrawn", "after_sale", caseId);
         });
         return view(caseId);
     }
@@ -534,13 +581,18 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 .toList();
         ReturnShipment returned = returns.selectByCaseId(caseId);
         RefundAttempt attempt = refunds.selectLatest(caseId);
+        ReturnDestinationRecord destination = destinations.selectById(caseId);
         return new AfterSaleVO(sale.getId(), sale.getOrderId(), sale.getType().name(), sale.getStatus().name(),
                 sale.getReason(), sale.getRefundAmount(), sale.getRequestedAt(), sale.getFinishedAt(),
                 sale.getReviewReason(), lines,
                 returned == null ? null : new AfterSaleVO.ReturnInfo(returned.getCarrierName(),
                         returned.getTrackingNo(), returned.getSentAt(), returned.getReceivedAt()),
                 attempt == null ? null : new AfterSaleVO.RefundInfo(attempt.getStatus().name(),
-                        attempt.getOutRequestNo(), attempt.getRequestedAt(), attempt.getResolvedAt()));
+                        attempt.getOutRequestNo(), attempt.getRequestedAt(), attempt.getResolvedAt()),
+                destination == null ? null : returnProfiles.decryptReturnDestination(new ReturnDestinationSnapshot(
+                        destination.getShopId(), destination.getKeyVersion(), destination.getConsigneeCiphertext(),
+                        destination.getPhoneCiphertext(), destination.getProvince(), destination.getCity(),
+                        destination.getDistrict(), destination.getDetailCiphertext())));
     }
 
     /** 读取售后申请，缺失时返回不存在；ID 格式已由入口约束。 */

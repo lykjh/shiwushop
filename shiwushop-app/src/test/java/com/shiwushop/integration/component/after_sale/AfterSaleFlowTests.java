@@ -1,6 +1,8 @@
 package com.shiwushop.integration.component.after_sale;
 
 import com.shiwushop.aftersale.dto.AfterSaleCreateDTO;
+import com.shiwushop.merchant.dto.shop.ShopReturnProfileSaveDTO;
+import com.shiwushop.merchant.service.ShopReturnProfileService;
 import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
 import com.shiwushop.aftersale.dto.ReturnReceiptDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
@@ -34,10 +36,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doAnswer;
 
-@SpringBootTest
+@SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Transactional
 class AfterSaleFlowTests {
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private ShopReturnProfileService returnProfiles;
     @Autowired private RefundAttemptMapper refundAttempts;
     @Autowired private AfterSaleService service;
     @Autowired private ShipmentService shipments;
@@ -324,6 +327,16 @@ class AfterSaleFlowTests {
         Long merchant = user("merchant" + token, "MERCHANT");
         jdbc.update("INSERT INTO shops (owner_user_id,name,enabled) VALUES (?,?,1)", merchant, "售后店铺" + token);
         Long shopId = jdbc.queryForObject("SELECT id FROM shops WHERE name=?", Long.class, "售后店铺" + token);
+        ShopReturnProfileSaveDTO destination = new ShopReturnProfileSaveDTO();
+        destination.setContactName("王明");
+        destination.setContactPhone("13912345678");
+        destination.setConsignee("张明");
+        destination.setPhone("13812345678");
+        destination.setProvince("江苏省");
+        destination.setCity("南京市");
+        destination.setDistrict("鼓楼区");
+        destination.setDetail("中山北路28号");
+        returnProfiles.save(shopId, merchant, destination);
         jdbc.update("INSERT INTO categories (name,level,visible,sort_order) VALUES (?,1,1,0)", "售后分类" + token);
         Long categoryId = jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, "售后分类" + token);
         jdbc.update("INSERT INTO products (shop_id,category_id,name,status) VALUES (?,?,?,'ON_SALE')",
