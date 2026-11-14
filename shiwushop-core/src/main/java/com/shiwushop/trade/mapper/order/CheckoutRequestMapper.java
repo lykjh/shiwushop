@@ -18,6 +18,8 @@ public interface CheckoutRequestMapper {
 
     Map<String, Object> selectForUpdate(@Param("userId") Long userId, @Param("key") String key);
 
+    Map<String, Object> selectExisting(@Param("userId") Long userId, @Param("key") String key);
+
     @Insert("INSERT INTO checkout_request_orders (checkout_request_id, order_id) VALUES (#{requestId}, #{orderId})")
     int linkOrder(@Param("requestId") Long requestId, @Param("orderId") Long orderId);
 

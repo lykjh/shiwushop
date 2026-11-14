@@ -24,10 +24,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class PublicBrandListTests {
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private BrandMapper brandMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private BrandMapper brandMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void listsOnlyEnabledBrandsWithoutCategoryOrLogin() throws Exception {

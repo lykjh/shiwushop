@@ -55,17 +55,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @AutoConfigureMockMvc
 class CheckoutConcurrencyTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private RegisterService userService;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private AddressMapper addressMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @MockitoSpyBean private InventoryMovementMapper movementMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private AddressMapper addressMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @MockitoSpyBean
+    private InventoryMovementMapper movementMapper;
 
     private Long firstUserId;
     private Long secondUserId;
@@ -144,7 +155,8 @@ class CheckoutConcurrencyTests {
                         "idempotencyKey", UUID.randomUUID().toString()));
                 requests.add(workers.submit(() -> {
                     ready.countDown();
-                    if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("并发请求未启动");
+                    if (!start.await(10, TimeUnit.SECONDS))
+                        throw new IllegalStateException("并发请求未启动");
                     return mockMvc.perform(post("/checkouts/direct").session(buyer)
                             .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
                 }));
@@ -158,7 +170,8 @@ class CheckoutConcurrencyTests {
             for (Future<MvcResult> request : requests) {
                 MvcResult result = request.get(60, TimeUnit.SECONDS);
                 int status = result.getResponse().getStatus();
-                if (status == 200) success++;
+                if (status == 200)
+                    success++;
                 if (status == 409) {
                     assertEquals("OUT_OF_STOCK", mapper.readTree(result.getResponse().getContentAsString())
                             .path("data").path("reason").asText());
@@ -204,14 +217,20 @@ class CheckoutConcurrencyTests {
             shop.setName("回滚店铺-" + UUID.randomUUID());
             shop.setEnabled(1);
             shopMapper.insert(shop);
-            if (i == 0) shopId = shop.getId(); else secondShopId = shop.getId();
+            if (i == 0)
+                shopId = shop.getId();
+            else
+                secondShopId = shop.getId();
             Product product = new Product();
             product.setShopId(shop.getId());
             product.setCategoryId(categoryId);
             product.setName("回滚商品-" + i);
             product.setStatus(ProductStatus.ON_SALE);
             productMapper.insert(product);
-            if (i == 0) productId = product.getId(); else secondProductId = product.getId();
+            if (i == 0)
+                productId = product.getId();
+            else
+                secondProductId = product.getId();
             Sku sku = new Sku();
             sku.setProductId(product.getId());
             String signature = UUID.randomUUID().toString().replace("-", "");
@@ -220,14 +239,19 @@ class CheckoutConcurrencyTests {
             sku.setStock(3);
             skuMapper.insert(sku);
             skuIds[i] = sku.getId();
-            if (i == 0) skuId = sku.getId(); else secondSkuId = sku.getId();
+            if (i == 0)
+                skuId = sku.getId();
+            else
+                secondSkuId = sku.getId();
             jdbc.update("INSERT INTO cart_items(user_id,sku_id,quantity) VALUES (?,?,1)", firstUserId, sku.getId());
         }
         doAnswer(invocation -> {
-            if (secondSkuId.equals(invocation.getArgument(0))) throw new IllegalStateException("模拟第二店铺写入失败");
+            if (secondSkuId.equals(invocation.getArgument(0)))
+                throw new IllegalStateException("模拟第二店铺写入失败");
             return invocation.callRealMethod();
         }).when(movementMapper).insertOrderDeduct(anyLong(), anyLong(), anyInt(), anyInt(), anyString());
-        List<Long> cartIds = jdbc.queryForList("SELECT id FROM cart_items WHERE user_id=? ORDER BY sku_id", Long.class, firstUserId);
+        List<Long> cartIds = jdbc.queryForList("SELECT id FROM cart_items WHERE user_id=? ORDER BY sku_id", Long.class,
+                firstUserId);
         String body = new ObjectMapper().writeValueAsString(Map.of("cartItemIds", cartIds,
                 "addressId", address.getId(), "confirmedTotal", new BigDecimal("14.00"),
                 "idempotencyKey", UUID.randomUUID().toString()));
@@ -235,43 +259,77 @@ class CheckoutConcurrencyTests {
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
         assertEquals(500, result.getResponse().getStatus());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=?", Integer.class, firstUserId));
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM checkout_requests WHERE user_id=?", Integer.class, firstUserId));
-        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM cart_items WHERE user_id=?", Integer.class, firstUserId));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM checkout_requests WHERE user_id=?", Integer.class,
+                firstUserId));
+        assertEquals(2,
+                jdbc.queryForObject("SELECT COUNT(*) FROM cart_items WHERE user_id=?", Integer.class, firstUserId));
         for (long id : skuIds) {
             assertEquals(3, skuMapper.selectById(id).getStock());
-            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE sku_id=?", Integer.class, id));
+            assertEquals(0,
+                    jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE sku_id=?", Integer.class, id));
         }
     }
 
     @AfterEach
     void removeTestData() {
-        if (firstUserId != null) jdbc.update("DELETE FROM cart_items WHERE user_id = ?", firstUserId);
-        if (secondSkuId != null) jdbc.update("DELETE FROM inventory_movements WHERE sku_id = ?", secondSkuId);
-        if (skuId != null) jdbc.update("DELETE FROM inventory_movements WHERE sku_id = ?", skuId);
-        if (firstUserId != null) jdbc.update("DELETE FROM checkout_request_orders WHERE checkout_request_id IN (SELECT id FROM checkout_requests WHERE user_id = ?)", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM checkout_request_orders WHERE checkout_request_id IN (SELECT id FROM checkout_requests WHERE user_id = ?)", secondUserId);
-        if (skuId != null) jdbc.update("DELETE FROM order_items WHERE sku_id = ?", skuId);
-        if (secondSkuId != null) jdbc.update("DELETE FROM order_items WHERE sku_id = ?", secondSkuId);
-        if (firstUserId != null) jdbc.update("DELETE FROM orders WHERE user_id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM orders WHERE user_id = ?", secondUserId);
-        if (firstUserId != null) jdbc.update("DELETE FROM checkout_requests WHERE user_id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM checkout_requests WHERE user_id = ?", secondUserId);
-        if (skuId != null) jdbc.update("DELETE FROM skus WHERE id = ?", skuId);
-        if (secondSkuId != null) jdbc.update("DELETE FROM skus WHERE id = ?", secondSkuId);
-        if (productId != null) jdbc.update("DELETE FROM products WHERE id = ?", productId);
-        if (secondProductId != null) jdbc.update("DELETE FROM products WHERE id = ?", secondProductId);
-        if (shopId != null) jdbc.update("DELETE FROM shops WHERE id = ?", shopId);
-        if (secondShopId != null) jdbc.update("DELETE FROM shops WHERE id = ?", secondShopId);
-        if (firstUserId != null) jdbc.update("DELETE FROM addresses WHERE user_id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM addresses WHERE user_id = ?", secondUserId);
-        if (categoryId != null) jdbc.update("DELETE FROM categories WHERE id = ?", categoryId);
-        if (parentCategoryId != null) jdbc.update("DELETE FROM categories WHERE id = ?", parentCategoryId);
-        if (firstUserId != null) jdbc.update("DELETE FROM user_accounts WHERE user_id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM user_accounts WHERE user_id = ?", secondUserId);
-        if (firstUserId != null) jdbc.update("DELETE FROM user_private WHERE user_id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM user_private WHERE user_id = ?", secondUserId);
-        if (firstUserId != null) jdbc.update("DELETE FROM users WHERE id = ?", firstUserId);
-        if (secondUserId != null) jdbc.update("DELETE FROM users WHERE id = ?", secondUserId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM cart_items WHERE user_id = ?", firstUserId);
+        if (secondSkuId != null)
+            jdbc.update("DELETE FROM inventory_movements WHERE sku_id = ?", secondSkuId);
+        if (skuId != null)
+            jdbc.update("DELETE FROM inventory_movements WHERE sku_id = ?", skuId);
+        if (firstUserId != null)
+            jdbc.update(
+                    "DELETE FROM checkout_request_orders WHERE checkout_request_id IN (SELECT id FROM checkout_requests WHERE user_id = ?)",
+                    firstUserId);
+        if (secondUserId != null)
+            jdbc.update(
+                    "DELETE FROM checkout_request_orders WHERE checkout_request_id IN (SELECT id FROM checkout_requests WHERE user_id = ?)",
+                    secondUserId);
+        if (skuId != null)
+            jdbc.update("DELETE FROM order_items WHERE sku_id = ?", skuId);
+        if (secondSkuId != null)
+            jdbc.update("DELETE FROM order_items WHERE sku_id = ?", secondSkuId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM orders WHERE user_id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM orders WHERE user_id = ?", secondUserId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM checkout_requests WHERE user_id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM checkout_requests WHERE user_id = ?", secondUserId);
+        if (skuId != null)
+            jdbc.update("DELETE FROM skus WHERE id = ?", skuId);
+        if (secondSkuId != null)
+            jdbc.update("DELETE FROM skus WHERE id = ?", secondSkuId);
+        if (productId != null)
+            jdbc.update("DELETE FROM products WHERE id = ?", productId);
+        if (secondProductId != null)
+            jdbc.update("DELETE FROM products WHERE id = ?", secondProductId);
+        if (shopId != null)
+            jdbc.update("DELETE FROM shops WHERE id = ?", shopId);
+        if (secondShopId != null)
+            jdbc.update("DELETE FROM shops WHERE id = ?", secondShopId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM addresses WHERE user_id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM addresses WHERE user_id = ?", secondUserId);
+        if (categoryId != null)
+            jdbc.update("DELETE FROM categories WHERE id = ?", categoryId);
+        if (parentCategoryId != null)
+            jdbc.update("DELETE FROM categories WHERE id = ?", parentCategoryId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM user_accounts WHERE user_id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM user_accounts WHERE user_id = ?", secondUserId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM user_private WHERE user_id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM user_private WHERE user_id = ?", secondUserId);
+        if (firstUserId != null)
+            jdbc.update("DELETE FROM users WHERE id = ?", firstUserId);
+        if (secondUserId != null)
+            jdbc.update("DELETE FROM users WHERE id = ?", secondUserId);
     }
 
     private UserProfile user() {

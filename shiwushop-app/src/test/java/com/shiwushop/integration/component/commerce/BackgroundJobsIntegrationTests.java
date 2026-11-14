@@ -18,11 +18,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest
 @Transactional
 class BackgroundJobsIntegrationTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private OrderMapper orders;
-    @Autowired private RefundAttemptMapper refunds;
-    @Autowired private ShipmentMapper shipments;
-    @Autowired private OutboxEventMapper outbox;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private OrderMapper orders;
+    @Autowired
+    private RefundAttemptMapper refunds;
+    @Autowired
+    private ShipmentMapper shipments;
+    @Autowired
+    private OutboxEventMapper outbox;
 
     @Test
     void readsBacklogAgesAndKeepsPendingShipmentEventsVisible() {

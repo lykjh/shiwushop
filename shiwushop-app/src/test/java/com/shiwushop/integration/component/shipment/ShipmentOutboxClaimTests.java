@@ -19,8 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 class ShipmentOutboxClaimTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private OutboxEventMapper outbox;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private OutboxEventMapper outbox;
 
     @Test
     void onlyOneInstanceClaimsAndExpiredClaimCanBeRecovered() throws Exception {
@@ -50,11 +52,13 @@ class ShipmentOutboxClaimTests {
                 assertEquals(1, first.get() + second.get());
             }
 
-            String oldToken = jdbc.queryForObject("SELECT claim_token FROM outbox_events WHERE id=?", String.class, eventId);
+            String oldToken = jdbc.queryForObject("SELECT claim_token FROM outbox_events WHERE id=?", String.class,
+                    eventId);
             assertEquals(1, outbox.claimShipmentEvent(eventId, "recovered", now.plusSeconds(31), now.plusSeconds(61)));
             assertEquals(0, outbox.markPublished(eventId, oldToken, now.plusSeconds(31)));
             assertEquals(1, outbox.markPublished(eventId, "recovered", now.plusSeconds(31)));
-            assertEquals("PUBLISHED", jdbc.queryForObject("SELECT status FROM outbox_events WHERE id=?", String.class, eventId));
+            assertEquals("PUBLISHED",
+                    jdbc.queryForObject("SELECT status FROM outbox_events WHERE id=?", String.class, eventId));
         } finally {
             jdbc.update("DELETE FROM outbox_events WHERE id=?", eventId);
         }

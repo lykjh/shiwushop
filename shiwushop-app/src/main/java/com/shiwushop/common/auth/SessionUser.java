@@ -2,12 +2,12 @@ package com.shiwushop.common.auth;
 
 import com.shiwushop.common.BusinessException;
 
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 public final class SessionUser {
-    private SessionUser() { }
+    private SessionUser() {
+    }
 
     /** 从现有 Session 读取用户 ID；匿名请求返回 null 且不创建 Session。 */
     public static Long currentId(HttpServletRequest request) {

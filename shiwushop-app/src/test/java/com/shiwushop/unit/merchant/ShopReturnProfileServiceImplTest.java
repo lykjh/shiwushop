@@ -9,6 +9,7 @@ import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.merchant.service.impl.ShopReturnProfileServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +45,8 @@ class ShopReturnProfileServiceImplTest {
         var saved = ArgumentCaptor.forClass(ShopReturnProfile.class);
         order.verify(mapper).insert(saved.capture());
         assertEquals("张明", cipher.decrypt(7L, "shop-return:consignee", 1, saved.getValue().getConsigneeCiphertext()));
-        assertThrows(BusinessException.class, () -> cipher.decrypt(8L, "shop-return:consignee", 1, saved.getValue().getConsigneeCiphertext()));
+        assertThrows(BusinessException.class,
+                () -> cipher.decrypt(8L, "shop-return:consignee", 1, saved.getValue().getConsigneeCiphertext()));
         when(mapper.selectForUpdate(7L)).thenReturn(saved.getValue());
         var snapshot = service.snapshotForReturn(7L);
         assertEquals("张明", service.decryptReturnDestination(snapshot).consignee());
@@ -59,6 +61,7 @@ class ShopReturnProfileServiceImplTest {
         verify(access, never()).requireOwnedForUpdate(anyLong(), anyLong(), anyString());
         assertThrows(BusinessException.class, () -> service.snapshotForReturn(7L));
     }
+
     @Test
     void encryptionFailureLeavesStoredValueUntouched() {
         var brokenCipher = new PrivacyCipher("");

@@ -18,9 +18,11 @@ import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.session.FindByIndexNameSessionRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -38,7 +40,7 @@ public class LoginServiceImpl implements LoginService {
      */
     @Override
     public LoginVO login(LoginDTO dto, HttpServletRequest request) {
-        loginRateLimiter.check(request.getRemoteAddr());
+        loginRateLimiter.check(request.getRemoteAddr());/**有问题*/
         HttpSession session = request.getSession(true);
         boolean captchaRequired = authRiskLimiter.loginRequiresCaptcha(dto.getUsername(), request);
         String proof = dto.getCaptchaProof();
@@ -54,7 +56,8 @@ public class LoginServiceImpl implements LoginService {
         try {
             loginVO = authenticate(dto);
         } catch (BusinessException e) {
-            if (e.getCode() == 401) authRiskLimiter.recordLoginFailure(dto.getUsername(), request);
+            if (e.getCode() == 401)
+                authRiskLimiter.recordLoginFailure(dto.getUsername(), request);
             throw e;
         }
         // 换 Session ID 前清除旧 Session 对应的失败计数。
@@ -62,6 +65,8 @@ public class LoginServiceImpl implements LoginService {
         request.changeSessionId();
         session.setAttribute("userId", loginVO.getId());
         session.setAttribute("authVersion", accountAccess.requireActive(loginVO.getId()).getAuthVersion());
+        session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, loginVO.getId().toString());
+        session.setAttribute("sessionRef", UUID.randomUUID().toString());
         BusinessEventLog.committed("user", "login", "user", loginVO.getId());
         return loginVO;
     }

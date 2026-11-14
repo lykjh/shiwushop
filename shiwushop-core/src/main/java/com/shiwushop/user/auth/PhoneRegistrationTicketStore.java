@@ -17,7 +17,9 @@ import java.util.List;
 /** 验码后签发一次性注册票据，票据只绑定原手机号和匿名 Session。 */
 @Component
 public class PhoneRegistrationTicketStore {
+    /** 手机号注册票据的有效期，票据与原手机号及匿名 Session 绑定。 */
     private static final Duration TTL = Duration.ofMinutes(5);
+    /** 仅在手机号及 Session 摘要匹配时原子删除注册票据，保证一次性消费。 */
     private static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>(
             "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end; " +
                     "return redis.call('DEL', KEYS[1])", Long.class);
@@ -34,7 +36,8 @@ public class PhoneRegistrationTicketStore {
         random.nextBytes(bytes);
         String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Boolean created = redis.opsForValue().setIfAbsent(key(ticket), value(phoneDigest, sessionId), TTL);
-        if (!Boolean.TRUE.equals(created)) throw new BusinessException(503, "注册凭证服务暂时不可用");
+        if (!Boolean.TRUE.equals(created))
+            throw new BusinessException(503, "注册凭证服务暂时不可用");
         return ticket;
     }
 
@@ -43,8 +46,10 @@ public class PhoneRegistrationTicketStore {
         if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{43}"))
             throw new BusinessException(401, "注册凭证无效或已过期");
         Long consumed = redis.execute(CONSUME, List.of(key(ticket)), value(phoneDigest, sessionId));
-        if (consumed == null) throw new BusinessException(503, "注册凭证服务暂时不可用");
-        if (consumed != 1) throw new BusinessException(401, "注册凭证无效或已过期");
+        if (consumed == null)
+            throw new BusinessException(503, "注册凭证服务暂时不可用");
+        if (consumed != 1)
+            throw new BusinessException(401, "注册凭证无效或已过期");
     }
 
     private String key(String ticket) {

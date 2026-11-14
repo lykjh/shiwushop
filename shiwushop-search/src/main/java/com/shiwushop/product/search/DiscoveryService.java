@@ -55,7 +55,8 @@ public class DiscoveryService {
      * 游标绑定查询、用户和 PIT；过滤失效命中后继续扫描候选以补满页面，结束时释放无用 PIT。
      */
     public DiscoveryPage list(DiscoveryQuery raw, String cursor, Long userId) {
-        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        if (!enabled)
+            throw new BusinessException(503, "商品发现索引尚未就绪");
         DiscoveryQuery query = normalize(raw);
         validate(query);
         String fingerprint = json.writeValueAsString(query);
@@ -75,11 +76,14 @@ public class DiscoveryService {
                 Map<String, Object> body = request(query, pit, position, fetchSize);
                 JsonNode result = search.search(body);
                 String renewedPit = result.path("pit_id").asText();
-                if (!renewedPit.isBlank()) pit = renewedPit;
+                if (!renewedPit.isBlank())
+                    pit = renewedPit;
                 JsonNode hits = result.path("hits").path("hits");
-                if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+                if (!hits.isArray())
+                    throw new BusinessException(503, "搜索响应格式错误");
                 List<Long> ids = new ArrayList<>();
-                for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
+                for (JsonNode hit : hits)
+                    ids.add(hit.path("_source").path("id").asLong());
                 Map<Long, PublicProductRow> current = new HashMap<>();
                 if (!ids.isEmpty()) {
                     for (PublicProductRow row : products.selectPublicCardsByIds(ids, query.categoryId(),
@@ -92,7 +96,8 @@ public class DiscoveryService {
                     scanned++;
                     position = json.readValue(hit.path("sort").toString(), List.class);
                     PublicProductRow row = current.get(hit.path("_source").path("id").asLong());
-                    if (row == null) continue;
+                    if (row == null)
+                        continue;
                     if (cards.size() == query.size()) {
                         hasMore = true;
                         break;
@@ -100,17 +105,20 @@ public class DiscoveryService {
                     cards.add(toCard(row));
                     lastReturnedSort = position;
                 }
-                if (hasMore) break;
+                if (hasMore)
+                    break;
                 exhausted = hits.size() < fetchSize;
             }
-            if (!hasMore && !exhausted) throw new BusinessException(503, "搜索索引与商品数据差异过大，请稍后重试");
+            if (!hasMore && !exhausted)
+                throw new BusinessException(503, "搜索索引与商品数据差异过大，请稍后重试");
             String next = hasMore ? cursors.encode(new DiscoveryCursor.State(pit, lastReturnedSort,
                     fingerprint, userId, Instant.now().plusSeconds(120).getEpochSecond())) : null;
             keepPit = hasMore;
             return new DiscoveryPage(cards, hasMore, next);
         } finally {
             // 只有下一页游标会继续使用 PIT；异常或末页立即释放最新 ID。
-            if (!keepPit) search.closePit(pit);
+            if (!keepPit)
+                search.closePit(pit);
         }
     }
 
@@ -119,7 +127,8 @@ public class DiscoveryService {
      * 返回仍匹配的卡片和应移除的 ID，供返回列表时更新价格或下架状态。
      */
     public DiscoveryRefresh refresh(List<Long> ids, DiscoveryQuery raw) {
-        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        if (!enabled)
+            throw new BusinessException(503, "商品发现索引尚未就绪");
         if (ids == null || ids.isEmpty() || ids.size() > 60 || ids.stream().anyMatch(id -> id == null || id <= 0))
             throw new BusinessException(400, "商品ID数量或格式错误");
         DiscoveryQuery query = normalize(raw);
@@ -128,21 +137,24 @@ public class DiscoveryService {
         List<Long> matching = unique;
         if (query.q() != null && !query.q().isBlank()) {
             JsonNode hits = search.searchIndex("products", Map.of(
-                    "size", unique.size(), "_source", List.of("id"),
-                    "query", Map.of("bool", Map.of(
-                            "must", List.of(Map.of("multi_match", Map.of("query", query.q(),
-                                    "fields", List.of("name^6", "brandName^3", "shopName^3")))),
-                            "filter", List.of(Map.of("terms", Map.of("id", unique)))))))
+                            "size", unique.size(), "_source", List.of("id"),
+                            "query", Map.of("bool", Map.of(
+                                    "must", List.of(Map.of("multi_match", Map.of("query", query.q(),
+                                            "fields", List.of("name^6", "brandName^3", "shopName^3")))),
+                                    "filter", List.of(Map.of("terms", Map.of("id", unique)))))))
                     .path("hits").path("hits");
-            if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+            if (!hits.isArray())
+                throw new BusinessException(503, "搜索响应格式错误");
             List<Long> found = new ArrayList<>();
-            for (JsonNode hit : hits) found.add(hit.path("_source").path("id").asLong());
+            for (JsonNode hit : hits)
+                found.add(hit.path("_source").path("id").asLong());
             matching = found;
         }
         Map<Long, PublicProductRow> rows = new HashMap<>();
-        if (!matching.isEmpty()) for (PublicProductRow row : products.selectPublicCardsByIds(matching,
-                query.categoryId(), query.brandId(), query.shopId(), query.minPrice(), query.maxPrice()))
-            rows.put(row.getId(), row);
+        if (!matching.isEmpty())
+            for (PublicProductRow row : products.selectPublicCardsByIds(matching,
+                    query.categoryId(), query.brandId(), query.shopId(), query.minPrice(), query.maxPrice()))
+                rows.put(row.getId(), row);
         return new DiscoveryRefresh(unique.stream().filter(rows::containsKey).map(id -> toCard(rows.get(id))).toList(),
                 unique.stream().filter(id -> !rows.containsKey(id)).toList());
     }
@@ -152,7 +164,8 @@ public class DiscoveryService {
      * 返回名称与站内跳转路径，避免直接展示过期索引中的实体。
      */
     public SearchSuggestions suggestions(String raw) {
-        if (!enabled) throw new BusinessException(503, "商品发现索引尚未就绪");
+        if (!enabled)
+            throw new BusinessException(503, "商品发现索引尚未就绪");
         String q = raw == null ? "" : raw.strip();
         if (q.isEmpty() || q.codePointCount(0, q.length()) > 100)
             throw new BusinessException(400, "搜索词长度必须在1到100个字符之间");
@@ -160,19 +173,29 @@ public class DiscoveryService {
         List<Long> shopIds = suggestIds("shops", q);
         List<Long> brandIds = suggestIds("brands", q);
         Map<Long, PublicProductRow> productRows = new HashMap<>();
-        if (!productIds.isEmpty()) for (PublicProductRow row : products.selectPublicCardsByIds(
-                productIds, null, null, null, null, null)) productRows.put(row.getId(), row);
+        if (!productIds.isEmpty())
+            for (PublicProductRow row : products.selectPublicCardsByIds(
+                    productIds, null, null, null, null, null))
+                productRows.put(row.getId(), row);
         Map<Long, Shop> shopRows = new HashMap<>();
-        if (!shopIds.isEmpty()) for (Shop row : shops.findByIds(shopIds)) shopRows.put(row.getId(), row);
+        if (!shopIds.isEmpty())
+            for (Shop row : shops.findByIds(shopIds))
+                shopRows.put(row.getId(), row);
         Map<Long, Brand> brandRows = new HashMap<>();
-        if (!brandIds.isEmpty()) for (Brand row : brands.selectBatchIds(brandIds)) brandRows.put(row.getId(), row);
+        if (!brandIds.isEmpty())
+            for (Brand row : brands.selectBatchIds(brandIds))
+                brandRows.put(row.getId(), row);
         return new SearchSuggestions(
                 productIds.stream().filter(productRows::containsKey).map(id ->
                         new SearchSuggestions.Entry(id, productRows.get(id).getName(), "/products/" + id)).toList(),
-                shopIds.stream().filter(id -> shopRows.containsKey(id) && Integer.valueOf(1).equals(shopRows.get(id).getEnabled()))
-                        .map(id -> new SearchSuggestions.Entry(id, shopRows.get(id).getName(), "/shops/" + id)).toList(),
-                brandIds.stream().filter(id -> brandRows.containsKey(id) && Integer.valueOf(1).equals(brandRows.get(id).getEnabled()))
-                        .map(id -> new SearchSuggestions.Entry(id, brandRows.get(id).getName(), "/brands/" + id)).toList());
+                shopIds.stream().filter(id -> shopRows.containsKey(id) &&
+                                Integer.valueOf(1).equals(shopRows.get(id).getEnabled()))
+                        .map(id -> new SearchSuggestions.Entry(id, shopRows.get(id).getName(), "/shops/" + id))
+                        .toList(),
+                brandIds.stream().filter(id -> brandRows.containsKey(id) &&
+                                Integer.valueOf(1).equals(brandRows.get(id).getEnabled()))
+                        .map(id -> new SearchSuggestions.Entry(id, brandRows.get(id).getName(), "/brands/" + id))
+                        .toList());
     }
 
     /** 在指定搜索索引中按名称匹配候选 ID，并对名称精确匹配加权。 */
@@ -182,9 +205,11 @@ public class DiscoveryService {
                         "must", List.of(Map.of("match", Map.of("name", q))),
                         "should", List.of(Map.of("term", Map.of("name.exact", Map.of(
                                 "value", q, "boost", 10)))))))).path("hits").path("hits");
-        if (!hits.isArray()) throw new BusinessException(503, "搜索响应格式错误");
+        if (!hits.isArray())
+            throw new BusinessException(503, "搜索响应格式错误");
         List<Long> ids = new ArrayList<>();
-        for (JsonNode hit : hits) ids.add(hit.path("_source").path("id").asLong());
+        for (JsonNode hit : hits)
+            ids.add(hit.path("_source").path("id").asLong());
         return ids;
     }
 
@@ -200,7 +225,8 @@ public class DiscoveryService {
         if (q.q() != null && q.q().codePointCount(0, q.q().length()) > 100) {
             throw new BusinessException(400, "搜索词不能超过100个字符");
         }
-        if (q.categoryId() != null) categories.detail(positive(q.categoryId()));
+        if (q.categoryId() != null)
+            categories.detail(positive(q.categoryId()));
         if (q.brandId() != null && brands.selectById(positive(q.brandId())) == null)
             throw new BusinessException(404, "品牌不存在");
         if (q.shopId() != null && shops.findById(positive(q.shopId())) == null)
@@ -208,27 +234,33 @@ public class DiscoveryService {
         if ((q.minPrice() != null && q.minPrice().signum() < 0)
                 || (q.maxPrice() != null && q.maxPrice().signum() < 0)
                 || (q.minPrice() != null && q.maxPrice() != null
-                    && q.minPrice().compareTo(q.maxPrice()) > 0)) {
+                && q.minPrice().compareTo(q.maxPrice()) > 0)) {
             throw new BusinessException(400, "价格区间错误");
         }
     }
 
     /** 拒绝非正数筛选 ID，返回可直接用于后续查询的原值。 */
     private long positive(Long id) {
-        if (id <= 0) throw new BusinessException(400, "筛选ID必须大于0");
+        if (id <= 0)
+            throw new BusinessException(400, "筛选ID必须大于0");
         return id;
     }
 
     /** 将筛选、关键词权重、PIT 和上一页排序位置组装为搜索引擎请求体。 */
     private Map<String, Object> request(DiscoveryQuery q, String pit, List<Object> position, int size) {
         List<Object> filters = new ArrayList<>();
-        if (q.categoryId() != null) filters.add(Map.of("term", Map.of("categoryPathIds", q.categoryId())));
-        if (q.brandId() != null) filters.add(Map.of("term", Map.of("brandId", q.brandId())));
-        if (q.shopId() != null) filters.add(Map.of("term", Map.of("shopId", q.shopId())));
+        if (q.categoryId() != null)
+            filters.add(Map.of("term", Map.of("categoryPathIds", q.categoryId())));
+        if (q.brandId() != null)
+            filters.add(Map.of("term", Map.of("brandId", q.brandId())));
+        if (q.shopId() != null)
+            filters.add(Map.of("term", Map.of("shopId", q.shopId())));
         if (q.minPrice() != null || q.maxPrice() != null) {
             Map<String, BigDecimal> price = new LinkedHashMap<>();
-            if (q.minPrice() != null) price.put("gte", q.minPrice());
-            if (q.maxPrice() != null) price.put("lte", q.maxPrice());
+            if (q.minPrice() != null)
+                price.put("gte", q.minPrice());
+            if (q.maxPrice() != null)
+                price.put("lte", q.maxPrice());
             filters.add(Map.of("range", Map.of("availablePrices", price)));
         }
         Map<String, Object> bool = new LinkedHashMap<>();
@@ -247,7 +279,8 @@ public class DiscoveryService {
         body.put("query", Map.of("bool", bool));
         body.put("sort", hasQuery ? List.of(Map.of("_score", "desc"), Map.of("id", "desc"))
                 : List.of(Map.of("id", "desc")));
-        if (position != null) body.put("search_after", position);
+        if (position != null)
+            body.put("search_after", position);
         return body;
     }
 

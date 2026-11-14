@@ -31,12 +31,18 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AfterSaleTimeoutServiceImplTest {
-    @Mock AfterSaleTimeoutMapper tasks;
-    @Mock AccountAccess accounts;
-    @Mock AfterSaleCaseMapper cases;
-    @Mock PlatformTransactionManager transactions;
-    @Mock Clock clock;
-    @InjectMocks AfterSaleTimeoutServiceImpl service;
+    @Mock
+    AfterSaleTimeoutMapper tasks;
+    @Mock
+    AccountAccess accounts;
+    @Mock
+    AfterSaleCaseMapper cases;
+    @Mock
+    PlatformTransactionManager transactions;
+    @Mock
+    Clock clock;
+    @InjectMocks
+    AfterSaleTimeoutServiceImpl service;
 
     @Test
     void anotherAdministratorCannotClaimOwnedTask() {

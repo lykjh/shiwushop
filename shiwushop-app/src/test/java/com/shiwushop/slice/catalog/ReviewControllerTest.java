@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,8 +23,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = {ReviewController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class ReviewControllerTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean ReviewService service;
+    @Autowired
+    MockMvc mvc;
+    @MockitoBean
+    ReviewService service;
 
     @ParameterizedTest
     @ValueSource(strings = {"{\"rating\":0,\"content\":\"正常评价\"}",

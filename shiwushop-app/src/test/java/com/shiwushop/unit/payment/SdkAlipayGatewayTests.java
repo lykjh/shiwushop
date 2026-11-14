@@ -38,7 +38,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SdkAlipayGatewayTests {
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     @Test
     void appliesBoundedNetworkTimeoutsToTheSdkClient() throws Exception {

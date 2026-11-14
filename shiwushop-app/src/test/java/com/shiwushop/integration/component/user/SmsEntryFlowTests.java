@@ -46,13 +46,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class SmsEntryFlowTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private StringRedisTemplate redis;
-    @Autowired private PhoneLookup lookup;
-    @Autowired private PhoneBindingMapper bindings;
-    @Autowired private PhoneRegistrationTicketStore tickets;
-    @MockitoBean private SmsSender sender;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private StringRedisTemplate redis;
+    @Autowired
+    private PhoneLookup lookup;
+    @Autowired
+    private PhoneBindingMapper bindings;
+    @Autowired
+    private PhoneRegistrationTicketStore tickets;
+    @MockitoBean
+    private SmsSender sender;
 
     private final ObjectMapper json = new ObjectMapper();
     private final Map<String, String> sentCodes = new ConcurrentHashMap<>();
@@ -87,15 +94,18 @@ class SmsEntryFlowTests {
     @Test
     void oneHundredVerifiedPhonesReceiveDistinctRandomAccountNames() throws Exception {
         // 预置“已验码”票据，覆盖公开注册服务中的真实账号生成，不改包内实现的可见性。
-        java.util.Set<String> usernames=new java.util.HashSet<>();
-        for(int n=0;n<100;n++) {
-            String phone=nextPhone();MockHttpSession session=new MockHttpSession();
-            String ticket=tickets.issue(lookup.digest(phone),session.getId());
-            var registered=mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
-                    .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone,ticket,"Shop123!")))
+        java.util.Set<String> usernames = new java.util.HashSet<>();
+        for (int n = 0; n < 100; n++) {
+            String phone = nextPhone();
+            MockHttpSession session = new MockHttpSession();
+            String ticket = tickets.issue(lookup.digest(phone), session.getId());
+            var registered = mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "Shop123!")))
                     .andExpect(status().isOk()).andReturn();
-            String username=json.readTree(registered.getResponse().getContentAsString()).path("data").path("username").asString();
-            assertThat(username).matches("sw[a-z0-9]{20}");assertThat(usernames.add(username)).isTrue();
+            String username = json.readTree(registered.getResponse().getContentAsString()).path("data").path("username")
+                    .asString();
+            assertThat(username).matches("sw[a-z0-9]{20}");
+            assertThat(usernames.add(username)).isTrue();
         }
         assertThat(usernames).hasSize(100);
     }
@@ -172,11 +182,15 @@ class SmsEntryFlowTests {
         clearCooldown(phone);
         MockHttpSession second = new MockHttpSession();
         send(phone, second);
+        String anonymousSessionId = second.getId();
         mvc.perform(post("/users/sms/entry/verify").session(second).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.state").value("LOGGED_IN"))
                 .andExpect(jsonPath("$.data.id").value(userId));
         assertThat(second.getAttribute("userId")).isEqualTo(userId);
+        assertThat(second.getId()).isNotEqualTo(anonymousSessionId);
+        assertThat(second.getAttribute("authVersion")).isEqualTo(jdbc.queryForObject(
+                "SELECT auth_version FROM user_accounts WHERE user_id=?", Integer.class, userId));
 
         jdbc.update("UPDATE user_accounts SET status='DISABLED' WHERE user_id=?", userId);
         redis.delete("shiwushop:auth:state:" + userId);
@@ -285,10 +299,14 @@ class SmsEntryFlowTests {
         return phone;
     }
 
-    private String phoneBody(String phone) { return "{\"phone\":\"" + phone + "\"}"; }
+    private String phoneBody(String phone) {
+        return "{\"phone\":\"" + phone + "\"}";
+    }
+
     private String codeBody(String phone, String code) {
         return "{\"phone\":\"" + phone + "\",\"code\":\"" + code + "\"}";
     }
+
     private String registerBody(String phone, String ticket, String password) {
         return "{\"phone\":\"" + phone + "\",\"registrationTicket\":\"" + ticket
                 + "\",\"password\":\"" + password + "\"}";

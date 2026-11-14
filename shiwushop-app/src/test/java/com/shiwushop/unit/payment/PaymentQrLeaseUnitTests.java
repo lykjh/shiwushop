@@ -14,6 +14,7 @@ import com.shiwushop.product.mapper.product.InventoryMovementMapper;
 import com.shiwushop.product.mapper.product.ProductMapper;
 import com.shiwushop.product.mapper.product.SkuMapper;
 import com.shiwushop.trade.service.impl.OrderPaymentServiceImpl;
+import com.shiwushop.marketing.service.MarketingOrderSettlement;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -39,18 +40,34 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentQrLeaseUnitTests {
-    @Mock OrderMapper orders;
-    @Mock OrderItemMapper orderItems;
-    @Mock PaymentAttemptMapper payments;
-    @Mock SkuMapper skus;
-    @Mock ProductMapper products;
-    @Mock InventoryMovementMapper movements;
-    @Mock OutboxEventMapper outbox;
-    @Mock AlipayGateway gateway;
-    @Mock PlatformTransactionManager transactions;
-    @Mock AccountAccess accounts;
-    @Mock Clock clock;
-    @InjectMocks OrderPaymentServiceImpl service;
+    @Mock
+    OrderMapper orders;
+    @Mock
+    OrderItemMapper orderItems;
+    @Mock
+    PaymentAttemptMapper payments;
+    @Mock
+    SkuMapper skus;
+    @Mock
+    ProductMapper products;
+    @Mock
+    InventoryMovementMapper movements;
+    @Mock
+    OutboxEventMapper outbox;
+    @Mock
+    AlipayGateway gateway;
+    @Mock
+    PlatformTransactionManager transactions;
+    @Mock
+    AccountAccess accounts;
+    @Mock
+    Clock clock;
+    @Mock
+    com.shiwushop.member.service.MemberRewardService memberRewards;
+    @Mock
+    MarketingOrderSettlement promotions;
+    @InjectMocks
+    OrderPaymentServiceImpl service;
 
     @Test
     void commitsClaimBeforeCallingGatewayAndCommitsSavedQrAfterward() {
@@ -93,7 +110,8 @@ class PaymentQrLeaseUnitTests {
         InOrder sequence = inOrder(transactions, gateway, payments);
         sequence.verify(payments).claimQrCode(eq(attempt.getId()), any(), any(), any());
         sequence.verify(transactions).commit(any());
-        sequence.verify(gateway).qrCode(eq(attempt.getOutTradeNo()), eq(attempt.getAmount()), eq(order.getPayExpiresAt()));
+        sequence.verify(gateway)
+                .qrCode(eq(attempt.getOutTradeNo()), eq(attempt.getAmount()), eq(order.getPayExpiresAt()));
         sequence.verify(payments).storeQrCode(eq(attempt.getId()), any(), any(), eq(attempt.getQrClaimToken()));
         sequence.verify(transactions).commit(any());
     }

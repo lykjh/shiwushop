@@ -46,18 +46,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantProductDetailTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private ProductImageMapper imageMapper;
-    @Autowired private ProductOptionMapper optionMapper;
-    @Autowired private ProductOptionValueMapper valueMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private SkuOptionValueMapper linkMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private ProductImageMapper imageMapper;
+    @Autowired
+    private ProductOptionMapper optionMapper;
+    @Autowired
+    private ProductOptionValueMapper valueMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private SkuOptionValueMapper linkMapper;
 
     @Test
     void returnsFullDraftInDisplayOrder() throws Exception {
@@ -98,6 +110,7 @@ class MerchantProductDetailTests {
                 .andExpect(jsonPath("$.data.skus[0].optionValueIds[0]").value(white.getId()))
                 .andExpect(jsonPath("$.data.skus[0].optionValueIds[1]").value(small.getId()))
                 .andExpect(jsonPath("$.data.skus[0].price").value(3999.00))
+                .andExpect(jsonPath("$.data.skus[0].legacy").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.skus[0].stock").value(0));
     }
 
@@ -126,7 +139,8 @@ class MerchantProductDetailTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private Shop shop(Long owner) {
@@ -157,9 +171,11 @@ class MerchantProductDetailTests {
 
     private Long image(Product product, Long owner, int order) {
         String key = "test/product-detail-" + UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
-                "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
-        Long mediaId = jdbcTemplate.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class, key);
+        jdbcTemplate.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
+                        "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
+        Long mediaId = jdbcTemplate.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class,
+                key);
         ProductImage image = new ProductImage();
         image.setProductId(product.getId());
         image.setMediaId(mediaId);

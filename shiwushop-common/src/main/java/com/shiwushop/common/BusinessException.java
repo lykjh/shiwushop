@@ -2,9 +2,8 @@ package com.shiwushop.common;
 
 import lombok.Getter;
 
-
 @Getter
-public class BusinessException extends RuntimeException{
+public class BusinessException extends RuntimeException {
     private final int code;
     private final transient Object data;
 

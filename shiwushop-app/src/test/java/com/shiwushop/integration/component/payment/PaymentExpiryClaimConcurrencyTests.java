@@ -1,7 +1,7 @@
 package com.shiwushop.integration.component.payment;
 
 import com.shiwushop.payment.service.AlipayGateway;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.trade.service.OrderPaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,10 +31,14 @@ import static org.mockito.Mockito.when;
 })
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PaymentExpiryClaimConcurrencyTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private OrderPaymentService payments;
-    @Autowired private Clock clock;
-    @MockitoBean private SdkAlipayGateway gateway;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private OrderPaymentService payments;
+    @Autowired
+    private Clock clock;
+    @MockitoBean(name = "localSimulationGateway")
+    private LocalSimulationGateway gateway;
 
     @Test
     void twoScannersQueryTheSameExpiredOrderOnlyOnce() throws Exception {
@@ -47,11 +51,11 @@ class PaymentExpiryClaimConcurrencyTests {
         jdbc.update("INSERT INTO shops(owner_user_id,name,enabled) VALUES (?,?,1)", userId, shopName);
         Long shopId = jdbc.queryForObject("SELECT id FROM shops WHERE name=?", Long.class, shopName);
         jdbc.update("""
-                INSERT INTO orders(user_id,shop_id,total_amount,status,pay_expires_at,
-                                   consignee_ciphertext,phone_ciphertext,province,city,district,
-                                   detail_ciphertext,shipping_key_version)
-                VALUES (?,?,20,'UNPAID',?,?,?,?,?,?,?,1)
-                """, userId, shopId, LocalDateTime.now(clock).minusMinutes(1),
+                        INSERT INTO orders(user_id,shop_id,total_amount,status,pay_expires_at,
+                                           consignee_ciphertext,phone_ciphertext,province,city,district,
+                                           detail_ciphertext,shipping_key_version)
+                        VALUES (?,?,20,'UNPAID',?,?,?,?,?,?,?,1)
+                        """, userId, shopId, LocalDateTime.now(clock).minusMinutes(1),
                 new byte[]{1}, new byte[]{1}, "江苏", "南京", "玄武", new byte[]{1});
         Long orderId = jdbc.queryForObject("SELECT id FROM orders WHERE user_id=? AND shop_id=?",
                 Long.class, userId, shopId);

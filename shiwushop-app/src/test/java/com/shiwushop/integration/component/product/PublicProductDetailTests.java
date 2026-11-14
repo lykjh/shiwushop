@@ -49,19 +49,32 @@ import static org.mockito.Mockito.verify;
 @AutoConfigureMockMvc
 @Transactional
 class PublicProductDetailTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CategoryMapper categories;
-    @Autowired private BrandMapper brands;
-    @Autowired private ShopMapper shops;
-    @Autowired private ProductMapper products;
-    @Autowired private ProductImageMapper images;
-    @Autowired private ProductOptionMapper options;
-    @MockitoSpyBean private ProductOptionValueMapper values;
-    @Autowired private SkuMapper skus;
-    @MockitoSpyBean private SkuOptionValueMapper links;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private BrandMapper brands;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private ProductMapper products;
+    @Autowired
+    private ProductImageMapper images;
+    @Autowired
+    private ProductOptionMapper options;
+    @MockitoSpyBean
+    private ProductOptionValueMapper values;
+    @Autowired
+    private SkuMapper skus;
+    @MockitoSpyBean
+    private SkuOptionValueMapper links;
 
     @Test
     void showsMediaBrandOptionsSkuAndHistoricalSalesWithoutStock() throws Exception {
@@ -150,43 +163,88 @@ class PublicProductDetailTests {
         TestRegistration.register(users, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         return jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
     }
+
     private Shop shop(Long owner, int enabled) {
-        Shop s = new Shop(); s.setOwnerUserId(owner); s.setName("店铺-" + UUID.randomUUID());
-        s.setEnabled(enabled); shops.insert(s); return s;
+        Shop s = new Shop();
+        s.setOwnerUserId(owner);
+        s.setName("店铺-" + UUID.randomUUID());
+        s.setEnabled(enabled);
+        shops.insert(s);
+        return s;
     }
+
     private Category category(Long parent, int level, int visible) {
-        Category c = new Category(); c.setParentId(parent); c.setLevel(level);
-        c.setVisible(visible); c.setSortOrder(0); c.setName("分类-" + UUID.randomUUID());
-        categories.insert(c); return c;
+        Category c = new Category();
+        c.setParentId(parent);
+        c.setLevel(level);
+        c.setVisible(visible);
+        c.setSortOrder(0);
+        c.setName("分类-" + UUID.randomUUID());
+        categories.insert(c);
+        return c;
     }
+
     private Brand brand() {
-        Brand b = new Brand(); b.setName("品牌-" + UUID.randomUUID()); b.setEnabled(1); brands.insert(b); return b;
+        Brand b = new Brand();
+        b.setName("品牌-" + UUID.randomUUID());
+        b.setEnabled(1);
+        brands.insert(b);
+        return b;
     }
+
     private Product product(Category category, Shop shop, Brand brand, String status) {
-        Product p = new Product(); p.setCategoryId(category.getId()); p.setShopId(shop.getId());
-        p.setName("商品-" + UUID.randomUUID()); p.setStatus(ProductStatus.valueOf(status)); products.insert(p);
-        if (brand != null) products.insertBrand(p.getId(), brand.getId());
+        Product p = new Product();
+        p.setCategoryId(category.getId());
+        p.setShopId(shop.getId());
+        p.setName("商品-" + UUID.randomUUID());
+        p.setStatus(ProductStatus.valueOf(status));
+        products.insert(p);
+        if (brand != null)
+            products.insertBrand(p.getId(), brand.getId());
         return p;
     }
+
     private Long image(Product product, Long owner, int order) {
         String key = "test/product-detail-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
-                "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
+        jdbc.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
+                        "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
         Long mediaId = jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class, key);
-        ProductImage image = new ProductImage(); image.setProductId(product.getId()); image.setMediaId(mediaId);
-        image.setIsCover(order == 0 ? 1 : 0); image.setSortOrder(order); images.insert(image); return mediaId;
+        ProductImage image = new ProductImage();
+        image.setProductId(product.getId());
+        image.setMediaId(mediaId);
+        image.setIsCover(order == 0 ? 1 : 0);
+        image.setSortOrder(order);
+        images.insert(image);
+        return mediaId;
     }
+
     private ProductOption option(Product product, String name, int order) {
-        ProductOption o = new ProductOption(); o.setProductId(product.getId()); o.setName(name);
-        o.setSortOrder(order); options.insert(o); return o;
+        ProductOption o = new ProductOption();
+        o.setProductId(product.getId());
+        o.setName(name);
+        o.setSortOrder(order);
+        options.insert(o);
+        return o;
     }
+
     private ProductOptionValue value(ProductOption option, String name) {
-        ProductOptionValue v = new ProductOptionValue(); v.setOptionId(option.getId());
-        v.setValueName(name); v.setSortOrder(0); values.insert(v); return v;
+        ProductOptionValue v = new ProductOptionValue();
+        v.setOptionId(option.getId());
+        v.setValueName(name);
+        v.setSortOrder(0);
+        values.insert(v);
+        return v;
     }
+
     private Sku sku(Product product, String price, int stock) {
-        Sku s = new Sku(); s.setProductId(product.getId());
-        String hex = UUID.randomUUID().toString().replace("-", ""); s.setOptionSignature(hex + hex);
-        s.setPrice(new BigDecimal(price)); s.setStock(stock); skus.insert(s); return s;
+        Sku s = new Sku();
+        s.setProductId(product.getId());
+        String hex = UUID.randomUUID().toString().replace("-", "");
+        s.setOptionSignature(hex + hex);
+        s.setPrice(new BigDecimal(price));
+        s.setStock(stock);
+        skus.insert(s);
+        return s;
     }
 }

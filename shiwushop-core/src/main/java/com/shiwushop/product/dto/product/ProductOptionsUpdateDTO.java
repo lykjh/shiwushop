@@ -9,6 +9,7 @@ import java.util.List;
 
 @Data
 public class ProductOptionsUpdateDTO {
+    /** 商品规格选项列表。 */
     @NotEmpty
     private List<@NotNull @Valid ProductOptionSaveDTO> options;
 }

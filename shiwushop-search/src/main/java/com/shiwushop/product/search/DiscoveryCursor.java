@@ -10,7 +10,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.security.GeneralSecurityException;
+
 import tools.jackson.core.JacksonException;
+
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -27,13 +29,16 @@ public class DiscoveryCursor {
         this.json = json;
         byte[] secret = configuredSecret.isBlank() ? new byte[32]
                 : configuredSecret.getBytes(StandardCharsets.UTF_8);
-        if (configuredSecret.isBlank()) new SecureRandom().nextBytes(secret);
-        if (secret.length < 32) throw new IllegalStateException("搜索游标签名密钥至少需要32字节");
+        if (configuredSecret.isBlank())
+            new SecureRandom().nextBytes(secret);
+        if (secret.length < 32)
+            throw new IllegalStateException("搜索游标签名密钥至少需要32字节");
         this.key = new SecretKeySpec(secret, "HmacSHA256");
     }
 
     /** 游标携带的搜索快照、排序位置、查询指纹、访问身份和到期时间。 */
-    public record State(String pit, List<Object> sort, String query, Long userId, long expiresAt) { }
+    public record State(String pit, List<Object> sort, String query, Long userId, long expiresAt) {
+    }
 
     /** 把游标状态编码为 URL 安全的载荷和 HMAC 签名，防止客户端改写翻页位置。 */
     public String encode(State state) {

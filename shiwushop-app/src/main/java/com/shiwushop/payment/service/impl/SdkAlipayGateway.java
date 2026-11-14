@@ -32,6 +32,7 @@ import com.alipay.api.response.AlipayTradeFastpayRefundQueryResponse;
 import com.shiwushop.common.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Fallback;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -47,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
+@Fallback
 public class SdkAlipayGateway implements AlipayGateway, RefundGateway, BillDownloadGateway {
     private static final String SANDBOX_GATEWAY = "https://openapi-sandbox.dl.alipaydev.com/gateway.do";
     private static final String SANDBOX_GATEWAY_ALT = "https://openapi.alipaydev.com/gateway.do";

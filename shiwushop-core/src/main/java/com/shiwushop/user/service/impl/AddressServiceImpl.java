@@ -26,9 +26,11 @@ public class AddressServiceImpl implements AddressService {
     @Override
     public Address forCheckout(Long userId, Long addressId) {
         Address address = addressMapper.selectOwnedActive(userId, addressId);
-        if (address == null) throw new BusinessException(404, "地址不存在");
+        if (address == null)
+            throw new BusinessException(404, "地址不存在");
         return address;
     }
+
     @Override
     public void markUsed(Long userId, Long addressId, LocalDateTime usedAt) {
         addressMapper.markUsed(userId, addressId, usedAt);
@@ -127,7 +129,8 @@ public class AddressServiceImpl implements AddressService {
      */
     private Long ensureDefault(Long userId) {
         Long defaultId = addressMapper.selectDefaultId(userId);
-        if (defaultId != null) return defaultId;
+        if (defaultId != null)
+            return defaultId;
         Long preferredId = addressMapper.selectPreferredId(userId);
         if (preferredId != null && addressMapper.setDefault(userId, preferredId) != 1) {
             throw new IllegalStateException("默认地址设置失败");

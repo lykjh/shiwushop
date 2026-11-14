@@ -13,12 +13,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,11 +31,16 @@ import static org.mockito.Mockito.doAnswer;
 
 @SpringBootTest(properties = {"spring.datasource.hikari.maximum-pool-size=2", "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class ShopReturnProfileConcurrencyTest {
-    @Autowired JdbcTemplate jdbc;
-    @Autowired ShopReturnProfileService profiles;
-    @Autowired ShopService shops;
-    @MockitoSpyBean MerchantShopAccess access;
-    @Autowired PlatformTransactionManager transactions;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Autowired
+    ShopReturnProfileService profiles;
+    @Autowired
+    ShopService shops;
+    @MockitoSpyBean
+    MerchantShopAccess access;
+    @Autowired
+    PlatformTransactionManager transactions;
 
     @Test
     void transferBeforeOwnerLockRejectsOldWrite() throws Exception {
@@ -56,12 +63,15 @@ class ShopReturnProfileConcurrencyTest {
                 try {
                     assertTrue(entered.await(10, TimeUnit.SECONDS));
                     shops.changeOwner(id, newOwner.id());
-                } finally { resume.countDown();
+                } finally {
+                    resume.countDown();
                 }
                 var failure = assertThrows(ExecutionException.class, () -> pending.get(10, TimeUnit.SECONDS));
                 assertInstanceOf(BusinessException.class, failure.getCause());
                 assertEquals(404, ((BusinessException) failure.getCause()).getCode());
-                assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM shop_return_profiles WHERE shop_id=?", Integer.class, id));
+                assertEquals(0,
+                        jdbc.queryForObject("SELECT COUNT(*) FROM shop_return_profiles WHERE shop_id=?", Integer.class,
+                                id));
             } finally {
                 resume.countDown();
                 jdbc.update("DELETE FROM shop_return_profiles WHERE shop_id=?", id);
@@ -124,7 +134,8 @@ class ShopReturnProfileConcurrencyTest {
 
     @Test
     void snapshotRequiresCallerTransaction() {
-        assertThrows(org.springframework.transaction.IllegalTransactionStateException.class, () -> profiles.snapshotForReturn(1L));
+        assertThrows(org.springframework.transaction.IllegalTransactionStateException.class,
+                () -> profiles.snapshotForReturn(1L));
     }
 
     @Test

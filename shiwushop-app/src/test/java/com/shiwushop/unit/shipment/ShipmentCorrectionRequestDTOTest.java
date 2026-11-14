@@ -3,10 +3,12 @@ package com.shiwushop.unit.shipment;
 import com.shiwushop.trade.dto.shipment.correction.ShipmentCorrectionRequestDTO;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ShipmentCorrectionRequestDTOTest {
-    @Test void stripsFieldsAndRejectsInvalidVersionOrBlankFields() {
+    @Test
+    void stripsFieldsAndRejectsInvalidVersionOrBlankFields() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             var valid = new ShipmentCorrectionRequestDTO(0, " 顺丰 ", " SF1 ", " 更正 ");

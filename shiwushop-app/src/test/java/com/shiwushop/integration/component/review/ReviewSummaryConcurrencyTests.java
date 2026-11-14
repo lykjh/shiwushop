@@ -17,8 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 class ReviewSummaryConcurrencyTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ProductReviewMapper reviews;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ProductReviewMapper reviews;
 
     @Test
     void concurrentReviewsOfOneProductDoNotLoseSummaryIncrements() throws Exception {
@@ -44,7 +46,8 @@ class ReviewSummaryConcurrencyTests {
                     }));
                 }
                 start.countDown();
-                for (Future<Integer> write : writes) write.get();
+                for (Future<Integer> write : writes)
+                    write.get();
             }
             assertEquals(8, reviews.selectSummary(productId).reviewCount());
             assertEquals(40, jdbc.queryForObject(

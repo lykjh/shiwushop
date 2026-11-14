@@ -1,4 +1,5 @@
 package com.shiwushop.integration.component.user;
+
 import com.shiwushop.support.LoginTestRequest;
 
 import com.shiwushop.support.TestRegistration;
@@ -28,10 +29,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class UserLoginTests {
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private CaptchaProofStore proofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private CaptchaProofStore proofs;
 
     @Test
     void activeAccountLogsInWithNewSchemaAndCreatesSession() throws Exception {
@@ -107,5 +112,4 @@ class UserLoginTests {
     private String newUsername() {
         return "buyer_" + UUID.randomUUID().toString().replace("-", "");
     }
-
 }

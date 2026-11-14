@@ -25,6 +25,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 class SmsCodeDelivery {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(SmsCodeDelivery.class);
     private final SecureRandom random = new SecureRandom();
     private final PhoneLookup phones;
@@ -34,10 +35,14 @@ class SmsCodeDelivery {
     private final SmsChallengeStore challenges;
     private final SmsSender sender;
 
-    @Value("${shop.sms.ip-tokens-per-second:2}") private long ipTokensPerSecond;
-    @Value("${shop.sms.ip-burst:20}") private long ipBurst;
-    @Value("${shop.sms.entry-global-tokens-per-second:1}") private long entryGlobalRate;
-    @Value("${shop.sms.entry-global-burst:20}") private long entryGlobalBurst;
+    @Value("${shop.sms.ip-tokens-per-second:2}")
+    private long ipTokensPerSecond;
+    @Value("${shop.sms.ip-burst:20}")
+    private long ipBurst;
+    @Value("${shop.sms.entry-global-tokens-per-second:1}")
+    private long entryGlobalRate;
+    @Value("${shop.sms.entry-global-burst:20}")
+    private long entryGlobalBurst;
 
     @PostConstruct
     void validateLimits() {
@@ -47,11 +52,13 @@ class SmsCodeDelivery {
 
     /** 渠道失败时删除预留挑战；发送额度仍视为已使用，避免反复冲击渠道。 */
     void send(String phone, String purpose, String remoteAddress, boolean binding) {
-        if (!sender.configured()) throw new BusinessException(503, "短信渠道未配置");
+        if (!sender.configured())
+            throw new BusinessException(503, "短信渠道未配置");
         long retry = limiter.tokenBucketRetrySeconds("shiwushop:sms:send:ip:" + limiter.digest(remoteAddress),
                 ipTokensPerSecond, ipBurst);
-        if (retry > 0) throw new BusinessException(429, "验证码发送过于频繁",
-                Map.of("retryAfterSeconds", retry), null);
+        if (retry > 0)
+            throw new BusinessException(429, "验证码发送过于频繁",
+                    Map.of("retryAfterSeconds", retry), null);
         String digest = phones.digest(phone);
         String code = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
         String token = UUID.randomUUID().toString();

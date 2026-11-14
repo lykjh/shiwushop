@@ -13,6 +13,7 @@ import com.shiwushop.product.vo.inventory.InventoryMovementPageVO;
 import com.shiwushop.product.vo.inventory.InventoryMovementVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 
 @Service
@@ -26,7 +27,7 @@ public class InventoryMovementServiceImpl implements InventoryMovementService {
     /** 只读本店 SKU 流水；按 ID 游标分页，新写入不改变后续页边界。 */
     @Override
     public InventoryMovementPageVO list(Long userId, Long shopId, Long skuId, InventoryMovementQuery query) {
-        shops.requireOwned(userId, shopId, "商品不存在");
+        shops.requireRole(userId, shopId, "INVENTORY", "商品不存在");
         Sku sku = skus.selectById(skuId);
         Product product = sku == null ? null : products.selectById(sku.getProductId());
         if (product == null || !shopId.equals(product.getShopId()))

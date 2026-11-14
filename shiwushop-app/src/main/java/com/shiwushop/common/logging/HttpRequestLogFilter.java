@@ -21,6 +21,7 @@ import java.util.UUID;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HttpRequestLogFilter extends OncePerRequestFilter {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(HttpRequestLogFilter.class);
 
     /** 为每次 HTTP 请求生成追踪 ID，并记录路由模板、状态码和耗时。 */
@@ -47,7 +48,8 @@ public class HttpRequestLogFilter extends OncePerRequestFilter {
     }
 
     private static String moduleOf(String packageName) {
-        if (packageName.startsWith("com.shiwushop.common.media.")) return "media";
+        if (packageName.startsWith("com.shiwushop.common.media."))
+            return "media";
         return packageName.startsWith("com.shiwushop.")
                 ? packageName.substring("com.shiwushop.".length()).split("\\.", 2)[0] : "common";
     }

@@ -11,6 +11,7 @@ import java.util.Map;
 
 @Component
 public class SmsChallengeStore {
+    /** 原子校验发送冷却和滚动额度，并预留 pending 状态的短信挑战。 */
     private static final DefaultRedisScript<Long> RESERVE = new DefaultRedisScript<>("""
             local t = redis.call('TIME')
             local now = t[1] * 1000 + math.floor(t[2] / 1000)
@@ -28,21 +29,25 @@ public class SmsChallengeStore {
             redis.call('PEXPIRE', KEYS[3], ARGV[6])
             return 0
             """, Long.class);
+    /** 仅由当前发送令牌激活短信挑战，避免旧发送结果覆盖新挑战。 */
     private static final DefaultRedisScript<Long> ACTIVATE = new DefaultRedisScript<>("""
             if redis.call('HGET', KEYS[1], 'token') ~= ARGV[1] then return 0 end
             redis.call('HSET', KEYS[1], 'state', 'active')
             return 1
             """, Long.class);
+    /** 仅撤销当前发送令牌对应的挑战，保留已占用的发送额度。 */
     private static final DefaultRedisScript<Long> ABORT = new DefaultRedisScript<>("""
             if redis.call('HGET', KEYS[1], 'token') ~= ARGV[1] then return 0 end
             return redis.call('DEL', KEYS[1])
             """, Long.class);
+    /** 短信尚未发出时按令牌撤销挑战，同时归还冷却和滚动发送额度。 */
     private static final DefaultRedisScript<Long> CANCEL_BEFORE_SEND = new DefaultRedisScript<>("""
             if redis.call('HGET', KEYS[3], 'token') ~= ARGV[1] then return 0 end
             redis.call('DEL', KEYS[3], KEYS[1])
             redis.call('ZREM', KEYS[2], ARGV[1])
             return 1
             """, Long.class);
+    /** 原子核验并消费 active 挑战；验证码错误次数达到上限时删除挑战。 */
     private static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
             if redis.call('HGET', KEYS[1], 'state') ~= 'active' then return 0 end
             if redis.call('HGET', KEYS[1], 'mac') == ARGV[1] then
@@ -69,7 +74,8 @@ public class SmsChallengeStore {
                              @Value("${shop.sms.sends-per-window:10}") int sendsPerWindow,
                              @Value("${shop.sms.failures-per-code:5}") int failuresPerCode) {
         if (cooldownSeconds < 1 || windowSeconds < 1 || codeSeconds < 1
-                || sendsPerWindow < 1 || failuresPerCode < 1) throw new IllegalArgumentException("短信限额参数无效");
+                || sendsPerWindow < 1 || failuresPerCode < 1)
+            throw new IllegalArgumentException("短信限额参数无效");
         this.redis = redis;
         this.cooldownMillis = cooldownSeconds * 1000;
         this.windowMillis = windowSeconds * 1000;
@@ -85,9 +91,11 @@ public class SmsChallengeStore {
                         prefix + ":" + purpose + ":code"),
                 token, Long.toString(cooldownMillis), Long.toString(windowMillis),
                 Integer.toString(sendsPerWindow), mac, Long.toString(codeMillis));
-        if (retry == null) throw new BusinessException(503, "验证码服务暂时不可用");
-        if (retry > 0) throw new BusinessException(429, "验证码发送过于频繁",
-                Map.of("retryAfterSeconds", retry), null);
+        if (retry == null)
+            throw new BusinessException(503, "验证码服务暂时不可用");
+        if (retry > 0)
+            throw new BusinessException(429, "验证码发送过于频繁",
+                    Map.of("retryAfterSeconds", retry), null);
     }
 
     /** 只有当前这次发送的令牌能激活挑战，旧发送结果不能覆盖新验证码。 */
@@ -96,6 +104,7 @@ public class SmsChallengeStore {
             throw new BusinessException(503, "验证码服务暂时不可用");
     }
 
+    /** 渠道失败可能已实际发出短信，只撤销验证码，不归还发送额度以免反复冲击渠道。 */
     public void abort(String digest, String purpose, String token) {
         redis.execute(ABORT, List.of(codeKey(digest, purpose)), token);
     }
@@ -114,10 +123,12 @@ public class SmsChallengeStore {
         Long consumed = redis.execute(CONSUME,
                 List.of(codeKey(digest, purpose)), candidateMac,
                 Integer.toString(failuresPerCode));
-        if (consumed == null) throw new BusinessException(503, "验证码服务暂时不可用");
+        if (consumed == null)
+            throw new BusinessException(503, "验证码服务暂时不可用");
         return consumed == 1;
     }
 
+    /** 各用途共享手机号发送限额，但验证码隔离，绑定码不能用于登录或重置密码。 */
     private String codeKey(String digest, String purpose) {
         return prefix(digest) + ":" + purpose + ":code";
     }

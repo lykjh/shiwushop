@@ -32,14 +32,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class PublicShopTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void listPaginatesOpenShopsWithVisibleOnSaleProducts() throws Exception {

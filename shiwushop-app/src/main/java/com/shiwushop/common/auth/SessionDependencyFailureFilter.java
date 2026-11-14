@@ -36,11 +36,13 @@ public class SessionDependencyFailureFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, response);
         } catch (ServletException | RuntimeException error) {
-            if (!isDependencyFailure(error)) throw error;
+            if (!isDependencyFailure(error))
+                throw error;
             log.warn("session dependency unavailable error={} committed={}",
                     error.getClass().getSimpleName(), response.isCommitted());
             // 已发出的响应无法改写；保留异常让容器结束失败传输。
-            if (response.isCommitted()) throw error;
+            if (response.isCommitted())
+                throw error;
             writeUnavailable(response);
         }
     }
@@ -49,7 +51,8 @@ public class SessionDependencyFailureFilter extends OncePerRequestFilter {
     private boolean isDependencyFailure(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof DataAccessResourceFailureException || cause instanceof QueryTimeoutException
-                    || cause instanceof RedisSystemException) return true;
+                    || cause instanceof RedisSystemException)
+                return true;
         }
         return false;
     }

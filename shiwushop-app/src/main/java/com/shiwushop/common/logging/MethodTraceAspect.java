@@ -15,10 +15,16 @@ import org.springframework.util.ClassUtils;
 @Component
 @ConditionalOnProperty(prefix = "shop.logging", name = "method-enabled", havingValue = "true")
 public class MethodTraceAspect {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(MethodTraceAspect.class);
+    /** 方法跟踪切点：控制器、服务、mapper 与 cache 包中的 public 方法。 */
+    private static final String BUSINESS_METHOD = "execution(public * com.shiwushop..*(..)) && ("
+            + "@within(org.springframework.web.bind.annotation.RestController) || "
+            + "@within(org.springframework.stereotype.Service) || "
+            + "within(com.shiwushop..mapper..*) || within(com.shiwushop..cache..*))";
 
-    /** 按需记录公开方法耗时与结果；不输出参数、返回值或异常消息。 */
-    @Around("execution(public * com.shiwushop..*(..)) && !within(com.shiwushop.common.logging.MethodTraceAspect)")
+    /** 只跟踪业务入口与数据访问方法，避免给 final 配置对象创建代理。 */
+    @Around(BUSINESS_METHOD)
     public Object trace(ProceedingJoinPoint call) throws Throwable {
         long started = System.nanoTime();
         String declaredBy = call.getSignature().getDeclaringTypeName();
@@ -27,22 +33,24 @@ public class MethodTraceAspect {
         String method = owner + "." + call.getSignature().getName();
         String module = owner.startsWith("com.shiwushop.common.media.") ? "media"
                 : owner.startsWith("com.shiwushop.") ? owner.substring("com.shiwushop.".length()).split("\\.", 2)[0]
-                : "common";
+                  : "common";
         boolean completed = false;
         try {
             Object result = call.proceed();
             completed = true;
             return result;
         } finally {
-            if (completed) log.info("method={} outcome=success durationMs={} module={}", method,
-                    (System.nanoTime() - started) / 1_000_000, module);
-            else log.warn("method={} outcome=failure durationMs={} module={}", method,
-                    (System.nanoTime() - started) / 1_000_000, module);
+            if (completed)
+                log.info("method={} outcome=success durationMs={} module={}", method,
+                        (System.nanoTime() - started) / 1_000_000, module);
+            else
+                log.warn("method={} outcome=failure durationMs={} module={}", method,
+                        (System.nanoTime() - started) / 1_000_000, module);
         }
     }
 
     /** 由框架观察异常类型，业务异常继续原样传播，不捕获参数或异常消息。 */
-    @AfterThrowing(pointcut = "execution(public * com.shiwushop..*(..)) && !within(com.shiwushop.common.logging.MethodTraceAspect)",
+    @AfterThrowing(pointcut = BUSINESS_METHOD,
             throwing = "failure")
     public void failed(JoinPoint call, Throwable failure) {
         log.warn("method={} error={}", call.getSignature().toLongString(), failure.getClass().getSimpleName());

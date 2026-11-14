@@ -7,5 +7,9 @@ public interface MediaReadService {
     /** 核对图片所有权或公开引用后返回文件资源与响应元数据。 */
     ImageFile read(Long mediaId, Long currentUserId);
 
-    record ImageFile(Resource resource, String mimeType, boolean owned, String etag) {}
+    /** 已验证管理员读取申请中的私有资质图片。 */
+    ImageFile readCredentialForReview(Long mediaId, Long reviewerId);
+
+    record ImageFile(Resource resource, String mimeType, boolean owned, String etag) {
+    }
 }

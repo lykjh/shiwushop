@@ -23,10 +23,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 class AddressDefaultConcurrencyTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private AddressService addresses;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private AddressService addresses;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
     private Long userId;
 
     @Test
@@ -38,8 +42,14 @@ class AddressDefaultConcurrencyTests {
         AddressVO second = addresses.create(userId, address("乙", 0));
         CountDownLatch start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
-            var left = executor.submit(() -> { start.await(); return addresses.update(userId, first.getId(), address("甲", 1)); });
-            var right = executor.submit(() -> { start.await(); return addresses.update(userId, second.getId(), address("乙", 1)); });
+            var left = executor.submit(() -> {
+                start.await();
+                return addresses.update(userId, first.getId(), address("甲", 1));
+            });
+            var right = executor.submit(() -> {
+                start.await();
+                return addresses.update(userId, second.getId(), address("乙", 1));
+            });
             start.countDown();
             left.get(10, TimeUnit.SECONDS);
             right.get(10, TimeUnit.SECONDS);
@@ -50,7 +60,8 @@ class AddressDefaultConcurrencyTests {
 
     @AfterEach
     void cleanUp() {
-        if (userId == null) return;
+        if (userId == null)
+            return;
         jdbc.update("DELETE FROM addresses WHERE user_id=?", userId);
         jdbc.update("DELETE FROM user_accounts WHERE user_id=?", userId);
         jdbc.update("DELETE FROM users WHERE id=?", userId);

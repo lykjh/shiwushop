@@ -32,7 +32,8 @@ class ProductOptionReader {
                 new LambdaQueryWrapper<ProductOption>()
                         .eq(ProductOption::getProductId, productId)
                         .orderByAsc(ProductOption::getSortOrder, ProductOption::getId));
-        if (options.isEmpty()) return List.of();
+        if (options.isEmpty())
+            return List.of();
         Map<Long, List<ProductOptionValueVO>> values = new HashMap<>();
         for (ProductOptionValue value : valueMapper.selectList(
                 new LambdaQueryWrapper<ProductOptionValue>()
@@ -61,5 +62,4 @@ class ProductOptionReader {
         }
         return values;
     }
-
 }

@@ -6,6 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.ObjectMapper;
+
 import java.util.stream.Stream;
 
 /** 只校验重设 DTO：密码沿用可见 ASCII 的 8～72 位规则，不在服务层重复检查。 */
@@ -34,10 +35,12 @@ class PasswordResetDTOContractTest {
                 Arguments.of("票据非法字符", "*".repeat(43), "Shop123!", false));
     }
 
-    @ParameterizedTest(name = "{0}") @MethodSource("boundaries")
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("boundaries")
     void validatesBoundary(String name, String ticket, String password, boolean valid) {
         var body = new ObjectMapper().createObjectNode();
-        body.put("resetTicket", ticket); body.put("newPassword", password);
+        body.put("resetTicket", ticket);
+        body.put("newPassword", password);
         DtoContract.verify(PasswordResetDTO.class, body.toString(), valid);
     }
 }

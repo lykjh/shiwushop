@@ -31,5 +31,4 @@ public class CheckoutController {
     public Result<CheckoutVO> direct(@Valid @RequestBody DirectCheckoutDTO dto, HttpServletRequest request) {
         return Result.success(checkoutService.checkoutDirect(SessionUser.requireId(request), dto));
     }
-
 }

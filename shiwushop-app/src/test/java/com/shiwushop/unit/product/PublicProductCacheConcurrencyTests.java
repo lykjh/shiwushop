@@ -36,6 +36,7 @@ class PublicProductCacheConcurrencyTests {
                 () -> cache.list(new PublicProductQuery(null, null, null, null, null, 20, null)));
         org.mockito.Mockito.verifyNoInteractions(products);
     }
+
     @Test
     void concurrentHomePageMissesLoadTheDatabaseOnce() throws Exception {
         PublicProductService products = mock(PublicProductService.class);
@@ -80,9 +81,11 @@ class PublicProductCacheConcurrencyTests {
                 start.await();
                 return cache.list(query);
             })).toList();
-            if (!ready.await(5, TimeUnit.SECONDS)) throw new AssertionError("workers not ready");
+            if (!ready.await(5, TimeUnit.SECONDS))
+                throw new AssertionError("workers not ready");
             start.countDown();
-            for (var call : calls) call.get(5, TimeUnit.SECONDS);
+            for (var call : calls)
+                call.get(5, TimeUnit.SECONDS);
         }
         assertEquals(1, databaseQueries.get(), "同一热点缓存失效不应触发多次数据库查询");
     }

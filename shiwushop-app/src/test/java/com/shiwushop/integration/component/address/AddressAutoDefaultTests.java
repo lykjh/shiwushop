@@ -21,10 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Transactional
 class AddressAutoDefaultTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private AddressService addresses;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private AddressService addresses;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void choosesRecentlyUsedAddressWhenDefaultIsClearedAndNewestWhenNoUsageExists() {
@@ -50,7 +54,8 @@ class AddressAutoDefaultTests {
     }
 
     private void assertDefault(Long userId, Long id) {
-        assertEquals(id, jdbc.queryForObject("SELECT id FROM addresses WHERE user_id = ? AND is_default = 1 AND deleted_at IS NULL",
+        assertEquals(id, jdbc.queryForObject(
+                "SELECT id FROM addresses WHERE user_id = ? AND is_default = 1 AND deleted_at IS NULL",
                 Long.class, userId));
     }
 

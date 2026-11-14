@@ -20,10 +20,14 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CartWriteRaceUnitTests {
-    @Mock CartItemMapper items;
-    @Mock SkuMapper skus;
-    @Mock AccountAccess accounts;
-    @InjectMocks CartServiceImpl service;
+    @Mock
+    CartItemMapper items;
+    @Mock
+    SkuMapper skus;
+    @Mock
+    AccountAccess accounts;
+    @InjectMocks
+    CartServiceImpl service;
 
     @Test
     void updateRejectsItemDeletedAfterOwnershipRead() {

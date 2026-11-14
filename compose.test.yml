@@ -23,3 +23,35 @@ services:
       interval: 2s
       timeout: 2s
       retries: 30
+
+  mysql-member-marketing:
+    image: mysql:8.0
+    profiles: ["member-marketing"]
+    environment:
+      MYSQL_ROOT_PASSWORD: test-root
+      MYSQL_DATABASE: shiwushop_member_20261105
+      MYSQL_USER: shiwushop
+      MYSQL_PASSWORD: test-member-local
+    ports:
+      - "127.0.0.1:24306:3306"
+    volumes:
+      - member-marketing-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis-member-marketing:
+    image: redis:7-alpine
+    profiles: ["member-marketing"]
+    ports:
+      - "127.0.0.1:27379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  member-marketing-mysql:

@@ -11,7 +11,9 @@ import com.shiwushop.product.mapper.product.SkuMapper;
 import com.shiwushop.product.service.impl.InventoryMovementServiceImpl;
 import com.shiwushop.product.vo.inventory.InventoryMovementVO;
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -23,9 +25,12 @@ class InventoryMovementServiceImplTest {
     final InventoryMovementServiceImpl service = new InventoryMovementServiceImpl(shops, skus, products, movements);
     final InventoryMovementQuery query = new InventoryMovementQuery(null, null, null, null, 1);
 
-    @Test void returnsOneExtraRowAsNextCursor() {
-        var sku = new Sku(); sku.setProductId(3L);
-        var product = new Product(); product.setShopId(2L);
+    @Test
+    void returnsOneExtraRowAsNextCursor() {
+        var sku = new Sku();
+        sku.setProductId(3L);
+        var product = new Product();
+        product.setShopId(2L);
         when(skus.selectById(4L)).thenReturn(sku);
         when(products.selectById(3L)).thenReturn(product);
         var first = new InventoryMovementVO(9L, "MERCHANT_ADJUST", 1, 2, null, null);
@@ -37,9 +42,12 @@ class InventoryMovementServiceImplTest {
         assertEquals(9L, result.nextCursor());
     }
 
-    @Test void rejectsSkuFromAnotherShopWithoutReadingMovements() {
-        var sku = new Sku(); sku.setProductId(3L);
-        var product = new Product(); product.setShopId(5L);
+    @Test
+    void rejectsSkuFromAnotherShopWithoutReadingMovements() {
+        var sku = new Sku();
+        sku.setProductId(3L);
+        var product = new Product();
+        product.setShopId(5L);
         when(skus.selectById(4L)).thenReturn(sku);
         when(products.selectById(3L)).thenReturn(product);
         assertEquals(404, assertThrows(BusinessException.class, () -> service.list(1L, 2L, 4L, query)).getCode());

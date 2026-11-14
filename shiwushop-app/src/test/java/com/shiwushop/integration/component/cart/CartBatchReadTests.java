@@ -37,16 +37,26 @@ import static org.mockito.Mockito.verify;
 @SpringBootTest
 @Transactional
 class CartBatchReadTests {
-    @Autowired private RegisterService users;
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CartService carts;
-    @Autowired private CartItemMapper cartItems;
-    @MockitoSpyBean private SkuMapper skus;
-    @MockitoSpyBean private ProductMapper products;
-    @MockitoSpyBean private ShopMapper shops;
-    @MockitoSpyBean private CategoryMapper categories;
-    @MockitoSpyBean private SkuOptionValueMapper skuValues;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CartService carts;
+    @Autowired
+    private CartItemMapper cartItems;
+    @MockitoSpyBean
+    private SkuMapper skus;
+    @MockitoSpyBean
+    private ProductMapper products;
+    @MockitoSpyBean
+    private ShopMapper shops;
+    @MockitoSpyBean
+    private CategoryMapper categories;
+    @MockitoSpyBean
+    private SkuOptionValueMapper skuValues;
 
     @Test
     void oneTwentyAndHundredItemsUseTheSameNumberOfReadQueries() {

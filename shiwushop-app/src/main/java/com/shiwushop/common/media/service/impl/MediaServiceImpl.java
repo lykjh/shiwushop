@@ -34,7 +34,9 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Slf4j
 public class MediaServiceImpl implements MediaService {
+    /** 原始上传及处理后图片的大小上限，单位为字节（10 MiB）。 */
     private static final long MAX_BYTES = 10L * 1024 * 1024;
+    /** 图片解码前校验的总像素上限，单位为像素（宽乘高），限制解码内存占用。 */
     private static final long MAX_PIXELS = 20_000_000;
     private final MediaAssetMapper assets;
     private final AccountSecurity accounts;
@@ -44,9 +46,9 @@ public class MediaServiceImpl implements MediaService {
 
     /** 分别限制重处理并发和等待人数，防止批量请求立即被拒绝或无限占用请求线程。 */
     public MediaServiceImpl(MediaAssetMapper assets, AccountSecurity accounts,
-            @Value("${shop.media.upload-max-concurrent:2}") int concurrent,
-            @Value("${shop.media.upload-max-waiting:16}") int waiting,
-            @Value("${shop.media.upload-wait-ms:10000}") long waitMillis) {
+                            @Value("${shop.media.upload-max-concurrent:2}") int concurrent,
+                            @Value("${shop.media.upload-max-waiting:16}") int waiting,
+                            @Value("${shop.media.upload-wait-ms:10000}") long waitMillis) {
         if (concurrent < 1 || waiting < 0 || waitMillis < 1)
             throw new IllegalArgumentException("图片并发和等待时间必须为正，等待人数不得为负");
         this.assets = assets;
@@ -65,9 +67,20 @@ public class MediaServiceImpl implements MediaService {
      */
     @Override
     public Long upload(Long userId, MultipartFile file) {
+        return upload(userId, file, "PUBLIC");
+    }
+
+    @Override
+    public Long uploadCredential(Long userId, MultipartFile file) {
+        return upload(userId, file, "CREDENTIAL");
+    }
+
+    private Long upload(Long userId, MultipartFile file, String purpose) {
         accounts.checkActive(userId);
-        if (file == null || file.isEmpty()) throw new BusinessException(400, "图片不能为空");
-        if (file.getSize() > MAX_BYTES) throw new BusinessException(413, "图片不能超过 10 MiB");
+        if (file == null || file.isEmpty())
+            throw new BusinessException(400, "图片不能为空");
+        if (file.getSize() > MAX_BYTES)
+            throw new BusinessException(413, "图片不能超过 10 MiB");
         acquireUploadSlot();
         Path originalFile = null;
         Path temporary = null;
@@ -84,12 +97,14 @@ public class MediaServiceImpl implements MediaService {
                 int read;
                 while ((read = input.read(buffer)) != -1) {
                     originalSize += read;
-                    if (originalSize > MAX_BYTES) throw new BusinessException(413, "图片不能超过 10 MiB");
+                    if (originalSize > MAX_BYTES)
+                        throw new BusinessException(413, "图片不能超过 10 MiB");
                     digest.update(buffer, 0, read);
                     output.write(buffer, 0, read);
                 }
             }
-            if (originalSize == 0) throw new BusinessException(400, "图片不能为空");
+            if (originalSize == 0)
+                throw new BusinessException(400, "图片不能为空");
             // 以实际解码结果为准并重新编码，避免信任文件名、Content-Type 或原始文件内容。
             DecodedImage decoded = decode(originalFile);
             temporary = Files.createTempFile(root, "upload-", ".tmp");
@@ -111,6 +126,7 @@ public class MediaServiceImpl implements MediaService {
             asset.setHeight(decoded.image().getHeight());
             asset.setSha256(digest.digest());
             asset.setStatus("READY");
+            asset.setPurpose(purpose);
             assets.insert(asset);
             saved = true;
             BusinessEventLog.committed("media", "image_uploaded", "media", asset.getId());
@@ -119,8 +135,10 @@ public class MediaServiceImpl implements MediaService {
             throw new BusinessException(503, "图片暂时无法保存", e);
         } finally {
             // 原子移动先于数据库写入；写库失败时清理已经落盘的文件。
-            if (originalFile != null) deleteQuietly(originalFile);
-            if (temporary != null) deleteQuietly(temporary);
+            if (originalFile != null)
+                deleteQuietly(originalFile);
+            if (temporary != null)
+                deleteQuietly(temporary);
             if (destination != null && !saved) {
                 deleteQuietly(destination);
             }
@@ -131,7 +149,8 @@ public class MediaServiceImpl implements MediaService {
 
     /** 有限人数按公平顺序等待处理许可；超时和中断都归还接收名额，尚未开始图片解码。 */
     private void acquireUploadSlot() {
-        if (!admittedUploads.tryAcquire()) throw busy();
+        if (!admittedUploads.tryAcquire())
+            throw busy();
         boolean acquired = false;
         try {
             acquired = uploadSlots.tryAcquire(waitMillis, TimeUnit.MILLISECONDS);
@@ -139,9 +158,11 @@ public class MediaServiceImpl implements MediaService {
             Thread.currentThread().interrupt();
             throw new BusinessException(503, "图片上传等待已中断，请重试", error);
         } finally {
-            if (!acquired) admittedUploads.release();
+            if (!acquired)
+                admittedUploads.release();
         }
-        if (!acquired) throw busy();
+        if (!acquired)
+            throw busy();
     }
 
     /** 队列已满或等待超时时提供明确重试时间，调用方无需猜测何时重试。 */
@@ -153,9 +174,11 @@ public class MediaServiceImpl implements MediaService {
     /** 读取真实格式与尺寸，仅接收 JPEG/PNG 且像素不超过上限。 */
     private static DecodedImage decode(Path path) throws IOException {
         try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
-            if (input == null) throw new BusinessException(400, "图片格式不支持");
+            if (input == null)
+                throw new BusinessException(400, "图片格式不支持");
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) throw new BusinessException(400, "图片格式不支持");
+            if (!readers.hasNext())
+                throw new BusinessException(400, "图片格式不支持");
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input, true, true);
@@ -170,7 +193,8 @@ public class MediaServiceImpl implements MediaService {
                 if (width <= 0 || height <= 0 || (long) width * height > MAX_PIXELS)
                     throw new BusinessException(413, "图片像素不能超过 2000 万");
                 BufferedImage image = reader.read(0);
-                if (image == null) throw new BusinessException(400, "图片内容无效");
+                if (image == null)
+                    throw new BusinessException(400, "图片内容无效");
                 if (format.equals("jpg")) {
                     BufferedImage rgb = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
                     Graphics2D graphics = rgb.createGraphics();
@@ -213,5 +237,6 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
-    private record DecodedImage(BufferedImage image, String format, String mimeType) {}
+    private record DecodedImage(BufferedImage image, String format, String mimeType) {
+    }
 }

@@ -28,5 +28,9 @@ public class ReviewController {
     }
 
     /** 新建评价成功后返回的评价 ID。 */
-    public record Created(Long id) { }
+    public record Created(
+        /** 新建评价 ID。 */
+        Long id
+    ) {
+    }
 }

@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class LoginVO {
 
+    /** 当前记录 ID。 */
     private Long id;
+    /** 登录用户名。 */
     private String username;
 }

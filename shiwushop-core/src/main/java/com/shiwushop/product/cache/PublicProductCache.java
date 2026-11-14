@@ -26,7 +26,9 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class PublicProductCache {
     // Redis Cluster 的多键脚本要求两个键落在同一槽。
+    /** 无筛选首页首批商品的缓存键；与回源锁共用 {home} 槽位。 */
     private static final String HOME_KEY = "shiwushop:public:products:v3:{home}:page";
+    /** 首页缓存回源租约键；与首页数据键共用 {home} 槽位。 */
     private static final String LOCK_KEY = "shiwushop:public:products:v3:{home}:lock";
     // 只释放自己持有的租约，避免过期后的旧请求删掉新请求的租约。
     private static final DefaultRedisScript<Long> RELEASE_LOCK = new DefaultRedisScript<>(
@@ -64,7 +66,8 @@ public class PublicProductCache {
         boolean acquired;
         try {
             cached = readHome();
-            if (cached != null) return cached;
+            if (cached != null)
+                return cached;
             acquired = Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(LOCK_KEY, token,
                     Duration.ofSeconds(lockSeconds)));
         } catch (DataAccessException | JacksonException e) {
@@ -78,7 +81,8 @@ public class PublicProductCache {
                 } catch (DataAccessException | JacksonException e) {
                     log.warn("公开商品缓存读取失败：{}", e.getClass().getSimpleName());
                 }
-                if (cached != null) return cached;
+                if (cached != null)
+                    return cached;
                 PublicProductPageVO result = products.publicList(query);
                 try {
                     redis.execute(FILL_IF_OWNER, List.of(HOME_KEY, LOCK_KEY), token,
@@ -100,7 +104,8 @@ public class PublicProductCache {
             while (System.nanoTime() < deadline) {
                 Thread.sleep(ThreadLocalRandom.current().nextLong(20, 51));
                 cached = readHome();
-                if (cached != null) return cached;
+                if (cached != null)
+                    return cached;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -121,7 +126,8 @@ public class PublicProductCache {
             if (!fallbackSlot.tryAcquire(waitMillis, TimeUnit.MILLISECONDS)) {
                 try {
                     PublicProductPageVO cached = readHome();
-                    if (cached != null) return cached;
+                    if (cached != null)
+                        return cached;
                 } catch (DataAccessException | JacksonException e) {
                     log.warn("公开商品缓存读取失败：{}", e.getClass().getSimpleName());
                 }

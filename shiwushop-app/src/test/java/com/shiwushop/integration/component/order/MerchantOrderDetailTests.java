@@ -41,16 +41,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantOrderDetailTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private PrivacyCipher privacyCipher;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private OrderMapper orderMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private PrivacyCipher privacyCipher;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private OrderMapper orderMapper;
 
     @Test
     void ownerCanReadPausedShopsOrderWithPurchaseSnapshots() throws Exception {
@@ -122,7 +132,8 @@ class MerchantOrderDetailTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private MockHttpSession session(Long user) {
@@ -171,7 +182,9 @@ class MerchantOrderDetailTests {
         order.setConsigneeCiphertext(privacyCipher.encrypt(order.getUserId(), "orders:consignee", "张三"));
         order.setPhoneCiphertext(privacyCipher.encrypt(order.getUserId(), "orders:phone", "13800138000"));
         order.setDetailCiphertext(privacyCipher.encrypt(order.getUserId(), "orders:detail", "下单地址"));
-        order.setProvince("北京市"); order.setCity("北京市"); order.setDistrict("海淀区");
+        order.setProvince("北京市");
+        order.setCity("北京市");
+        order.setDistrict("海淀区");
         order.setShippingKeyVersion(1);
         order.setPayExpiresAt(LocalDateTime.now().plusMinutes(15));
         order.setPaidAt(LocalDateTime.now());

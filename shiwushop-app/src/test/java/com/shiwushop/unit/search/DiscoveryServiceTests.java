@@ -31,7 +31,8 @@ class DiscoveryServiceTests {
     private final ObjectMapper json = new ObjectMapper();
     private final SearchGateway search = mock(SearchGateway.class);
     private final ProductMapper products = mock(ProductMapper.class);
-    private final DiscoveryService service = new DiscoveryService(search, new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"), products,
+    private final DiscoveryService service = new DiscoveryService(search,
+            new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"), products,
             mock(BrandMapper.class), mock(ShopService.class), mock(CategoryService.class), json, true);
 
     @Test
@@ -41,9 +42,14 @@ class DiscoveryServiceTests {
             Map<?, ?> body = invocation.getArgument(0);
             Object after = body.get("search_after");
             List<Long> ids = new ArrayList<>();
-            if (after == null) for (long id = 20; id >= 1; id--) ids.add(id);
-            else if (after.equals(List.of(1))) ids.add(0L);
-            else if (after.equals(List.of(20))) for (long id = 19; id >= 0; id--) ids.add(id);
+            if (after == null)
+                for (long id = 20; id >= 1; id--)
+                    ids.add(id);
+            else if (after.equals(List.of(1)))
+                ids.add(0L);
+            else if (after.equals(List.of(20)))
+                for (long id = 19; id >= 0; id--)
+                    ids.add(id);
             List<Map<String, Object>> hits = ids.stream()
                     .map(id -> Map.<String, Object>of("_source", Map.of("id", id), "sort", List.of(id)))
                     .toList();
@@ -88,7 +94,8 @@ class DiscoveryServiceTests {
 
     @Test
     void disabledDiscoveryDoesNotServePilotIndex() {
-        var disabled = new DiscoveryService(search, new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"), products,
+        var disabled = new DiscoveryService(search, new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"),
+                products,
                 mock(BrandMapper.class), mock(ShopService.class), mock(CategoryService.class), json, false);
         assertEquals(503, assertThrows(BusinessException.class,
                 () -> disabled.list(new DiscoveryQuery(null, null, null, null, null, null, 20), null, null))

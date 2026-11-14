@@ -54,20 +54,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class CheckoutTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private PrivacyCipher privacyCipher;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private AddressMapper addressMapper;
-    @Autowired private CartItemMapper cartItemMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CartService cartService;
-    @Autowired private CheckoutService checkoutService;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private PrivacyCipher privacyCipher;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private AddressMapper addressMapper;
+    @Autowired
+    private CartItemMapper cartItemMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CartService cartService;
+    @Autowired
+    private CheckoutService checkoutService;
     private final ObjectMapper om = new ObjectMapper();
 
     @Test
@@ -94,7 +108,7 @@ class CheckoutTests {
         System.out.println("C04 100-item checkout elapsed_ms="
                 + java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
         assertEquals(100, jdbc.queryForObject("SELECT COUNT(*) FROM order_items item "
-                + "JOIN orders order_head ON order_head.id=item.order_id WHERE order_head.user_id=?",
+                        + "JOIN orders order_head ON order_head.id=item.order_id WHERE order_head.user_id=?",
                 Integer.class, fixture.buyer.getId()));
     }
 
@@ -160,9 +174,11 @@ class CheckoutTests {
                 Integer.class, f.firstSku.getId(), f.secondSku.getId(), f.thirdSku.getId()));
         assertNotNull(jdbc.queryForObject("SELECT last_used_at FROM addresses WHERE id = ?",
                 java.time.LocalDateTime.class, f.address.getId()));
-        assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
+        assertEquals(3, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
                 Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId(), f.thirdSku.getProductId()));
-        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM checkout_request_orders WHERE checkout_request_id = (SELECT id FROM checkout_requests WHERE user_id = ? AND idempotency_key = ?)",
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM checkout_request_orders WHERE checkout_request_id = (SELECT id FROM checkout_requests WHERE user_id = ? AND idempotency_key = ?)",
                 Integer.class, f.buyer.getId(), key));
         assertEquals("张三", privacyCipher.decrypt(f.buyer.getId(), "orders:consignee", 1,
                 orderMapper.selectById(firstOrderId).getConsigneeCiphertext()));
@@ -176,7 +192,8 @@ class CheckoutTests {
                 .andExpect(status().isOk()).andReturn();
         assertEquals(firstOrderId, om.readTree(retry.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong());
-        assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
+        assertEquals(3, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
                 Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId(), f.thirdSku.getProductId()));
         mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId()), f.address.getId(), "10.00", key)))
@@ -211,10 +228,10 @@ class CheckoutTests {
         assertNotNull(cartItemMapper.selectById(second.getId()));
         assertNull(jdbc.queryForObject("SELECT last_used_at FROM addresses WHERE id = ?",
                 java.time.LocalDateTime.class, f.address.getId()));
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?)",
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?)",
                 Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId()));
     }
-
 
     @Test
     void rejectsOtherUsersItemsAndDuplicateIds() throws Exception {
@@ -255,9 +272,11 @@ class CheckoutTests {
                 .andExpect(jsonPath("$.data.items[0].quantity").value(2));
         assertNotNull(cartItemMapper.selectById(saved.getId()));
         assertEquals(1, skuMapper.selectById(f.firstSku.getId()).getStock());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE sku_id = ? AND reason = 'ORDER_DEDUCT'",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE sku_id = ? AND reason = 'ORDER_DEDUCT'",
                 Integer.class, f.firstSku.getId()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, f.firstSku.getProductId()));
         MvcResult retry = mockMvc.perform(post("/checkouts/direct").session(f.session)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -265,7 +284,8 @@ class CheckoutTests {
         assertEquals(orderId, om.readTree(retry.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong());
         assertEquals(1, skuMapper.selectById(f.firstSku.getId()).getStock());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, f.firstSku.getProductId()));
     }
 
@@ -418,5 +438,6 @@ class CheckoutTests {
     }
 
     private record Fixture(UserProfile buyer, MockHttpSession session, Address address, Shop firstShop,
-                           Shop secondShop, Sku firstSku, Sku secondSku, Sku thirdSku) {}
+                           Shop secondShop, Sku firstSku, Sku secondSku, Sku thirdSku) {
+    }
 }

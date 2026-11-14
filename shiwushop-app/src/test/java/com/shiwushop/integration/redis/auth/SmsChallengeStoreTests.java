@@ -3,6 +3,7 @@ package com.shiwushop.integration.redis.auth;
 import com.shiwushop.user.auth.SmsChallengeStore;
 import com.shiwushop.common.BusinessException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -15,11 +16,20 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SmsChallengeStoreTests {
+    @BeforeAll
+    static void requireIsolatedRedis() {
+        assertEquals("127.0.0.1", System.getProperty("spring.data.redis.host"));
+        assertEquals(28379, Integer.getInteger("spring.data.redis.port"));
+        assertEquals(9, Integer.getInteger("spring.data.redis.database"));
+    }
+
     @Test
     void codeIsPurposeBoundAndConsumedOnlyOnceUnderConcurrency() throws Exception {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
@@ -36,7 +46,10 @@ class SmsChallengeStoreTests {
             try (var pool = Executors.newFixedThreadPool(2)) {
                 List<Future<Boolean>> results = new ArrayList<>();
                 for (int i = 0; i < 2; i++) {
-                    results.add(pool.submit(() -> { start.await(); return store.consume(digest, "login", "correct-mac"); }));
+                    results.add(pool.submit(() -> {
+                        start.await();
+                        return store.consume(digest, "login", "correct-mac");
+                    }));
                 }
                 start.countDown();
                 assertThat(results.get(0).get() ^ results.get(1).get()).isTrue();
@@ -51,7 +64,8 @@ class SmsChallengeStoreTests {
 
     @Test
     void cooldownAndWrongAttemptLimitRejectFurtherUse() {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();

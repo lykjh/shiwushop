@@ -9,10 +9,12 @@ import java.util.List;
 
 @Data
 public class ProductOptionSaveDTO {
+    /** 名称。 */
     @NotBlank
     @Size(max = 30)
     private String name;
 
+    /** 规格选项值列表。 */
     @NotEmpty
     private List<@NotBlank @Size(max = 50) String> values;
 }

@@ -9,7 +9,7 @@ import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
 import com.shiwushop.aftersale.vo.AfterSaleVO;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.payment.service.RefundGateway;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.aftersale.mapper.refund.RefundAttemptMapper;
 import com.shiwushop.aftersale.service.AfterSaleService;
 import com.shiwushop.product.service.ReviewService;
@@ -39,14 +39,22 @@ import static org.mockito.Mockito.doAnswer;
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Transactional
 class AfterSaleFlowTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ShopReturnProfileService returnProfiles;
-    @Autowired private RefundAttemptMapper refundAttempts;
-    @Autowired private AfterSaleService service;
-    @Autowired private ShipmentService shipments;
-    @Autowired private ReviewService reviews;
-    @Autowired private PublicReviewService publicReviews;
-    @MockitoBean private SdkAlipayGateway gateway;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ShopReturnProfileService returnProfiles;
+    @Autowired
+    private RefundAttemptMapper refundAttempts;
+    @Autowired
+    private AfterSaleService service;
+    @Autowired
+    private ShipmentService shipments;
+    @Autowired
+    private ReviewService reviews;
+    @Autowired
+    private PublicReviewService publicReviews;
+    @MockitoBean(name = "localSimulationGateway")
+    private LocalSimulationGateway gateway;
 
     @Test
     void completedRefundExcludesReviewOnlyAfterFullQuantityAndOnlyOnce() {
@@ -129,7 +137,8 @@ class AfterSaleFlowTests {
         assertEquals("WAITING_RECEIPT", service.sendReturn(fixture.buyer(), sale.id(),
                 new ReturnShipmentDTO("圆通", "YT-123")).status());
         assertEquals(409, assertThrows(BusinessException.class,
-                () -> service.sendReturn(fixture.buyer(), sale.id(), new ReturnShipmentDTO("圆通", "OTHER"))).getCode());
+                () -> service.sendReturn(fixture.buyer(), sale.id(),
+                        new ReturnShipmentDTO("圆通", "OTHER"))).getCode());
         assertEquals("REFUNDING", service.receiveReturn(fixture.merchant(), fixture.shopId(), sale.id(),
                 new ReturnReceiptDTO(true)).status());
         assertEquals(2, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
@@ -349,7 +358,8 @@ class AfterSaleFlowTests {
                         "consignee_ciphertext,phone_ciphertext,province,city,district,detail_ciphertext,shipping_key_version) " +
                         "VALUES (?, ?, 20, 'PAID', NOW(), NOW(), ?, ?, '北京', '北京', '海淀', ?, 1)",
                 buyer, shopId, new byte[]{1}, new byte[]{1}, new byte[]{1});
-        Long orderId = jdbc.queryForObject("SELECT id FROM orders WHERE user_id=? AND shop_id=?", Long.class, buyer, shopId);
+        Long orderId = jdbc.queryForObject("SELECT id FROM orders WHERE user_id=? AND shop_id=?", Long.class, buyer,
+                shopId);
         jdbc.update("INSERT INTO order_items (order_id,sku_id,product_name,sku_spec,quantity,unit_price) " +
                 "VALUES (?,?,?,'标准',2,10)", orderId, skuId, "售后商品" + token);
         Long itemId = jdbc.queryForObject("SELECT id FROM order_items WHERE order_id=?", Long.class, orderId);
@@ -370,5 +380,6 @@ class AfterSaleFlowTests {
     }
 
     private record Fixture(Long buyer, Long merchant, Long shopId, Long orderId, Long itemId, Long skuId,
-                           String outTradeNo, String tradeNo) {}
+                           String outTradeNo, String tradeNo) {
+    }
 }

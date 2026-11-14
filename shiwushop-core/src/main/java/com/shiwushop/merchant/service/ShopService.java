@@ -6,16 +6,18 @@ import com.shiwushop.merchant.vo.shop.ShopDetailVO;
 import com.shiwushop.merchant.vo.shop.ShopPageVO;
 import com.shiwushop.merchant.vo.shop.ShopVO;
 
-
 import java.util.List;
 import java.util.Collection;
+
 import com.shiwushop.merchant.entity.shop.Shop;
 
 public interface ShopService {
     /** 跨模块只读店铺快照；写入与归属锁使用本模块的命令接口。 */
     Shop findById(Long shopId);
+
     /** 在调用方事务中锁定店铺，用于协调归属变更。 */
     Shop lockById(Long shopId);
+
     List<Shop> findByIds(Collection<Long> shopIds);
 
     /** 管理员创建店铺并指定初始店主，返回管理视图。 */

@@ -1,10 +1,12 @@
 package com.shiwushop.slice.order;
+
 import com.shiwushop.support.ControllerSliceSecurity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import com.shiwushop.trade.controller.order.OrderController;
@@ -28,11 +30,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest({OrderController.class, MerchantOrderController.class})
-@ContextConfiguration(classes={OrderController.class, MerchantOrderController.class, GlobalExceptionHandler.class})
+@ContextConfiguration(classes = {OrderController.class, MerchantOrderController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class OrderListControllerSliceTests {
-    @Autowired private MockMvc mvc;
-    @MockitoBean private OrderService orders;
+    @Autowired
+    private MockMvc mvc;
+    @MockitoBean
+    private OrderService orders;
     private final MockHttpSession session = new MockHttpSession();
 
     @Test
@@ -41,7 +45,6 @@ class OrderListControllerSliceTests {
         OrderSummaryVO row = new OrderSummaryVO();
         row.setId(10L);
         when(orders.list(7L, null, 1)).thenReturn(new OrderSliceVO(List.of(row), true, 10L));
-
 
         mvc.perform(get("/orders?size=1").session(session))
                 .andExpect(status().isOk())
@@ -57,7 +60,6 @@ class OrderListControllerSliceTests {
         when(orders.listMerchant(7L, 9L, 10L, 5))
                 .thenReturn(new OrderSliceVO(List.of(), false, null));
 
-
         mvc.perform(get("/merchant/shops/9/orders?afterId=10&size=5").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasMore").value(false));
@@ -67,8 +69,9 @@ class OrderListControllerSliceTests {
     void merchantDetailKeepsTheExistingShopScopedRoute() throws Exception {
         session.setAttribute("userId", 7L);
         when(orders.detailMerchant(7L, 9L, 11L))
-                .thenReturn(new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, false, null, List.of()));
-
+                .thenReturn(
+                        new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, false, null, List.of(), "NORMAL", "CASH",
+                                "READY", null, null, null, 0, null));
 
         mvc.perform(get("/merchant/shops/9/orders/11").session(session))
                 .andExpect(status().isOk())

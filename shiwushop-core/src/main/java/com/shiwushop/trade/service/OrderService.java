@@ -3,8 +3,6 @@ package com.shiwushop.trade.service;
 import com.shiwushop.trade.vo.order.OrderSliceVO;
 import com.shiwushop.trade.vo.order.OrderDetailVO;
 
-
-
 public interface OrderService {
     /** 查询买家本人订单的商品、金额、支付和物流详情。 */
     OrderDetailVO detail(Long userId, Long orderId);

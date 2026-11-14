@@ -243,6 +243,7 @@ class ShipmentRocketLiveIT {
                     "(SELECT id FROM shipments WHERE order_id=?)", orderId);
             jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id IN " +
                     "(SELECT id FROM shipments WHERE order_id=?)", orderId);
+            jdbc.update("DELETE FROM shipment_items WHERE shipment_id IN (SELECT id FROM shipments WHERE order_id=?)", orderId);
             jdbc.update("DELETE FROM shipments WHERE order_id=?", orderId);
             jdbc.update("DELETE FROM order_items WHERE order_id=?", orderId);
             jdbc.update("DELETE FROM orders WHERE id=?", orderId);

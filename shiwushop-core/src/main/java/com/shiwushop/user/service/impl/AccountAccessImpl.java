@@ -4,7 +4,6 @@ import com.shiwushop.user.auth.AccountAuthCache;
 
 import com.shiwushop.common.BusinessException;
 
-
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.entity.status.AccountRole;
 import com.shiwushop.user.entity.status.AccountStatus;
@@ -48,6 +47,7 @@ public class AccountAccessImpl implements AccountAccess {
             throw new BusinessException(403, "需要商家权限");
         }
     }
+
     /** 管理权限使用用户模块的账号状态，公共设施不读取用户表。 */
     @Override
     public void requireAdmin(Long userId) {
@@ -59,7 +59,8 @@ public class AccountAccessImpl implements AccountAccess {
     @Override
     public UserAccount requireShopOwner(Long userId, String missingMessage) {
         UserAccount owner = userAccountMapper.selectById(userId);
-        if (owner == null) throw new BusinessException(404, missingMessage);
+        if (owner == null)
+            throw new BusinessException(404, missingMessage);
         if (owner.getStatus() != AccountStatus.ACTIVE
                 || (owner.getRole() != AccountRole.USER && owner.getRole() != AccountRole.MERCHANT))
             throw new BusinessException(409, "该账号不能经营店铺");

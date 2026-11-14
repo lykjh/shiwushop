@@ -8,7 +8,7 @@ import com.shiwushop.merchant.service.ShopReturnProfileService;
 import com.shiwushop.merchant.service.ShopService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.support.TestAccounts;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.support.CommerceFixture;
 import com.shiwushop.support.PaymentHttpFixture;
 import org.junit.jupiter.api.Test;
@@ -40,13 +40,20 @@ import static org.mockito.Mockito.doAnswer;
         "spring.autoconfigure.exclude=", "spring.datasource.hikari.maximum-pool-size=2",
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class AfterSaleSnapshotConcurrencyTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired AfterSaleService sales;
-    @Autowired ShopReturnProfileService profiles;
-    @Autowired ShopService shops;
-    @MockitoBean SdkAlipayGateway gateway;
-    @MockitoSpyBean MerchantShopAccess access;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Autowired
+    AfterSaleService sales;
+    @Autowired
+    ShopReturnProfileService profiles;
+    @Autowired
+    ShopService shops;
+    @MockitoBean(name = "localSimulationGateway")
+    LocalSimulationGateway gateway;
+    @MockitoSpyBean
+    MerchantShopAccess access;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -78,11 +85,13 @@ class AfterSaleSnapshotConcurrencyTest {
                     assertTrue(release.await(10, TimeUnit.SECONDS));
                 }
                 return shop;
-            }).when(access).requireOwnedForUpdate(eq(fixture.catalog.merchant.id()), eq(fixture.catalog.shop), anyString());
+            }).when(access)
+                    .requireOwnedForUpdate(eq(fixture.catalog.merchant.id()), eq(fixture.catalog.shop), anyString());
             try (var pool = Executors.newFixedThreadPool(2)) {
                 var review = pool.submit(() -> {
                     Thread.currentThread().setName("review-writer");
-                    return sales.review(fixture.catalog.merchant.id(), fixture.catalog.shop, caseId, new AfterSaleReviewDTO(true, null));
+                    return sales.review(fixture.catalog.merchant.id(), fixture.catalog.shop, caseId,
+                            new AfterSaleReviewDTO(true, null));
                 });
                 try {
                     assertTrue(locked.await(10, TimeUnit.SECONDS));
@@ -101,7 +110,8 @@ class AfterSaleSnapshotConcurrencyTest {
                 }
             }
         } finally {
-            if (sale != 0) jdbc.update("DELETE FROM after_sale_return_destinations WHERE case_id=?", sale);
+            if (sale != 0)
+                jdbc.update("DELETE FROM after_sale_return_destinations WHERE case_id=?", sale);
             jdbc.update("DELETE FROM shop_return_profiles WHERE shop_id=?", fixture.catalog.shop);
             fixture.close();
         }
@@ -132,9 +142,12 @@ class AfterSaleSnapshotConcurrencyTest {
                     entered.countDown();
                     assertTrue(release.await(10, TimeUnit.SECONDS));
                     return call.callRealMethod();
-                }).when(access).requireOwnedForUpdate(eq(fixture.catalog.merchant.id()), eq(fixture.catalog.shop), anyString());
+                }).when(access).requireOwnedForUpdate(eq(fixture.catalog.merchant.id()), eq(fixture.catalog.shop),
+                        anyString());
                 try (var pool = Executors.newSingleThreadExecutor()) {
-                    var pending = pool.submit(() -> sales.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale, new AfterSaleReviewDTO(true, null)));
+                    var pending = pool.submit(
+                            () -> sales.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale,
+                                    new AfterSaleReviewDTO(true, null)));
                     try {
                         assertTrue(entered.await(10, TimeUnit.SECONDS));
                         shops.changeOwner(fixture.catalog.shop, next.id());
@@ -144,13 +157,17 @@ class AfterSaleSnapshotConcurrencyTest {
                     var failure = assertThrows(ExecutionException.class, () -> pending.get(10, TimeUnit.SECONDS));
                     assertInstanceOf(BusinessException.class, failure.getCause());
                     assertEquals(404, ((BusinessException) failure.getCause()).getCode());
-                    assertEquals("REQUESTED", jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
-                    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM after_sale_return_destinations WHERE case_id=?", Integer.class, sale));
+                    assertEquals("REQUESTED",
+                            jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
+                    assertEquals(0,
+                            jdbc.queryForObject("SELECT COUNT(*) FROM after_sale_return_destinations WHERE case_id=?",
+                                    Integer.class, sale));
                 } finally {
                     release.countDown();
                 }
             } finally {
-                jdbc.update("UPDATE shops SET owner_user_id=? WHERE id=?", fixture.catalog.merchant.id(), fixture.catalog.shop);
+                jdbc.update("UPDATE shops SET owner_user_id=? WHERE id=?", fixture.catalog.merchant.id(),
+                        fixture.catalog.shop);
             }
         } finally {
             jdbc.update("DELETE FROM shop_return_profiles WHERE shop_id=?", fixture.catalog.shop);

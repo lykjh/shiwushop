@@ -17,8 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @AutoConfigureMockMvc
 class HealthEndpointTests {
-    @Autowired private MockMvc mockMvc;
-    @Autowired private ApplicationContext context;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private ApplicationContext context;
 
     @Test
     void healthIsAvailableWithoutExposingMetrics() throws Exception {

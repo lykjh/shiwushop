@@ -18,12 +18,12 @@
                b.id AS brandId, b.name AS brandName,
                s.id AS shopId, s.name AS shopName,
                COALESCE((SELECT MIN(sku.price) FROM skus sku
-                   WHERE sku.product_id = p.id AND sku.stock > 0
+                   WHERE sku.product_id = p.id AND sku.status = 'ACTIVE' AND sku.stock > 0
                      AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
                      AND (#{maxPrice} IS NULL OR sku.price &lt;= #{maxPrice})),
-                   (SELECT MIN(sku.price) FROM skus sku WHERE sku.product_id = p.id)) AS startingPrice,
+                   (SELECT MIN(sku.price) FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE')) AS startingPrice,
                COALESCE(sales.sold_count, 0) AS soldCount,
-               NOT EXISTS (SELECT 1 FROM skus sku WHERE sku.product_id = p.id AND sku.stock > 0) AS soldOut
+               NOT EXISTS (SELECT 1 FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE' AND sku.stock > 0) AS soldOut
     </sql>
 
     <sql id="pageJoins">
@@ -37,7 +37,7 @@
         WHERE p.status = 'ON_SALE'
           AND (#{brandId} IS NULL OR pb.brand_id = #{brandId})
           AND (#{shopId} IS NULL OR p.shop_id = #{shopId})
-          AND (SELECT sku.id FROM skus sku WHERE sku.product_id = p.id
+          AND (SELECT sku.id FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE'
               AND ((#{minPrice} IS NULL AND #{maxPrice} IS NULL)
                 OR (sku.stock > 0
                   AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
@@ -47,7 +47,8 @@
 
     <sql id="primaryPageFrom">
         FROM products p FORCE INDEX (PRIMARY)
-        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
+            AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
         STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
         <include refid="pageJoins"/>
         <include refid="pageWhere"/>
@@ -55,7 +56,8 @@
 
     <sql id="filteredPageFrom">
         FROM products p
-        JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
+            AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
         JOIN visible_categories c ON c.id = p.category_id
         <include refid="pageJoins"/>
         <include refid="pageWhere"/>
@@ -64,7 +66,8 @@
     <sql id="brandPageFrom">
         FROM product_brands pb FORCE INDEX (fk_product_brands_brand_id)
         STRAIGHT_JOIN products p ON p.id = pb.product_id
-        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
+            AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
         STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
         LEFT JOIN product_images cover ON cover.product_id = p.id AND cover.is_cover = 1
         LEFT JOIN brands b ON b.id = pb.brand_id
@@ -86,7 +89,8 @@
         <include refid="visibleCategories"/>
         <include refid="pageColumns"/>
         FROM products p FORCE INDEX (idx_products_shop_status_id)
-        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+        STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
+            AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
         STRAIGHT_JOIN visible_categories c ON c.id = p.category_id
         <include refid="pageJoins"/>
         <include refid="pageWhere"/>

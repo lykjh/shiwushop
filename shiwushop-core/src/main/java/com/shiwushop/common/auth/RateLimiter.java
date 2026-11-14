@@ -1,11 +1,10 @@
 /*
-*
-* */
+ *
+ * */
 
 package com.shiwushop.common.auth;
 
 import com.shiwushop.common.BusinessException;
-
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -24,19 +23,11 @@ import java.util.UUID;
 public class RateLimiter {
 
     /**
-    KEYS[1]：Redis key（由 Java 侧 List.of(key) 传入）。
-    * INCR：把该 key 的值 +1。如果 key 不存在，视为 0，自增后为 1。
-    * 结果存到局部变量 count。
-    * */
-    private static final DefaultRedisScript<Long> INCREMENT_WITH_EXPIRY=new DefaultRedisScript<>(
-            "local count =redis.call('INCR',KEYS[1]);"+"if count == 1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]); end; return count",
-            Long.class);
-    /**
-    *尝试从桶里取 1 个令牌。取到则返回 0（放行）；取不到则返回还需要等待的秒数（拒绝）。
-    * KEYS[1]：Redis key（由 Java 侧 List.of(key) 传入）。
-    * ARGV[1]：令牌生成速率（每秒令牌数）。
-    * ARGV[2]：令牌桶容量。
-    * */
+     *尝试从桶里取 1 个令牌。取到则返回 0（放行）；取不到则返回还需要等待的秒数（拒绝）。
+     * KEYS[1]：Redis key（由 Java 侧 List.of(key) 传入）。
+     * ARGV[1]：令牌生成速率（每秒令牌数）。
+     * ARGV[2]：令牌桶容量。
+     * */
     // 使用 Redis 时间和单键脚本，让所有应用实例共享同一个原子令牌桶。
     private static final DefaultRedisScript<Long> TOKEN_BUCKET = new DefaultRedisScript<>("""
             local now = redis.call('TIME')
@@ -71,6 +62,7 @@ public class RateLimiter {
             end
             return redis.call('ZCARD', KEYS[1])
             """, Long.class);
+    /** 按最早失败事件计算滚动窗口解除限流所需的等待秒数。 */
     private static final DefaultRedisScript<Long> FAILURE_RETRY = new DefaultRedisScript<>("""
             local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
             if #oldest == 0 then return 0 end
@@ -172,6 +164,7 @@ public class RateLimiter {
             end
             return #KEYS - 1
             """, Long.class);
+    /** 原子累计各维度的认证成功次数，首次计数时设置统计有效期。 */
     private static final DefaultRedisScript<Long> AUTH_SUCCESS_EVENT = new DefaultRedisScript<>("""
             for i = 1, #KEYS do
                 local kind = redis.call('TYPE', KEYS[i]).ok
@@ -182,26 +175,14 @@ public class RateLimiter {
             end
             return #KEYS
             """, Long.class);
+    /** 原子删除指定维度的认证失败历史。 */
     private static final DefaultRedisScript<Long> AUTH_CLEAR_EVENT = new DefaultRedisScript<>(
             "return redis.call('DEL', unpack(KEYS))", Long.class);
 
     private final StringRedisTemplate redis;
 
     public RateLimiter(StringRedisTemplate redis) {
-        this.redis=redis;
-    }
-
-    /** 原子计数并返回当前值；Redis 不可用时抛 503（fail-closed） */
-    public long increment(String key, long windowMs) {
-        try {
-            Long count = redis.execute(INCREMENT_WITH_EXPIRY, List.of(key), String.valueOf(windowMs));
-            if (count == null) {
-                throw new BusinessException(503, "限流服务暂时不可用");
-            }
-            return count;
-        } catch (DataAccessException e) {
-            throw new BusinessException(503, "限流服务暂时不可用", e);
-        }
+        this.redis = redis;
     }
 
     /** 返回 0 表示放行；否则返回下一个令牌所需的等待秒数。 */
@@ -233,7 +214,8 @@ public class RateLimiter {
         try {
             Long count = redis.execute(FAILURE_WINDOW, List.of(key),
                     String.valueOf(windowMs), eventId, String.valueOf(maxEvents));
-            if (count == null) throw new BusinessException(503, "限流服务暂时不可用");
+            if (count == null)
+                throw new BusinessException(503, "限流服务暂时不可用");
             return count;
         } catch (DataAccessException e) {
             throw new BusinessException(503, "限流服务暂时不可用", e);
@@ -244,7 +226,8 @@ public class RateLimiter {
     public long failureRetrySeconds(String key, long windowMs) {
         try {
             Long retry = redis.execute(FAILURE_RETRY, List.of(key), String.valueOf(windowMs));
-            if (retry == null) throw new BusinessException(503, "限流服务暂时不可用");
+            if (retry == null)
+                throw new BusinessException(503, "限流服务暂时不可用");
             return retry;
         } catch (DataAccessException e) {
             throw new BusinessException(503, "限流服务暂时不可用", e);
@@ -252,20 +235,23 @@ public class RateLimiter {
     }
 
     public record AuthRiskSnapshot(long bucket, long requests, long failures,
-            long sessionFailures, long sessionBlockFailures, long sharedFailures,
-            long accountFailures, long deviceFailures, long deviceSuccesses,
-            long sharedSuccesses, long sessionAttempts, long sessionRetrySeconds) {}
+                                   long sessionFailures, long sessionBlockFailures, long sharedFailures,
+                                   long accountFailures, long deviceFailures, long deviceSuccesses,
+                                   long sharedSuccesses, long sessionAttempts, long sessionRetrySeconds) {
+    }
 
     /** 原子读取鉴权风险快照，包含同时间桶的请求、失败及设备信号。 */
     public AuthRiskSnapshot checkAuthRisk(List<String> keys, boolean register, long windowMs,
-            long maxTrackedSessions, String sessionDigest) {
+                                          long maxTrackedSessions, String sessionDigest) {
         try {
             List<?> result = redis.execute(AUTH_RISK_CHECK, keys,
                     register ? "1" : "0", String.valueOf(windowMs),
                     String.valueOf(maxTrackedSessions), sessionDigest);
-            if (result == null || result.size() != 12) throw new BusinessException(503, "限流服务暂时不可用");
+            if (result == null || result.size() != 12)
+                throw new BusinessException(503, "限流服务暂时不可用");
             long[] values = new long[12];
-            for (int i = 0; i < values.length; i++) values[i] = ((Number) result.get(i)).longValue();
+            for (int i = 0; i < values.length; i++)
+                values[i] = ((Number) result.get(i)).longValue();
             return new AuthRiskSnapshot(values[0], values[1], values[2], values[3], values[4],
                     values[5], values[6], values[7], values[8], values[9], values[10], values[11]);
         } catch (DataAccessException e) {
@@ -287,7 +273,8 @@ public class RateLimiter {
         }
         try {
             Long updated = redis.execute(AUTH_FAILURE_EVENT, keys, arguments.toArray(String[]::new));
-            if (updated == null || updated != windows.length) throw new BusinessException(503, "限流服务暂时不可用");
+            if (updated == null || updated != windows.length)
+                throw new BusinessException(503, "限流服务暂时不可用");
         } catch (DataAccessException e) {
             throw new BusinessException(503, "限流服务暂时不可用", e);
         }
@@ -297,7 +284,8 @@ public class RateLimiter {
     public void recordAuthSuccess(List<String> keys, long windowMs) {
         try {
             Long updated = redis.execute(AUTH_SUCCESS_EVENT, keys, String.valueOf(windowMs));
-            if (updated == null || updated != keys.size()) throw new BusinessException(503, "限流服务暂时不可用");
+            if (updated == null || updated != keys.size())
+                throw new BusinessException(503, "限流服务暂时不可用");
         } catch (DataAccessException e) {
             throw new BusinessException(503, "限流服务暂时不可用", e);
         }
@@ -314,21 +302,11 @@ public class RateLimiter {
         }
     }
 
-    /** 读取普通计数键，不存在时返回零；Redis 故障时返回 503。 */
-    public long count(String key){
-        try{
-            String value=redis.opsForValue().get(key);
-            return value==null?0:Long.parseLong(value);
-        }catch (DataAccessException e){
-            throw new BusinessException(503, "限流服务暂时不可用", e);
-        }
-    }
-
     /** 删除指定限流键，供成功操作清除失败额度。 */
-    public void clear(String key){
-        try{
+    public void clear(String key) {
+        try {
             redis.delete(key);
-        }catch (DataAccessException e){
+        } catch (DataAccessException e) {
             throw new BusinessException(503, "限流服务暂时不可用", e);
         }
     }
@@ -342,5 +320,4 @@ public class RateLimiter {
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
-
 }

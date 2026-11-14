@@ -45,18 +45,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class OrderDetailTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private UserAccountMapper accountMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private StringRedisTemplate redis;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private UserAccountMapper accountMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private StringRedisTemplate redis;
 
     @Test
     void returnsEncryptedAddressAndSaleSnapshotOnlyToBuyer() throws Exception {
@@ -102,7 +114,8 @@ class OrderDetailTests {
         orderMapper.insert(order);
         orderMapper.insertCheckoutItem(order.getId(), sku.getId(), "成交商品名", "白色", 2,
                 new BigDecimal("10.00"));
-        Long orderItemId = jdbc.queryForObject("SELECT id FROM order_items WHERE order_id=?", Long.class, order.getId());
+        Long orderItemId = jdbc.queryForObject("SELECT id FROM order_items WHERE order_id=?", Long.class,
+                order.getId());
         MockHttpSession own = session(buyer);
 
         mockMvc.perform(get("/orders/{id}", order.getId())).andExpect(status().isUnauthorized());

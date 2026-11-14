@@ -27,8 +27,10 @@ class SearchOutboxWorkerUnitTests {
         var outbox = mock(OutboxEventMapper.class);
         var source = mock(SearchIndexSource.class);
         var event = new OutboxEventMapper.SearchEvent();
-        event.setId(41L); event.setAggregateId(7L);
-        event.setEventType("SEARCH_PRODUCT_REFRESH"); event.setAggregateType("PRODUCT");
+        event.setId(41L);
+        event.setAggregateId(7L);
+        event.setEventType("SEARCH_PRODUCT_REFRESH");
+        event.setAggregateType("PRODUCT");
         when(outbox.selectPendingSearchEvent(any())).thenReturn(event);
         when(outbox.claimSearchEvent(eq(41L), anyString(), any(), any())).thenReturn(1);
         when(source.affectedProductIds("SEARCH_PRODUCT_REFRESH", 7L, 0, 200))
@@ -39,6 +41,7 @@ class SearchOutboxWorkerUnitTests {
         org.mockito.Mockito.verify(outbox, org.mockito.Mockito.never()).markDead(any(), anyString());
         org.mockito.Mockito.verify(outbox, org.mockito.Mockito.never()).markRetry(any(), anyString(), any());
     }
+
     @Test
     void invalidEventIsDeadInsteadOfRetried() {
         var outbox = mock(OutboxEventMapper.class);
@@ -52,6 +55,7 @@ class SearchOutboxWorkerUnitTests {
         verify(outbox).markDead(eq(41L), anyString());
         org.mockito.Mockito.verify(outbox, org.mockito.Mockito.never()).markRetry(any(), anyString(), any());
     }
+
     @Test
     void fullFanoutBatchCheckpointsInsteadOfAcknowledgingWholeEvent() {
         OutboxEventMapper outbox = mock(OutboxEventMapper.class);
@@ -71,7 +75,8 @@ class SearchOutboxWorkerUnitTests {
         when(source.productDocuments(ids)).thenReturn(Map.of());
         StringBuilder bulkResult = new StringBuilder("{\"items\":[");
         for (int i = 0; i < 201; i++) {
-            if (i > 0) bulkResult.append(',');
+            if (i > 0)
+                bulkResult.append(',');
             bulkResult.append("{\"delete\":{\"status\":404}}");
         }
         bulkResult.append("]}");

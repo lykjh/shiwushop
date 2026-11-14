@@ -27,38 +27,69 @@ public class ShipmentCorrectionController {
     /** 店主为已发货订单提交运单更正。 */
     @PostMapping("/merchant/shops/{shopId}/orders/{orderId}/shipment/corrections")
     public Result<ShipmentCorrectionRequestVO> request(@PathVariable @Positive Long shopId,
-            @PathVariable @Positive Long orderId, @Valid @RequestBody ShipmentCorrectionRequestDTO body,
-            HttpServletRequest request) {
+                                                       @PathVariable @Positive Long orderId,
+                                                       @Valid @RequestBody ShipmentCorrectionRequestDTO body,
+                                                       HttpServletRequest request) {
         return Result.success(corrections.request(SessionUser.requireId(request), shopId, orderId, body));
+    }
+
+    @PostMapping("/merchant/shops/{shopId}/orders/{orderId}/shipments/{shipmentId}/corrections")
+    public Result<ShipmentCorrectionRequestVO> requestPackage(@PathVariable @Positive Long shopId,
+                                                               @PathVariable @Positive Long orderId,
+                                                               @PathVariable @Positive Long shipmentId,
+                                                               @Valid @RequestBody ShipmentCorrectionRequestDTO body,
+                                                               HttpServletRequest request) {
+        return Result.success(corrections.requestPackage(SessionUser.requireId(request), shopId, orderId,
+                shipmentId, body));
     }
 
     /** 管理员批准或驳回申请。 */
     @PostMapping("/admin/shipment-corrections/{id}/decision")
     public Result<ShipmentCorrectionRequestVO> decide(@PathVariable @Positive Long id,
-            @Valid @RequestBody ShipmentCorrectionDecisionDTO body, HttpServletRequest request) {
+                                                      @Valid @RequestBody ShipmentCorrectionDecisionDTO body,
+                                                      HttpServletRequest request) {
         return Result.success(corrections.decide(adminAuth.requireAdmin(request), id, body));
     }
 
     /** 买家读取订单中已生效的更正历史。 */
     @GetMapping("/orders/{orderId}/shipment/corrections")
     public Result<ShipmentCorrectionHistoryPageVO> buyerHistory(@PathVariable @Positive Long orderId,
-            HttpServletRequest request) {
+                                                                HttpServletRequest request) {
         return Result.success(corrections.buyerHistory(SessionUser.requireId(request), orderId));
+    }
+
+    @GetMapping("/orders/{orderId}/shipments/{shipmentId}/corrections")
+    public Result<ShipmentCorrectionHistoryPageVO> buyerPackageHistory(@PathVariable @Positive Long orderId,
+                                                                       @PathVariable @Positive Long shipmentId,
+                                                                       HttpServletRequest request) {
+        return Result.success(corrections.buyerPackageHistory(SessionUser.requireId(request), orderId, shipmentId));
     }
 
     /** 当前店主读取订单中已生效的更正历史。 */
     @GetMapping("/merchant/shops/{shopId}/orders/{orderId}/shipment/corrections")
     public Result<ShipmentCorrectionHistoryPageVO> merchantHistory(@PathVariable @Positive Long shopId,
-            @PathVariable @Positive Long orderId, HttpServletRequest request) {
+                                                                   @PathVariable @Positive Long orderId,
+                                                                   HttpServletRequest request) {
         return Result.success(corrections.merchantHistory(SessionUser.requireId(request), shopId, orderId));
+    }
+
+    @GetMapping("/merchant/shops/{shopId}/orders/{orderId}/shipments/{shipmentId}/corrections")
+    public Result<ShipmentCorrectionHistoryPageVO> merchantPackageHistory(@PathVariable @Positive Long shopId,
+                                                                          @PathVariable @Positive Long orderId,
+                                                                          @PathVariable @Positive Long shipmentId,
+                                                                          HttpServletRequest request) {
+        return Result.success(corrections.merchantPackageHistory(SessionUser.requireId(request), shopId,
+                orderId, shipmentId));
     }
 
     /** 当前店主读取本订单更正申请的状态。 */
     @GetMapping("/merchant/shops/{shopId}/orders/{orderId}/shipment/corrections/{correctionId}")
     public Result<ShipmentCorrectionRequestVO> merchantRequest(@PathVariable @Positive Long shopId,
-            @PathVariable @Positive Long orderId, @PathVariable @Positive Long correctionId,
-            HttpServletRequest request) {
-        return Result.success(corrections.merchantRequest(SessionUser.requireId(request), shopId, orderId, correctionId));
+                                                               @PathVariable @Positive Long orderId,
+                                                               @PathVariable @Positive Long correctionId,
+                                                               HttpServletRequest request) {
+        return Result.success(
+                corrections.merchantRequest(SessionUser.requireId(request), shopId, orderId, correctionId));
     }
 
     /** 管理员按状态和游标读取申请。 */

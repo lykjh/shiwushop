@@ -1,0 +1,32 @@
+root = true
+
+# Windows PowerShell 5 需 BOM 才能可靠解析此中文本地启动脚本。
+[deploy/rocketmq/start-local.ps1]
+charset = utf-8-bom
+
+[*.java]
+charset = utf-8
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 120
+insert_final_newline = true
+ij_continuation_indent_size = 8
+ij_java_blank_lines_around_method = 1
+ij_java_blank_lines_around_method_in_interface = 1
+ij_java_keep_blank_lines_in_code = 1
+ij_java_keep_blank_lines_in_declarations = 1
+ij_java_keep_blank_lines_before_right_brace = 0
+ij_java_keep_simple_blocks_in_one_line = false
+ij_java_keep_simple_methods_in_one_line = false
+ij_java_keep_simple_lambdas_in_one_line = false
+ij_java_keep_multiple_expressions_in_one_line = false
+ij_java_keep_control_statement_in_one_line = false
+ij_java_method_annotation_wrap = split_into_lines
+ij_java_field_annotation_wrap = split_into_lines
+ij_java_method_parameters_wrap = normal
+ij_java_call_parameters_wrap = normal
+ij_java_method_call_chain_wrap = normal
+ij_java_binary_operation_wrap = normal
+ij_java_wrap_long_lines = false
+ij_java_enable_javadoc_formatting = false

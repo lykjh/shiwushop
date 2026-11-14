@@ -16,9 +16,13 @@ import java.util.Map;
 
 @Component
 public class AuthRiskLimiter {
+    /** 登录与注册风险统计的五分钟窗口，单位为毫秒。 */
     private static final long WINDOW_MS = 300_000;
+    /** 认证风控 Redis 键前缀；固定哈希标签使多键 Lua 操作落入同一槽。 */
     private static final String PREFIX = "shiwushop:auth-risk:{auth-risk}:";
+    /** 缺少账号或设备维度时传入的有序集合占位键，保持风险脚本键位固定。 */
     private static final String UNUSED_ZSET = PREFIX + "unused:zset";
+    /** 缺少设备维度时传入的字符串占位键，保持风险脚本键位固定。 */
     private static final String UNUSED_STRING = PREFIX + "unused:string";
 
     private final RateLimiter rateLimiter;
@@ -56,7 +60,8 @@ public class AuthRiskLimiter {
         this.sessionFailures = sessionFailures;
         this.sessionBlockFailures = sessionBlockFailures;
         this.sessionRegisterAttempts = sessionRegisterAttempts;
-        if (maxTrackedSessions < 1) throw new IllegalArgumentException("Session 风控记录上限必须大于零");
+        if (maxTrackedSessions < 1)
+            throw new IllegalArgumentException("Session 风控记录上限必须大于零");
         this.maxTrackedSessions = maxTrackedSessions;
         this.deviceRegisterSuccesses = deviceRegisterSuccesses;
         this.ipUaRegisterSuccesses = ipUaRegisterSuccesses;
@@ -78,22 +83,28 @@ public class AuthRiskLimiter {
     }
 
     /** 将请求出口与归一化浏览器类别合并为共享流量信号，不保存完整 IP 或 UA。 */
-    private String ipUaKey(HttpServletRequest request){
-        String ua=request.getHeader("User-Agent");
-        if(ua==null)ua="";
+    private String ipUaKey(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        if (ua == null)
+            ua = "";
         String family = browserFamily(ua);
-        String source=request.getRemoteAddr()+"\0"+family;
+        String source = request.getRemoteAddr() + "\0" + family;
         return PREFIX + "ip-ua:" + rateLimiter.digest(source);
     }
 
     /** 把易变的 UA 字符串归并为有限的浏览器类别，限制风险键的数量。 */
     private static String browserFamily(String ua) {
         String normalized = ua.toLowerCase(Locale.ROOT);
-        if (normalized.contains("edg/") || normalized.contains("edgios/")) return "edge";
-        if (normalized.contains("opr/") || normalized.contains("opera/")) return "opera";
-        if (normalized.contains("chrome/") || normalized.contains("crios/")) return "chrome";
-        if (normalized.contains("firefox/") || normalized.contains("fxios/")) return "firefox";
-        if (normalized.contains("safari/")) return "safari";
+        if (normalized.contains("edg/") || normalized.contains("edgios/"))
+            return "edge";
+        if (normalized.contains("opr/") || normalized.contains("opera/"))
+            return "opera";
+        if (normalized.contains("chrome/") || normalized.contains("crios/"))
+            return "chrome";
+        if (normalized.contains("firefox/") || normalized.contains("fxios/"))
+            return "firefox";
+        if (normalized.contains("safari/"))
+            return "safari";
         return "other";
     }
 
@@ -114,12 +125,12 @@ public class AuthRiskLimiter {
      * 记录一次密码认证失败，同时更新账号、Session 和共享出口的滚动失败历史。
      * 同一风险事件交给底层限流器原子写入，并记录登录失败指标。
      */
-    public void recordLoginFailure(String username, HttpServletRequest request){
+    public void recordLoginFailure(String username, HttpServletRequest request) {
         String session = sessionKey(request) + ":login:fail:rolling";
         String shared = ipUaKey(request) + ":login:fail:rolling";
         rateLimiter.recordAuthFailure(List.of(
-                volumeKey("login", request), accountKey(username),
-                session + ":5m", session + ":1m", shared + ":5m"),
+                        volumeKey("login", request), accountKey(username),
+                        session + ":5m", session + ":1m", shared + ":5m"),
                 requestBucket("login", request),
                 new long[]{WINDOW_MS, WINDOW_MS, 60_000, WINDOW_MS},
                 new long[]{accountFailures, sessionFailures, sessionBlockFailures, ipUaFailures});
@@ -130,7 +141,7 @@ public class AuthRiskLimiter {
      * 记录一次注册风险失败；有设备信号时额外累计设备维度的失败历史。
      * 用户名冲突等正常业务错误不应调用此方法。
      */
-    public void recordRegisterFailure(HttpServletRequest request){
+    public void recordRegisterFailure(HttpServletRequest request) {
         String session = sessionKey(request) + ":register:fail:rolling";
         String shared = ipUaKey(request) + ":register:fail:rolling";
         List<String> keys = new ArrayList<>(List.of(volumeKey("register", request),
@@ -229,16 +240,16 @@ public class AuthRiskLimiter {
         String shared = ipUaKey(request);
         String device = "register".equals(action) ? deviceKey(request) : null;
         RateLimiter.AuthRiskSnapshot risk = rateLimiter.checkAuthRisk(List.of(
-                volumeKey(action, request),
-                session + ":" + action + ":fail:rolling:5m",
-                session + ":" + action + ":fail:rolling:1m",
-                shared + ":" + action + ":fail:rolling:5m",
-                account == null ? UNUSED_ZSET : account,
-                device == null ? UNUSED_ZSET : device + ":register:fail:rolling:5m",
-                device == null ? UNUSED_STRING : device + ":register:success:5m",
-                shared + ":register:success:5m",
-                shared + ":register:session-attempts",
-                shared + ":register:session-attempt-index"),
+                        volumeKey(action, request),
+                        session + ":" + action + ":fail:rolling:5m",
+                        session + ":" + action + ":fail:rolling:1m",
+                        shared + ":" + action + ":fail:rolling:5m",
+                        account == null ? UNUSED_ZSET : account,
+                        device == null ? UNUSED_ZSET : device + ":register:fail:rolling:5m",
+                        device == null ? UNUSED_STRING : device + ":register:success:5m",
+                        shared + ":register:success:5m",
+                        shared + ":register:session-attempts",
+                        shared + ":register:session-attempt-index"),
                 "register".equals(action), WINDOW_MS, maxTrackedSessions,
                 rateLimiter.digest(request.getSession(true).getId()));
         request.setAttribute(PREFIX + action + ":bucket", risk.bucket());

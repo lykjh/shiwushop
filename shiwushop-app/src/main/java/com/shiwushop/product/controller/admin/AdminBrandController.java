@@ -6,7 +6,6 @@ import com.shiwushop.product.dto.brand.BrandCreateDTO;
 import com.shiwushop.product.vo.brand.BrandVO;
 import com.shiwushop.product.vo.brand.AdminBrandListVO;
 
-
 import com.shiwushop.common.Result;
 import com.shiwushop.product.service.BrandService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,7 +26,7 @@ public class AdminBrandController {
     /** 管理员创建品牌，并记录创建操作人。 */
     @PostMapping
     public Result<AdminBrandListVO> create(
-            @Valid @RequestBody BrandCreateDTO dto, HttpServletRequest request){
+            @Valid @RequestBody BrandCreateDTO dto, HttpServletRequest request) {
         Long adminId = adminAuth.requireAdmin(request);
         return Result.success(brandService.create(dto, adminId));
     }
@@ -48,6 +47,4 @@ public class AdminBrandController {
         Long adminId = adminAuth.requireAdmin(request);
         return Result.success(brandService.update(id, dto, adminId));
     }
-
-
 }

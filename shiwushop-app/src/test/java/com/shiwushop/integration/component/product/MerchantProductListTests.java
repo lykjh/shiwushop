@@ -34,13 +34,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantProductListTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
 
     @Test
     void listsAllStatusesOfOwnShopWithStablePagination() throws Exception {
@@ -100,7 +107,8 @@ class MerchantProductListTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private Shop shop(Long owner) {

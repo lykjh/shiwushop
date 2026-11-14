@@ -14,6 +14,8 @@ import com.shiwushop.product.mapper.product.ProductMapper;
 import com.shiwushop.merchant.mapper.shop.ShopMapper;
 
 import com.shiwushop.product.entity.status.ProductStatus;
+import com.shiwushop.product.dto.product.ProductListingDecisionDTO;
+import com.shiwushop.product.service.ProductService;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.user.dto.user.RegisterDTO;
@@ -42,15 +44,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantProductUpdateTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ShopMapper shops;
-    @Autowired private CategoryMapper categories;
-    @Autowired private BrandMapper brands;
-    @Autowired private ProductMapper products;
-    @Autowired private ProductImageMapper productImages;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private BrandMapper brands;
+    @Autowired
+    private ProductMapper products;
+    @Autowired
+    private ProductService productService;
+    @Autowired
+    private ProductImageMapper productImages;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -64,10 +77,10 @@ class MerchantProductUpdateTests {
         Long cover = media(owner), detail = media(owner);
 
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "新版商品",
-                        "description", "新版介绍", "coverMediaId", cover,
-                        "imageMediaIds", List.of(cover, detail)))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "新版商品",
+                                "description", "新版介绍", "coverMediaId", cover,
+                                "imageMediaIds", List.of(cover, detail)))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.brandId").value(org.hamcrest.Matchers.nullValue()));
         assertNull(products.selectBrandId(product.getId()));
@@ -77,9 +90,9 @@ class MerchantProductUpdateTests {
         assertEquals(1, images(product).getFirst().getIsCover());
 
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
-                        "brandId", brand.getId(), "imageMediaIds", List.of()))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
+                                "brandId", brand.getId(), "imageMediaIds", List.of()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandId").value(brand.getId()));
         assertEquals(brand.getId(), products.selectBrandId(product.getId()));
         assertTrue(images(product).isEmpty());
@@ -97,9 +110,9 @@ class MerchantProductUpdateTests {
         image(product, first, true, 0);
         image(product, second, false, 1);
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "只换封面",
-                        "coverMediaId", second))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "只换封面",
+                                "coverMediaId", second))))
                 .andExpect(status().isOk());
         assertEquals(List.of(first, second), images(product).stream().map(ProductImage::getMediaId).toList());
         assertEquals(List.of(0, 1), images(product).stream().map(ProductImage::getIsCover).toList());
@@ -111,20 +124,21 @@ class MerchantProductUpdateTests {
         Category child = child();
         Product product = product(owner, child, "DRAFT");
         String body = body(child.getId(), "测试");
-        mvc.perform(put("/merchant/products/{id}", product.getId()).contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(
+                        put("/merchant/products/{id}", product.getId()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(user("MERCHANT")))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "旧 URL",
-                        "coverUrl", "https://example.com/a.jpg"))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "旧 URL",
+                                "coverUrl", "https://example.com/a.jpg"))))
                 .andExpect(status().isBadRequest());
         Long foreign = media(user("MERCHANT"));
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "越权图片",
-                        "coverMediaId", foreign, "imageMediaIds", List.of(foreign)))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "越权图片",
+                                "coverMediaId", foreign, "imageMediaIds", List.of(foreign)))))
                 .andExpect(status().isBadRequest());
     }
 
@@ -132,55 +146,105 @@ class MerchantProductUpdateTests {
     void onSaleMustRetainCoverAndImages() throws Exception {
         Long owner = user("MERCHANT");
         Category child = child();
-        Product product = product(owner, child, "ON_SALE");
+        Product product = product(owner, child, "DRAFT");
         image(product, media(owner), true, 0);
+        jdbc.update("INSERT INTO skus(product_id,option_signature,price,stock) VALUES (?,?,10,1)",
+                product.getId(), String.format("%064x", product.getId()));
+        Long revision = products.selectById(product.getId()).getRevision();
+        productService.submitListing(owner, product.getId(), revision);
+        productService.decideListing(user("ADMIN"), product.getId(),
+                new ProductListingDecisionDTO(revision, true, null));
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON).content(body(child.getId(), "保留图片")))
+                        .contentType(MediaType.APPLICATION_JSON).content(body(child.getId(), "保留图片")))
+                .andExpect(status().isConflict());
+        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
+                                "imageMediaIds", List.of()))))
+                .andExpect(status().isConflict());
+        mvc.perform(put("/merchant/products/{id}/status", product.getId()).session(session(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"OFF_SALE\"}"))
                 .andExpect(status().isOk());
         mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
-                        "imageMediaIds", List.of()))))
-                .andExpect(status().isConflict());
+                        .contentType(MediaType.APPLICATION_JSON).content(body(child.getId(), "保留图片")))
+                .andExpect(status().isOk());
         assertEquals("保留图片", products.selectById(product.getId()).getName());
         assertEquals(1, images(product).size());
     }
 
-    private String body(Long categoryId, String name) { return json.writeValueAsString(Map.of("categoryId", categoryId, "name", name)); }
-    private MockHttpSession session(Long id) { MockHttpSession s = new MockHttpSession(); s.setAttribute("userId", id); return s; }
+    private String body(Long categoryId, String name) {
+        return json.writeValueAsString(Map.of("categoryId", categoryId, "name", name));
+    }
+
+    private MockHttpSession session(Long id) {
+        MockHttpSession s = new MockHttpSession();
+        s.setAttribute("userId", id);
+        return s;
+    }
+
     private Long user(String role) {
         String name = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(users, registrationProofs, new RegisterDTO(name, "Shop123!", null));
         jdbc.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, name);
         return jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, name);
     }
+
     private Category child() {
         Category root = category(null, 1);
         return category(root.getId(), 2);
     }
+
     private Category category(Long parent, int level) {
-        Category c = new Category(); c.setParentId(parent); c.setLevel(level); c.setName("分类-" + UUID.randomUUID());
-        c.setVisible(1); c.setSortOrder(0); categories.insert(c); return c;
+        Category c = new Category();
+        c.setParentId(parent);
+        c.setLevel(level);
+        c.setName("分类-" + UUID.randomUUID());
+        c.setVisible(1);
+        c.setSortOrder(0);
+        categories.insert(c);
+        return c;
     }
+
     private Brand brand() {
-        Brand b = new Brand(); b.setName("品牌-" + UUID.randomUUID()); b.setEnabled(1); brands.insert(b); return b;
+        Brand b = new Brand();
+        b.setName("品牌-" + UUID.randomUUID());
+        b.setEnabled(1);
+        brands.insert(b);
+        return b;
     }
+
     private Product product(Long owner, Category category, String status) {
-        Shop shop = new Shop(); shop.setOwnerUserId(owner); shop.setName("店铺-" + UUID.randomUUID());
-        shop.setEnabled(1); shops.insert(shop);
-        Product p = new Product(); p.setShopId(shop.getId()); p.setCategoryId(category.getId());
-        p.setName("商品-" + UUID.randomUUID()); p.setStatus(ProductStatus.valueOf(status)); products.insert(p); return p;
+        Shop shop = new Shop();
+        shop.setOwnerUserId(owner);
+        shop.setName("店铺-" + UUID.randomUUID());
+        shop.setEnabled(1);
+        shops.insert(shop);
+        Product p = new Product();
+        p.setShopId(shop.getId());
+        p.setCategoryId(category.getId());
+        p.setName("商品-" + UUID.randomUUID());
+        p.setStatus(ProductStatus.valueOf(status));
+        products.insert(p);
+        return p;
     }
+
     private Long media(Long owner) {
         String key = "test/product-update-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
-                "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
+        jdbc.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
+                        "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
         return jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class, key);
     }
+
     private void image(Product product, Long mediaId, boolean cover, int order) {
-        ProductImage i = new ProductImage(); i.setProductId(product.getId()); i.setMediaId(mediaId);
-        i.setIsCover(cover ? 1 : 0); i.setSortOrder(order); productImages.insert(i);
+        ProductImage i = new ProductImage();
+        i.setProductId(product.getId());
+        i.setMediaId(mediaId);
+        i.setIsCover(cover ? 1 : 0);
+        i.setSortOrder(order);
+        productImages.insert(i);
     }
+
     private List<ProductImage> images(Product product) {
         return productImages.selectList(new LambdaQueryWrapper<ProductImage>()
                 .eq(ProductImage::getProductId, product.getId()).orderByAsc(ProductImage::getSortOrder));

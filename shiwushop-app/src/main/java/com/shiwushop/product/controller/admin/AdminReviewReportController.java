@@ -27,15 +27,16 @@ public class AdminReviewReportController {
     /** 管理员按游标查看待处理的评价举报。 */
     @GetMapping
     public Result<PendingReviewReportPageVO> pending(@RequestParam(required = false) @Positive Long afterId,
-                                                       @RequestParam(defaultValue = "20") @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(100) int size,
-                                                       HttpServletRequest http) {
+                                                     @RequestParam(defaultValue = "20") @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(100) int size,
+                                                     HttpServletRequest http) {
         auth.requireAdmin(http);
         return Result.success(reviews.pendingReports(afterId, size));
     }
 
     /** 管理员对一条评价举报作出处理决定，并记录处理人。 */
     @PostMapping("/{reportId}/resolve")
-    public Result<Void> resolve(@PathVariable @Positive Long reportId, @Valid @RequestBody ReviewReportDecisionDTO request,
+    public Result<Void> resolve(@PathVariable @Positive Long reportId,
+                                @Valid @RequestBody ReviewReportDecisionDTO request,
                                 HttpServletRequest http) {
         reviews.resolveReport(auth.requireAdmin(http), reportId, request);
         return Result.success();

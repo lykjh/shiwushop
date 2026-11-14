@@ -16,31 +16,34 @@ import java.util.Base64;
 @RequiredArgsConstructor
 public class CaptchaProofStore {
 
-    private static final Duration TTL=Duration.ofMinutes(2);
-    private static final String USED_PREFIX="shiwushop:captcha:used:";
+    /** 滑块已使用标记和登录验证凭证的 Redis 有效期2分钟。 */
+    private static final Duration TTL = Duration.ofMinutes(2);
+    /** 滑块已使用标记的 Redis 键前缀，后接 captchaId 摘要，防止重复签发凭证。 */
+    private static final String USED_PREFIX = "shiwushop:captcha:used:";
+    /** 登录滑块凭证的 Redis 键前缀，后接凭证摘要，值为绑定的 Session 摘要。 */
     private static final String PROOF_PREFIX = "shiwushop:captcha:login:proof:";
 
     private final StringRedisTemplate redis;
     private final RateLimiter rateLimiter;
-    private final SecureRandom random=new SecureRandom();
+    private final SecureRandom random = new SecureRandom();
 
     /** 先标记原滑块已使用，再保存与 Session 摘要绑定的随机短期凭证。 */
-    public String issue(String captchaId,String sessionId){
-        try{
-            String usedKey=USED_PREFIX+rateLimiter.digest(captchaId);
-            Boolean first =redis.opsForValue().setIfAbsent(usedKey,"1",TTL);
-            if(!Boolean.TRUE.equals(first)){
+    public String issue(String captchaId, String sessionId) {
+        try {
+            String usedKey = USED_PREFIX + rateLimiter.digest(captchaId);
+            Boolean first = redis.opsForValue().setIfAbsent(usedKey, "1", TTL);
+            if (!Boolean.TRUE.equals(first)) {
                 throw new BusinessException(400, "滑块验证已使用，请重新获取");
             }
 
-            byte[] bytes=new byte[32];
+            byte[] bytes = new byte[32];
             random.nextBytes(bytes);
             String proof = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
-            redis.opsForValue().set(PROOF_PREFIX+rateLimiter.digest(proof),rateLimiter.digest(sessionId),TTL);
+            redis.opsForValue().set(PROOF_PREFIX + rateLimiter.digest(proof), rateLimiter.digest(sessionId), TTL);
 
-            return  proof;
-        }catch (DataAccessException e){
+            return proof;
+        } catch (DataAccessException e) {
             throw new BusinessException(503, "验证服务暂时不可用", e);
         }
     }
@@ -62,5 +65,4 @@ public class CaptchaProofStore {
             throw new BusinessException(503, "验证服务暂时不可用", e);
         }
     }
-
 }

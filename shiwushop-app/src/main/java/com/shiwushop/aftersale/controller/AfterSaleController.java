@@ -7,6 +7,7 @@ import com.shiwushop.aftersale.dto.ReturnReceiptDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
 import com.shiwushop.aftersale.vo.AfterSaleVO;
 import com.shiwushop.aftersale.vo.AfterSaleSliceVO;
+import com.shiwushop.aftersale.vo.AfterSaleTimelineVO;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.aftersale.service.AfterSaleService;
@@ -39,9 +40,9 @@ public class AfterSaleController {
     /** 买家按游标查看本人订单关联的售后申请。 */
     @GetMapping("/orders/{orderId}/after-sales")
     public Result<AfterSaleSliceVO> buyerList(@PathVariable @Positive Long orderId,
-                                               @RequestParam(required = false) @Positive Long beforeId,
-                                               @RequestParam(defaultValue = "20") int size,
-                                               HttpServletRequest request) {
+                                              @RequestParam(required = false) @Positive Long beforeId,
+                                              @RequestParam(defaultValue = "20") int size,
+                                              HttpServletRequest request) {
         return Result.success(service.buyerList(SessionUser.requireId(request), orderId, beforeId, size));
     }
 
@@ -49,6 +50,14 @@ public class AfterSaleController {
     @GetMapping("/after-sales/{caseId}")
     public Result<AfterSaleVO> buyerDetail(@PathVariable @Positive Long caseId, HttpServletRequest request) {
         return Result.success(service.buyerDetail(SessionUser.requireId(request), caseId));
+    }
+
+    @GetMapping("/after-sales/{caseId}/timeline")
+    public Result<AfterSaleTimelineVO> buyerTimeline(@PathVariable @Positive Long caseId,
+                                                      @RequestParam(required = false) @Positive Long beforeId,
+                                                      @RequestParam(defaultValue = "20") int size,
+                                                      HttpServletRequest request) {
+        return Result.success(service.buyerTimeline(SessionUser.requireId(request), caseId, beforeId, size));
     }
 
     /** 买家撤销符合条件的售后申请。 */
@@ -59,7 +68,8 @@ public class AfterSaleController {
 
     /** 买家提交退货物流信息，服务层检查售后当前是否允许退货。 */
     @PostMapping("/after-sales/{caseId}/return-shipment")
-    public Result<AfterSaleVO> sendReturn(@PathVariable @Positive Long caseId, @Valid @RequestBody ReturnShipmentDTO body,
+    public Result<AfterSaleVO> sendReturn(@PathVariable @Positive Long caseId,
+                                          @Valid @RequestBody ReturnShipmentDTO body,
                                           HttpServletRequest request) {
         return Result.success(service.sendReturn(SessionUser.requireId(request), caseId, body));
     }
@@ -67,17 +77,27 @@ public class AfterSaleController {
     /** 商家查看所属店铺的一条售后申请详情。 */
     @GetMapping("/merchant/shops/{shopId}/after-sales/{caseId}")
     public Result<AfterSaleVO> merchantDetail(@PathVariable @Positive Long shopId, @PathVariable @Positive Long caseId,
-                                               HttpServletRequest request) {
+                                              HttpServletRequest request) {
         return Result.success(service.merchantDetail(SessionUser.requireId(request), shopId, caseId));
+    }
+
+    @GetMapping("/merchant/shops/{shopId}/after-sales/{caseId}/timeline")
+    public Result<AfterSaleTimelineVO> merchantTimeline(@PathVariable @Positive Long shopId,
+                                                         @PathVariable @Positive Long caseId,
+                                                         @RequestParam(required = false) @Positive Long beforeId,
+                                                         @RequestParam(defaultValue = "20") int size,
+                                                         HttpServletRequest request) {
+        return Result.success(service.merchantTimeline(SessionUser.requireId(request), shopId, caseId,
+                beforeId, size));
     }
 
     /** 商家按状态和游标筛选店铺售后申请。 */
     @GetMapping("/merchant/shops/{shopId}/after-sales")
     public Result<AfterSaleSliceVO> merchantList(@PathVariable @Positive Long shopId,
-                                                  @RequestParam(required = false) @Positive Long beforeId,
-                                                  @RequestParam(required = false) String status,
-                                                  @RequestParam(defaultValue = "20") int size,
-                                                  HttpServletRequest request) {
+                                                 @RequestParam(required = false) @Positive Long beforeId,
+                                                 @RequestParam(required = false) String status,
+                                                 @RequestParam(defaultValue = "20") int size,
+                                                 HttpServletRequest request) {
         return Result.success(service.merchantList(SessionUser.requireId(request), shopId,
                 beforeId, status, size));
     }
@@ -85,28 +105,28 @@ public class AfterSaleController {
     /** 商家审核一条售后申请，服务层执行对应状态转换。 */
     @PostMapping("/merchant/shops/{shopId}/after-sales/{caseId}/review")
     public Result<AfterSaleVO> review(@PathVariable @Positive Long shopId, @PathVariable @Positive Long caseId,
-                                       @Valid @RequestBody AfterSaleReviewDTO body, HttpServletRequest request) {
+                                      @Valid @RequestBody AfterSaleReviewDTO body, HttpServletRequest request) {
         return Result.success(service.review(SessionUser.requireId(request), shopId, caseId, body));
     }
 
     /** 商家登记收到买家退回的商品，并推动售后进入后续处理状态。 */
     @PostMapping("/merchant/shops/{shopId}/after-sales/{caseId}/receive")
     public Result<AfterSaleVO> receive(@PathVariable @Positive Long shopId, @PathVariable @Positive Long caseId,
-                                        @Valid @RequestBody ReturnReceiptDTO body, HttpServletRequest request) {
+                                       @Valid @RequestBody ReturnReceiptDTO body, HttpServletRequest request) {
         return Result.success(service.receiveReturn(SessionUser.requireId(request), shopId, caseId, body));
     }
 
     /** 商家为符合条件的售后申请发起退款。 */
     @PostMapping("/merchant/shops/{shopId}/after-sales/{caseId}/refund")
     public Result<AfterSaleVO> refund(@PathVariable @Positive Long shopId, @PathVariable @Positive Long caseId,
-                                       HttpServletRequest request) {
+                                      HttpServletRequest request) {
         return Result.success(service.refund(SessionUser.requireId(request), shopId, caseId));
     }
 
     /** 商家主动向退款网关核对结果，并同步售后退款状态。 */
     @PostMapping("/merchant/shops/{shopId}/after-sales/{caseId}/refund/sync")
     public Result<AfterSaleVO> syncRefund(@PathVariable @Positive Long shopId, @PathVariable @Positive Long caseId,
-                                           HttpServletRequest request) {
+                                          HttpServletRequest request) {
         return Result.success(service.syncRefund(SessionUser.requireId(request), shopId, caseId));
     }
 }

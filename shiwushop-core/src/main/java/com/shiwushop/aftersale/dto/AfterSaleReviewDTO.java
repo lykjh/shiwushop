@@ -4,8 +4,16 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-public record AfterSaleReviewDTO(@NotNull Boolean approved, @Size(max = 500) String reason) {
-    public AfterSaleReviewDTO { if (reason != null) reason = reason.strip(); }
+public record AfterSaleReviewDTO(
+    /** 是否审核通过。 */
+    @NotNull Boolean approved,
+    /** 售后审核意见；拒绝时必填，通过时可不填。 */
+    @Size(max = 500) String reason
+) {
+    public AfterSaleReviewDTO {
+        if (reason != null)
+            reason = reason.strip();
+    }
 
     /** 审核通过允许不填原因，拒绝申请必须向买家说明原因。 */
     @AssertTrue(message = "拒绝售后时必须填写原因")

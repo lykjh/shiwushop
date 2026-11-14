@@ -2,7 +2,6 @@ package com.shiwushop.product.controller.brand;
 
 import com.shiwushop.product.vo.brand.BrandPublicVO;
 
-
 import com.shiwushop.common.Result;
 import com.shiwushop.product.service.BrandService;
 import lombok.RequiredArgsConstructor;

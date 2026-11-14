@@ -2,12 +2,24 @@ package com.shiwushop.product.mapper.product;
 
 import com.shiwushop.product.dto.inventory.InventoryMovementQuery;
 import com.shiwushop.product.vo.inventory.InventoryMovementVO;
+import com.shiwushop.product.entity.inventory.MarketingInventoryMovement;
+
 import java.util.List;
+
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Options;
 
 public interface InventoryMovementMapper {
+    @Select("SELECT id,sku_id,activity_sku_id,actor_user_id,reason,delta,balance_after,operation_key " +
+            "FROM inventory_movements WHERE operation_key=#{operationKey}")
+    MarketingInventoryMovement selectMarketingByKey(@Param("operationKey") String operationKey);
+
+    @Insert("INSERT INTO inventory_movements(sku_id,activity_sku_id,actor_user_id,reason,delta,balance_after,operation_key) " +
+            "VALUES(#{skuId},#{activitySkuId},#{actorUserId},#{reason},#{delta},#{balanceAfter},#{operationKey})")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertMarketing(MarketingInventoryMovement movement);
     @Select("""
             <script>
             SELECT id, reason, delta, balance_after, order_item_id, created_at
@@ -20,7 +32,8 @@ public interface InventoryMovementMapper {
             </script>
             """)
     List<InventoryMovementVO> selectPage(@Param("skuId") Long skuId,
-            @Param("query") InventoryMovementQuery query, @Param("limit") int limit);
+                                         @Param("query") InventoryMovementQuery query, @Param("limit") int limit);
+
     @Insert("""
             INSERT INTO inventory_movements (sku_id, reason, delta, balance_after, operation_key)
             VALUES (#{skuId}, 'MERCHANT_ADJUST', #{delta}, #{balanceAfter}, #{operationKey})

@@ -8,6 +8,7 @@ import lombok.Data;
 @Data
 public class ShopStatusUpdateDTO {
 
+    /** 是否启用，1 是、0 否。 */
     @NotNull(message = "营业状态不能为空")
     @Min(value = 0, message = "营业状态只能是0或1")
     @Max(value = 1, message = "营业状态只能是0或1")

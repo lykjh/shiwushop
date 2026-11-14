@@ -3,7 +3,6 @@ package com.shiwushop.unit.auth;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.auth.SessionUser;
 
-
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 

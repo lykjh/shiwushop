@@ -23,11 +23,14 @@ spring:
     data:
       redis:
         namespace: shiwushop:session
-
+        repository-type: indexed
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 
 logging:
+  # 显式使用应用日志配置，避免依赖 JAR 的配置覆盖日志路径、滚动和 MDC。
   config: classpath:logback-spring.xml
   file:
     name: ${SHOP_LOG_FILE:./logs/shiwushop.log}
@@ -40,6 +43,14 @@ logging:
       total-size-cap: 1GB
 
 shop:
+  account:
+    deletion-request-enabled: false
+  marketing:
+    enabled: ${SHOP_MARKETING_ENABLED:false}
+  member:
+    enabled: ${SHOP_MEMBER_ENABLED:false}
+    reward-start-at: ${SHOP_MEMBER_REWARD_START_AT:}
+    scan-delay-ms: ${SHOP_MEMBER_SCAN_DELAY_MS:60000}
   logging:
     method-enabled: ${SHOP_METHOD_LOG_ENABLED:false}
   search:
@@ -120,6 +131,7 @@ shop:
     timeout-rule-version: 1
     timeout-scan-delay-ms: 60000
   payment:
+    simulation-enabled: ${SHOP_PAYMENT_SIMULATION_ENABLED:false}
     expiry-scan-delay-ms: 30000
     refund-scan-delay-ms: 60000
     scan-budget-ms: ${SHOP_PAYMENT_SCAN_BUDGET_MS:20000}
@@ -153,6 +165,7 @@ shop:
     entry-global-burst: 20
 
 server:
+  shutdown: graceful
   tomcat:
     max-swallow-size: 16MB
   servlet:
@@ -166,6 +179,14 @@ server:
         http-only: true
         same-site: lax
         secure: ${SHOP_SESSION_COOKIE_SECURE:false}
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis
 ---
 spring:
   config:
@@ -176,3 +197,4 @@ spring:
       cluster:
         nodes: 127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005,127.0.0.1:7006
         max-redirects: 3
+

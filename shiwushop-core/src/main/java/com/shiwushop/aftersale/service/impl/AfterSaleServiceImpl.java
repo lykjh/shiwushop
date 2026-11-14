@@ -1,11 +1,20 @@
 package com.shiwushop.aftersale.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.shiwushop.marketing.service.MarketingOrderSettlement;
+
+import java.util.Arrays;
+
+import tools.jackson.databind.ObjectMapper;
+
+import com.shiwushop.marketing.RefundUnits;
 import com.shiwushop.aftersale.dto.AfterSaleCreateDTO;
 import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
 import com.shiwushop.aftersale.dto.ReturnReceiptDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
 import com.shiwushop.aftersale.vo.AfterSaleVO;
 import com.shiwushop.aftersale.vo.AfterSaleSliceVO;
+import com.shiwushop.aftersale.vo.AfterSaleTimelineVO;
 import com.shiwushop.user.service.AccountAccess;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
@@ -23,6 +32,7 @@ import com.shiwushop.trade.entity.payment.PaymentAttempt;
 import com.shiwushop.aftersale.entity.refund.RefundAttempt;
 import com.shiwushop.aftersale.entity.shipment.ReturnShipment;
 import com.shiwushop.trade.entity.shipment.Shipment;
+import com.shiwushop.trade.service.ShipmentService;
 import com.shiwushop.aftersale.entity.status.AfterSaleStatus;
 import com.shiwushop.aftersale.entity.status.AfterSaleType;
 import com.shiwushop.trade.entity.status.OrderStatus;
@@ -41,6 +51,7 @@ import com.shiwushop.trade.service.AfterSaleOrderService;
 import com.shiwushop.product.service.TradingProductService;
 import com.shiwushop.product.service.ProductStockService;
 import com.shiwushop.product.service.ReviewService;
+import com.shiwushop.member.service.MemberRewardService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -62,7 +73,9 @@ import java.util.concurrent.TimeUnit;
 @Service
 @RequiredArgsConstructor
 public class AfterSaleServiceImpl implements AfterSaleService {
+    /** 确认收货后允许申请售后的期限，单位为天。 */
     private static final int APPLY_DAYS_AFTER_CONFIRM = 7;
+    /** 退款对账任务的认领租期；到期后允许其他执行者接管。 */
     private static final Duration RECONCILE_CLAIM_LEASE = Duration.ofMinutes(2);
     private final AfterSaleCaseMapper cases;
     private final AfterSaleTimeoutService timeouts;
@@ -81,6 +94,10 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private final TradingProductService products;
     private final ProductStockService stock;
     private final ReviewService reviews;
+    private final MemberRewardService memberRewards;
+    private final ObjectMapper json;
+    private final MarketingOrderSettlement promotions;
+    private final ShipmentService shipments;
     @Value("${shop.payment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
@@ -98,8 +115,10 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     /** 锁订单后计算已占用的件数和金额，避免并发申请超过可退余额。 */
     private Long createLocked(Long buyerId, Long orderId, String requestKey, AfterSaleType type, String reason,
                               List<AfterSaleCreateDTO.Item> requestedItems) {
+        promotions.lockSource(orderId);
         Order order = orderAccess.lock(orderId);
-        if (order == null || !buyerId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !buyerId.equals(order.getUserId()))
+            throw new BusinessException(404, "订单不存在");
         AfterSaleCase previous = cases.selectByRequestKey(orderId, requestKey);
         if (previous != null) {
             if (previous.getType() != type || !previous.getReason().equals(reason)
@@ -107,15 +126,9 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 throw new BusinessException(409, "幂等键对应的申请内容不同");
             return previous.getId();
         }
-        if (order.getStatus() != OrderStatus.PAID) throw new BusinessException(409, "订单尚未付款");
-        Shipment shipment = orderAccess.shipment(orderId);
-        if (type == AfterSaleType.RETURN_REFUND && shipment == null)
-            throw new BusinessException(409, "订单尚未发货，不能退货退款");
+        if (order.getStatus() != OrderStatus.PAID)
+            throw new BusinessException(409, "订单尚未付款");
         LocalDateTime now = LocalDateTime.now(clock);
-        if (shipment != null && shipment.getStatus() == ShipmentStatus.CONFIRMED
-                && now.isAfter(shipment.getConfirmedAt().plusDays(APPLY_DAYS_AFTER_CONFIRM))) {
-            throw new BusinessException(409, "售后申请期限已过");
-        }
         Set<Long> seen = new HashSet<>();
         List<AfterSaleItem> lines = new ArrayList<>();
         BigDecimal amount = BigDecimal.ZERO;
@@ -127,16 +140,25 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             if (original == null || !orderId.equals(original.getOrderId()))
                 throw new BusinessException(404, "订单商品不存在");
             int remaining = original.getQuantity() - items.reservedQuantity(original.getId());
-            if (requested.quantity() > remaining) throw new BusinessException(409, "申请件数超过可退件数");
+            if (requested.quantity() > remaining)
+                throw new BusinessException(409, "申请件数超过可退件数");
             AfterSaleItem line = new AfterSaleItem();
             line.setOrderItemId(original.getId());
             line.setQuantity(requested.quantity());
-            line.setRefundAmount(original.getUnitPrice().multiply(BigDecimal.valueOf(requested.quantity())));
+            Shipment source = sourceFor(orderId, original, requested, type, now);
+            line.setSourceKind(source == null ? "UNSHIPPED" : "SHIPMENT");
+            line.setSourceShipmentId(source == null ? null : source.getId());
+            if (Integer.valueOf(1).equals(order.getPricingVersion())) {
+                freezeRefund(original, line);
+            } else {
+                line.setRefundAmount(original.getUnitPrice().multiply(BigDecimal.valueOf(requested.quantity())));
+            }
             amount = amount.add(line.getRefundAmount());
             lines.add(line);
         }
-        PaymentAttempt paid = paidAttempt(order);
-        if (items.reservedAmount(orderId).add(amount).compareTo(paid.getAmount()) > 0)
+        BigDecimal paidAmount = !"CASH".equals(order.getSettlementKind()) ? BigDecimal.ZERO : paidAttempt(
+                order).getAmount();
+        if (items.reservedAmount(orderId).add(amount).compareTo(paidAmount) > 0)
             throw new BusinessException(409, "退款金额超过已支付金额");
         AfterSaleCase sale = new AfterSaleCase();
         sale.setOrderId(orderId);
@@ -145,6 +167,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         sale.setStatus(AfterSaleStatus.REQUESTED);
         sale.setReason(reason);
         sale.setRefundAmount(amount);
+        if (amount.signum() == 0)
+            sale.setCaseOrigin("POINTS".equals(order.getSettlementKind()) ? "POINTS" : "ZERO_CASH");
         sale.setRequestedAt(now);
         cases.insert(sale);
         for (AfterSaleItem line : lines) {
@@ -157,15 +181,67 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return sale.getId();
     }
 
+    /** 售后件数绑定一个确定来源；混合来源必须由买家指定包裹或分开申请。 */
+    private Shipment sourceFor(Long orderId, OrderItem original, AfterSaleCreateDTO.Item request,
+                               AfterSaleType type, LocalDateTime now) {
+        int unshipped = original.getQuantity() - orderAccess.shippedQuantity(original.getId())
+                - items.reservedQuantityForSource(original.getId(), "UNSHIPPED", null);
+        List<Shipment> candidates = new ArrayList<>();
+        for (Shipment shipment : orderAccess.shipments(orderId)) {
+            int allocated = orderAccess.shipmentQuantity(shipment.getId(), original.getId());
+            if (allocated == 0)
+                continue;
+            if (!"COMPLETE".equals(shipment.getAllocationState()))
+                throw new BusinessException(409, "包裹件数待核实");
+            if (allocated - items.reservedQuantityForSource(original.getId(), "SHIPMENT", shipment.getId()) > 0)
+                candidates.add(shipment);
+        }
+        Shipment source;
+        if (request.shipmentId() != null) {
+            if ("UNSHIPPED".equals(request.sourceKind()))
+                throw new BusinessException(400, "退款来源与包裹不一致");
+            source = candidates.stream().filter(s -> s.getId().equals(request.shipmentId())).findFirst()
+                    .orElseThrow(() -> new BusinessException(409, "指定包裹没有可退件数"));
+        } else if ("UNSHIPPED".equals(request.sourceKind())) {
+            if (type != AfterSaleType.REFUND_ONLY || unshipped <= 0)
+                throw new BusinessException(409, "没有可退的未发货件数");
+            source = null;
+        } else if (candidates.size() == 1 && (type == AfterSaleType.RETURN_REFUND || unshipped == 0)) {
+            source = candidates.getFirst();
+        } else if (candidates.isEmpty() && unshipped > 0 && type == AfterSaleType.REFUND_ONLY
+                && !"SHIPMENT".equals(request.sourceKind())) {
+            source = null;
+        } else {
+            throw new BusinessException(409, "请指定退款包裹或单独申请未发货件数");
+        }
+        if (source == null) {
+            if (request.quantity() > unshipped)
+                throw new BusinessException(409, "申请件数超过未发货余额");
+        } else {
+            int available = orderAccess.shipmentQuantity(source.getId(), original.getId())
+                    - items.reservedQuantityForSource(original.getId(), "SHIPMENT", source.getId());
+            if (request.quantity() > available)
+                throw new BusinessException(409, "申请件数超过包裹可退件数");
+            if (source.getStatus() == ShipmentStatus.CONFIRMED
+                    && now.isAfter(source.getConfirmedAt().plusDays(APPLY_DAYS_AFTER_CONFIRM)))
+                throw new BusinessException(409, "售后申请期限已过");
+        }
+        return source;
+    }
+
     /** 幂等重试时比较原申请与本次提交的商品 ID 和数量。 */
     private boolean sameItems(Long caseId, List<AfterSaleCreateDTO.Item> requested) {
         List<AfterSaleItem> existing = items.selectForCase(caseId);
-        if (existing.size() != requested.size()) return false;
+        if (existing.size() != requested.size())
+            return false;
         for (AfterSaleItem line : existing) {
             long matches = requested.stream().filter(item -> item != null
                     && line.getOrderItemId().equals(item.orderItemId())
-                    && line.getQuantity().equals(item.quantity())).count();
-            if (matches != 1) return false;
+                    && line.getQuantity().equals(item.quantity())
+                    && (item.shipmentId() == null || item.shipmentId().equals(line.getSourceShipmentId()))
+                    && (item.sourceKind() == null || item.sourceKind().equals(line.getSourceKind()))).count();
+            if (matches != 1)
+                return false;
         }
         return true;
     }
@@ -232,6 +308,26 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    /** 复用详情归属校验，再只返回公开业务审计事件。 */
+    @Override
+    public AfterSaleTimelineVO buyerTimeline(Long buyerId, Long caseId, Long beforeId, int size) {
+        return timeline(caseId, beforeId, size, buyerDetail(buyerId, caseId).status());
+    }
+
+    /** 店主与买家共用相同公开事件集，平台内部审计不进入查询。 */
+    @Override
+    public AfterSaleTimelineVO merchantTimeline(Long merchantId, Long shopId, Long caseId,
+                                                 Long beforeId, int size) {
+        return timeline(caseId, beforeId, size, merchantDetail(merchantId, shopId, caseId).status());
+    }
+
+    private AfterSaleTimelineVO timeline(Long caseId, Long beforeId, int size, String status) {
+        int limit = PageSpec.of(1, size).size();
+        var events = audit.publicEvents(caseId, cursor(beforeId), limit + 1);
+        var page = events.stream().limit(limit).toList();
+        return new AfterSaleTimelineVO(status, page, events.size() > limit ? page.getLast().id() : null);
+    }
+
     /** 店主审核申请并推进售后状态；退货退款先等待寄回，退款申请进入退款中。 */
     @Override
     public AfterSaleVO review(Long merchantId, Long shopId, Long caseId, AfterSaleReviewDTO request) {
@@ -239,12 +335,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
             merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
+            promotions.lockSource(found.getOrderId());
             orderAccess.lock(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
-            if (sale.getStatus() != AfterSaleStatus.REQUESTED) throw new BusinessException(409, "售后申请已审核");
+            if (sale.getStatus() != AfterSaleStatus.REQUESTED)
+                throw new BusinessException(409, "售后申请已审核");
             AfterSaleStatus next = request.approved()
                     ? sale.getType() == AfterSaleType.RETURN_REFUND
-                    ? AfterSaleStatus.WAITING_RETURN : AfterSaleStatus.REFUNDING
+                      ? AfterSaleStatus.WAITING_RETURN : AfterSaleStatus.REFUNDING
                     : AfterSaleStatus.REJECTED;
             if (request.approved() && sale.getType() == AfterSaleType.RETURN_REFUND) {
                 ReturnDestinationSnapshot snapshot = returnProfiles.snapshotForReturn(shopId);
@@ -262,7 +360,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             }
             LocalDateTime now = LocalDateTime.now(clock);
             if (cases.review(caseId, next, merchantId, reviewReason, now,
-                    request.approved() ? null : now) != 1) throw new BusinessException(409, "审核状态冲突");
+                    request.approved() ? null : now) != 1)
+                throw new BusinessException(409, "审核状态冲突");
             timeouts.onStageChanged(caseId);
             audit.record(merchantId, request.approved() ? "AFTER_SALE_APPROVED" : "AFTER_SALE_REJECTED",
                     caseId, "商家审核售后", now);
@@ -278,14 +377,17 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
             buyerOrder(buyerId, found.getOrderId());
+            promotions.lockSource(found.getOrderId());
             orderAccess.lock(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
-            if (sale.getStatus() == AfterSaleStatus.CLOSED) return;
+            if (sale.getStatus() == AfterSaleStatus.CLOSED)
+                return;
             if ((sale.getStatus() != AfterSaleStatus.REQUESTED && sale.getStatus() != AfterSaleStatus.WAITING_RETURN)
                     || returns.selectByCaseId(caseId) != null || refunds.selectLatest(caseId) != null)
                 throw new BusinessException(409, "当前不能撤销售后申请");
             LocalDateTime now = LocalDateTime.now(clock);
-            if (cases.withdraw(caseId, sale.getStatus(), now) != 1) throw new BusinessException(409, "售后状态冲突");
+            if (cases.withdraw(caseId, sale.getStatus(), now) != 1)
+                throw new BusinessException(409, "售后状态冲突");
             timeouts.onStageChanged(caseId);
             audit.record(buyerId, "AFTER_SALE_WITHDRAWN", caseId, "买家撤销售后", now);
             BusinessEventLog.committed("aftersale", "after_sale_withdrawn", "after_sale", caseId);
@@ -301,12 +403,15 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
             buyerOrder(buyerId, found.getOrderId());
+            promotions.lockSource(found.getOrderId());
             orderAccess.lock(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
-            if (sale.getType() != AfterSaleType.RETURN_REFUND) throw new BusinessException(409, "不是退货退款申请");
+            if (sale.getType() != AfterSaleType.RETURN_REFUND)
+                throw new BusinessException(409, "不是退货退款申请");
             ReturnShipment existing = returns.selectByCaseId(caseId);
             if (existing != null) {
-                if (carrier.equals(existing.getCarrierName()) && tracking.equals(existing.getTrackingNo())) return;
+                if (carrier.equals(existing.getCarrierName()) && tracking.equals(existing.getTrackingNo()))
+                    return;
                 throw new BusinessException(409, "退货运单已录入，信息不同");
             }
             if (sale.getStatus() != AfterSaleStatus.WAITING_RETURN)
@@ -333,6 +438,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             AfterSaleCase found = requireCase(caseId);
             merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
+            promotions.lockSource(found.getOrderId());
             orderAccess.lock(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(caseId);
             if (sale.getStatus() != AfterSaleStatus.WAITING_RECEIPT)
@@ -345,7 +451,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                     || cases.transition(caseId, AfterSaleStatus.WAITING_RECEIPT, AfterSaleStatus.REFUNDING) != 1)
                 throw new BusinessException(409, "退货签收状态冲突");
             timeouts.onStageChanged(caseId);
-            if (request.restockable()) restoreStock(caseId, "RETURN_RECEIPT");
+            if (request.restockable())
+                restoreStock(caseId, "RETURN_RECEIPT");
             audit.record(merchantId, "RETURN_RECEIVED", caseId, "商家确认收到退货", now);
             BusinessEventLog.committed("aftersale", "return_received", "after_sale", caseId);
         });
@@ -355,11 +462,23 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     /** 先提交本地退款尝试，再在事务外调用渠道；结果未知时保留请求号供核对。 */
     @Override
     public AfterSaleVO refund(Long merchantId, Long shopId, Long caseId) {
+        return refundCase(merchantId, shopId, caseId, false);
+    }
+
+    @Override
+    public void refundFailedGroup(Long caseId) {
+        refundCase(null, null, caseId, true);
+    }
+
+    private AfterSaleVO refundCase(Long merchantId, Long shopId, Long caseId, boolean system) {
         // 先提交本地退款尝试，再调用外部渠道；超时也保留同一请求号供查询和重试。
-        RefundContext context = tx().execute(status -> prepareRefund(merchantId, shopId, caseId));
-        if (context == null) return view(caseId);
-        if (!context.newAttempt() && !LocalDateTime.now(clock).isBefore(context.attempt().getRequestedAt().plusSeconds(10))) {
-            if (queryAndSettle(context)) return view(caseId);
+        RefundContext context = tx().execute(status -> prepareRefund(merchantId, shopId, caseId, system));
+        if (context == null)
+            return view(caseId);
+        if (!context.newAttempt() &&
+                !LocalDateTime.now(clock).isBefore(context.attempt().getRequestedAt().plusSeconds(10))) {
+            if (queryAndSettle(context))
+                return view(caseId);
         } else if (!context.newAttempt()) {
             return view(caseId);
         }
@@ -369,13 +488,16 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                     context.payment().getAlipayTradeNo(), context.attempt().getOutRequestNo(),
                     context.attempt().getAmount());
         } catch (BusinessException unknown) {
-            if (unknown.getCode() != 503) throw unknown;
+            if (unknown.getCode() != 503)
+                throw unknown;
             log.warn("退款调用结果未知，attemptId={}", context.attempt().getId(), unknown);
             markUnknown(context.attempt().getId());
             return view(caseId);
         }
-        if (result.succeeded()) settleSuccess(context, result, false);
-        else markUnknown(context.attempt().getId());
+        if (result.succeeded())
+            settleSuccess(context, result, false);
+        else
+            markUnknown(context.attempt().getId());
         return view(caseId);
     }
 
@@ -385,31 +507,51 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         RefundContext context = tx().execute(status -> {
             AfterSaleCase sale = requireCase(caseId);
             Order order = merchantOrderForUpdate(merchantId, shopId, sale.getOrderId());
-            if (sale.getStatus() == AfterSaleStatus.REFUNDED) return null;
+            if (sale.getStatus() == AfterSaleStatus.REFUNDED)
+                return null;
             RefundAttempt attempt = refunds.selectLatest(caseId);
             if (attempt == null || sale.getStatus() != AfterSaleStatus.REFUNDING)
                 throw new BusinessException(409, "尚未发起退款");
-            if (attempt.getStatus() == RefundAttemptStatus.SUCCESS) return null;
+            if (attempt.getStatus() == RefundAttemptStatus.SUCCESS)
+                return null;
             if (attempt.getStatus() == RefundAttemptStatus.FAILED)
                 throw new BusinessException(409, "退款记录已标记失败，需要人工核查");
             return LocalDateTime.now(clock).isBefore(attempt.getRequestedAt().plusSeconds(10))
                     ? null : new RefundContext(attempt, paidAttempt(order), false);
         });
         // 渠道查询在事务外执行；已受理的退款核对继续由幂等状态保护。
-        if (context != null) queryAndSettle(context);
+        if (context != null)
+            queryAndSettle(context);
         return view(caseId);
     }
 
     /** 锁定订单和售后申请，复用现有尝试或创建金额不超出原支付的退款请求。 */
-    private RefundContext prepareRefund(Long merchantId, Long shopId, Long caseId) {
+    private RefundContext prepareRefund(Long merchantId, Long shopId, Long caseId, boolean system) {
         AfterSaleCase found = requireCase(caseId);
-        merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
+        if (system) {
+            if (!"GROUP_FAILED".equals(found.getCaseOrigin()))
+                throw new BusinessException(409, "非失败团系统退款");
+        } else {
+            merchantOrderForUpdate(merchantId, shopId, found.getOrderId());
+        }
+        promotions.lockSource(found.getOrderId());
         Order order = orderAccess.lock(found.getOrderId());
         AfterSaleCase sale = cases.selectForUpdate(caseId);
-        if (sale.getStatus() == AfterSaleStatus.REFUNDED) return null;
+        if (sale.getStatus() == AfterSaleStatus.REFUNDED)
+            return null;
         if (sale.getStatus() != AfterSaleStatus.REFUNDING)
             throw new BusinessException(409, "售后尚未进入退款阶段");
-        if (!gateway.configured()) throw new BusinessException(503, "退款渠道未配置");
+        if (sale.getRefundAmount().signum() == 0
+                && ("ZERO_CASH".equals(sale.getCaseOrigin()) || "POINTS".equals(sale.getCaseOrigin()))) {
+            var now = LocalDateTime.now(clock);
+            if (cases.markRefunded(sale.getId(), now) != 1)
+                throw new BusinessException(409, "售后状态冲突");
+            completeReturn(sale);
+            audit.record(merchantId, "REFUND_SUCCEEDED", sale.getId(), "零现金售后完成", now);
+            return null;
+        }
+        if (!gateway.configured())
+            throw new BusinessException(503, "退款渠道未配置");
         PaymentAttempt paid = paidAttempt(order);
         RefundAttempt attempt = refunds.selectLatest(caseId);
         if (attempt != null) {
@@ -428,13 +570,16 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         attempt = new RefundAttempt();
         attempt.setCaseId(caseId);
         attempt.setPaymentAttemptId(paid.getId());
-        attempt.setOutRequestNo("SHIWUSHOPR" + UUID.randomUUID().toString().replace("-", ""));
+        attempt.setOutRequestNo(("LOCAL_SIMULATION".equals(paid.getChannel()) ? "LOCAL_SIMULATIONR" : "SHIWUSHOPR")
+                + UUID.randomUUID().toString().replace("-", ""));
         attempt.setAmount(sale.getRefundAmount());
         attempt.setStatus(RefundAttemptStatus.PENDING);
         attempt.setRequestedAt(LocalDateTime.now(clock));
         refunds.insert(attempt);
         timeouts.onStageChanged(caseId);
-        audit.record(merchantId, "REFUND_REQUESTED", caseId, "商家发起退款", attempt.getRequestedAt());
+        audit.record(system ? null : merchantId, "REFUND_REQUESTED", caseId,
+                "LOCAL_SIMULATION".equals(paid.getChannel()) ? "发起模拟退款（不退真实资金）"
+                        : system ? "失败团自动发起退款" : "商家发起退款", attempt.getRequestedAt());
         BusinessEventLog.committed("aftersale", "refund_requested", "refund", attempt.getId());
         return new RefundContext(attempt, paid, true);
     }
@@ -451,7 +596,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             result = gateway.query(context.payment().getOutTradeNo(),
                     context.payment().getAlipayTradeNo(), context.attempt().getOutRequestNo());
         } catch (BusinessException unknown) {
-            if (unknown.getCode() != 503) throw unknown;
+            if (unknown.getCode() != 503)
+                throw unknown;
             log.warn("退款查询结果未知，attemptId={}", context.attempt().getId(), unknown);
             markUnknown(context.attempt().getId(), reconcileToken);
             return false;
@@ -483,38 +629,147 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             RefundAttempt expected = context.attempt();
             AfterSaleCase found = requireCase(expected.getCaseId());
+            promotions.lockSource(found.getOrderId());
             orderAccess.lock(found.getOrderId());
             AfterSaleCase sale = cases.selectForUpdate(expected.getCaseId());
             RefundAttempt current = refunds.selectForUpdate(expected.getId());
             if (reconcileToken != null && refunds.ownsReconciliation(expected.getId(), reconcileToken) != 1)
                 throw new BusinessException(409, "退款核对租约已失效");
-            if (current.getStatus() == RefundAttemptStatus.SUCCESS && sale.getStatus() == AfterSaleStatus.REFUNDED) return;
+            if (current.getStatus() == RefundAttemptStatus.SUCCESS && sale.getStatus() == AfterSaleStatus.REFUNDED)
+                return;
             if (sale.getStatus() != AfterSaleStatus.REFUNDING || current.getStatus() == RefundAttemptStatus.SUCCESS)
                 throw new BusinessException(409, "退款状态冲突");
             LocalDateTime now = LocalDateTime.now(clock);
             if (refunds.resolve(current.getId(), RefundAttemptStatus.SUCCESS, now, null) != 1
                     || cases.markRefunded(sale.getId(), now) != 1)
                 throw new BusinessException(409, "退款状态冲突");
-            // 订单锁已串行化同单退款；评价行锁使隐藏、删除与退款只扣减汇总一次。
-            for (AfterSaleItem line : items.selectForCase(sale.getId())) {
-                OrderItem original = orderAccess.item(line.getOrderItemId());
-                reviews.excludeFullyRefunded(line.getOrderItemId(),
-                        items.refundedQuantityForUpdate(line.getOrderItemId()), original.getQuantity());
-            }
-            if (sale.getType() == AfterSaleType.REFUND_ONLY
-                    && orderAccess.shipment(sale.getOrderId()) == null) {
-                restoreStock(sale.getId(), "REFUND_SUCCESS");
-            } else {
-                Set<Long> productIds = new HashSet<>();
-                for (AfterSaleItem line : items.selectForCase(sale.getId())) {
-                    OrderItem original = orderAccess.item(line.getOrderItemId());
-                    productIds.add(products.findSku(original.getSkuId()).getProductId());
-                }
-                stock.refreshProducts(productIds);
-            }
-            audit.record(null, "REFUND_SUCCEEDED", sale.getId(), "支付宝退款成功", now);
+            completeReturn(sale);
+            audit.record(null, "REFUND_SUCCEEDED", sale.getId(),
+                    "LOCAL_SIMULATION".equals(context.payment().getChannel())
+                            ? "模拟退款成功（不退真实资金）" : "支付宝退款成功", now);
             BusinessEventLog.committed("aftersale", "refund_succeeded", "refund", current.getId());
         });
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void cancelUnshippedZeroCash(Order order, List<OrderItem> orderItems) {
+        if (orderAccess.shipment(order.getId()) != null || cases.hasOpen(order.getId()))
+            throw new BusinessException(409, "已发货或有未结售后，不能取消订单");
+        // 旧版本使用随机取消键；已完成旧案只需补上订单履约门禁。
+        if (cases.selectCount(new LambdaQueryWrapper<AfterSaleCase>()
+                .eq(AfterSaleCase::getOrderId, order.getId())
+                .likeRight(AfterSaleCase::getRequestKey, "ZERO_CANCEL:")
+                .eq(AfterSaleCase::getStatus, AfterSaleStatus.REFUNDED)) > 0)
+            return;
+        var now = LocalDateTime.now(clock);
+        var sale = new AfterSaleCase();
+        sale.setOrderId(order.getId());
+        sale.setRequestKey("ZERO_CANCEL:" + order.getId());
+        sale.setType(AfterSaleType.REFUND_ONLY);
+        sale.setStatus(AfterSaleStatus.REFUNDED);
+        sale.setCaseOrigin("POINTS".equals(order.getSettlementKind()) ? "POINTS" : "ZERO_CASH");
+        boolean pointsOrder = "POINTS".equals(order.getSettlementKind());
+        sale.setReason(pointsOrder ? "买家取消未发货积分兑换订单" : "买家取消未发货零现金订单");
+        sale.setRefundAmount(BigDecimal.ZERO);
+        sale.setRequestedAt(now);
+        sale.setFinishedAt(now);
+        cases.insert(sale);
+        for (var item : orderItems) {
+            int quantity = item.getQuantity() - items.reservedQuantity(item.getId());
+            if (quantity == 0)
+                continue;
+            var line = new AfterSaleItem();
+            line.setCaseId(sale.getId());
+            line.setOrderItemId(item.getId());
+            line.setQuantity(quantity);
+            line.setSourceKind("UNSHIPPED");
+            freezeRefund(item, line);
+            items.insert(line);
+        }
+        completeReturn(sale);
+        audit.record(order.getUserId(), pointsOrder ? "POINTS_CANCELLED" : "ZERO_CASH_CANCELLED",
+                sale.getId(), pointsOrder ? "未发货积分兑换订单已撤销履约" : "未发货零现金订单已撤销履约", now);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Long prepareFailedGroupRefund(Order order, List<OrderItem> orderItems) {
+        String key = "GROUP_FAIL:" + order.getId();
+        AfterSaleCase previous = cases.selectByRequestKey(order.getId(), key);
+        if (previous != null)
+            return previous.getId();
+        if (orderAccess.shipment(order.getId()) != null || cases.hasOpen(order.getId()))
+            throw new BusinessException(409, "失败团已有发货或进行中售后");
+        orderAccess.paidAttempt(order);
+        orderAccess.stopFailedGroupFulfillment(order.getId());
+        var now = LocalDateTime.now(clock);
+        var lines = new ArrayList<AfterSaleItem>();
+        BigDecimal amount = BigDecimal.ZERO;
+        for (OrderItem item : orderItems) {
+            var line = new AfterSaleItem();
+            line.setOrderItemId(item.getId());
+            line.setQuantity(item.getQuantity());
+            line.setSourceKind("UNSHIPPED");
+            freezeRefund(item, line);
+            lines.add(line);
+            amount = amount.add(line.getRefundAmount());
+        }
+        if (amount.compareTo(order.getTotalAmount()) != 0)
+            throw new BusinessException(409, "失败团退款金额与支付金额不符");
+        var sale = new AfterSaleCase();
+        sale.setOrderId(order.getId());
+        sale.setRequestKey(key);
+        sale.setType(AfterSaleType.REFUND_ONLY);
+        sale.setStatus(AfterSaleStatus.REFUNDING);
+        sale.setCaseOrigin("GROUP_FAILED");
+        sale.setReason("拼团失败自动全额退款");
+        sale.setRefundAmount(amount);
+        sale.setRequestedAt(now);
+        cases.insert(sale);
+        for (AfterSaleItem line : lines) {
+            line.setCaseId(sale.getId());
+            items.insert(line);
+        }
+        timeouts.onStageChanged(sale.getId());
+        audit.record(null, "AFTER_SALE_REQUESTED", sale.getId(), "拼团失败自动退款", now);
+        return sale.getId();
+    }
+
+    private void freezeRefund(OrderItem original, AfterSaleItem line) {
+        var occupied = items.occupiedUnits(original.getId()).stream()
+                .flatMap(value -> Arrays.stream(json.readValue(value, RefundUnits.Range[].class))).toList();
+        var ranges = RefundUnits.select(original.getPayableAmount(), original.getQuantity(), line.getQuantity(),
+                occupied);
+        line.setUnitAllocation(json.writeValueAsString(ranges));
+        line.setRefundAmount(BigDecimal.valueOf(ranges.stream().mapToLong(RefundUnits.Range::cashMinor).sum(), 2));
+    }
+
+    private void completeReturn(AfterSaleCase sale) {
+        Order refundedOrder = orderAccess.find(sale.getOrderId());
+        memberRewards.refundConfirmed(refundedOrder.getUserId(), sale.getOrderId(), sale.getId(),
+                orderAccess.rewardLines(sale.getOrderId()));
+        // 订单锁已串行化同单退款；评价行锁使隐藏、删除与退款只扣减汇总一次。
+        for (AfterSaleItem line : items.selectForCase(sale.getId())) {
+            OrderItem original = orderAccess.item(line.getOrderItemId());
+            reviews.excludeFullyRefunded(line.getOrderItemId(),
+                    items.refundedQuantityForUpdate(line.getOrderItemId()), original.getQuantity());
+        }
+        if (sale.getType() == AfterSaleType.REFUND_ONLY) {
+            restoreStock(sale.getId(), "REFUND_SUCCESS", true);
+        } else {
+            Set<Long> productIds = new HashSet<>();
+            for (AfterSaleItem line : items.selectForCase(sale.getId())) {
+                OrderItem original = orderAccess.item(line.getOrderItemId());
+                productIds.add(products.findSku(original.getSkuId()).getProductId());
+            }
+            stock.refreshProducts(productIds);
+        }
+        if (Integer.valueOf(1).equals(refundedOrder.getPricingVersion()))
+            promotions.refund(refundedOrder.getId(), sale.getId());
+        if (!sale.getRequestKey().startsWith("ZERO_CANCEL:"))
+            orderAccess.stopZeroCashWhenFullyRefunded(refundedOrder);
+        shipments.reconcileReceiptAfterRefund(refundedOrder.getId());
     }
 
     /** 将渠道结果不明的退款尝试留在待核对状态。 */
@@ -527,7 +782,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         tx().executeWithoutResult(status -> {
             if (reconcileToken != null) {
                 refunds.selectForUpdate(attemptId);
-                if (refunds.ownsReconciliation(attemptId, reconcileToken) != 1) return;
+                if (refunds.ownsReconciliation(attemptId, reconcileToken) != 1)
+                    return;
             }
             refunds.markUnknown(attemptId);
             refunds.markChecked(attemptId, LocalDateTime.now(clock));
@@ -538,22 +794,27 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     @Override
     public void reconcileUnknown() {
         // UNKNOWN 表示结果未确认，不能据此再次生成退款单或判定失败。
-        if (!gateway.configured()) return;
+        if (!gateway.configured())
+            return;
         LocalDateTime before = LocalDateTime.now(clock).minusSeconds(10);
         long started = System.nanoTime();
         int processed = 0;
         int failed = 0;
         for (Long id : refunds.unresolvedIds(before, 50)) {
             // A slow channel response must not turn this scan into an unbounded batch.
-            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis) break;
+            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis)
+                break;
             String token = UUID.randomUUID().toString();
-            if (refunds.claimReconciliation(id, token, before, RECONCILE_CLAIM_LEASE.toSeconds()) != 1) continue;
+            if (refunds.claimReconciliation(id, token, before, RECONCILE_CLAIM_LEASE.toSeconds()) != 1)
+                continue;
             processed++;
             try {
                 RefundAttempt attempt = refunds.selectById(id);
-                if (attempt == null || attempt.getStatus() == RefundAttemptStatus.SUCCESS) continue;
+                if (attempt == null || attempt.getStatus() == RefundAttemptStatus.SUCCESS)
+                    continue;
                 AfterSaleCase sale = cases.selectById(attempt.getCaseId());
-                if (sale == null || sale.getStatus() != AfterSaleStatus.REFUNDING) continue;
+                if (sale == null || sale.getStatus() != AfterSaleStatus.REFUNDING)
+                    continue;
                 PaymentAttempt paid = paidAttempt(orderAccess.find(sale.getOrderId()));
                 queryAndSettle(new RefundContext(attempt, paid, false), token);
             } catch (RuntimeException e) {
@@ -571,8 +832,17 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
     /** 返还售后涉及的 SKU 库存并写库存流水和商品搜索刷新事件。 */
     private void restoreStock(Long caseId, String operation) {
+        restoreStock(caseId, operation, false);
+    }
+
+    private void restoreStock(Long caseId, String operation, boolean unshippedOnly) {
+        AfterSaleCase sale = requireCase(caseId);
+        if (!"NORMAL".equals(orderAccess.find(sale.getOrderId()).getBusinessType()))
+            return;
         Set<Long> changedProductIds = new HashSet<>();
         for (AfterSaleItem line : items.selectForCase(caseId)) {
+            if (unshippedOnly && !"UNSHIPPED".equals(line.getSourceKind()))
+                continue;
             OrderItem original = orderAccess.item(line.getOrderItemId());
             stock.returnRefund(original.getSkuId(), original.getId(), line.getQuantity(),
                     operation + ":" + caseId + ":" + line.getOrderItemId());
@@ -606,7 +876,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     /** 读取售后申请，缺失时返回不存在；ID 格式已由入口约束。 */
     private AfterSaleCase requireCase(Long caseId) {
         AfterSaleCase sale = cases.selectById(caseId);
-        if (sale == null) throw new BusinessException(404, "售后申请不存在");
+        if (sale == null)
+            throw new BusinessException(404, "售后申请不存在");
         return sale;
     }
 
@@ -614,7 +885,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private Order buyerOrder(Long buyerId, Long orderId) {
         accountAccess.checkActive(buyerId);
         Order order = orderAccess.find(orderId);
-        if (order == null || !buyerId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !buyerId.equals(order.getUserId()))
+            throw new BusinessException(404, "订单不存在");
         return order;
     }
 
@@ -630,10 +902,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
     /** 根据是否写入选择店铺归属锁，再确认订单属于该店。 */
     private Order merchantOrder(Long merchantId, Long shopId, Long orderId, boolean lock) {
-        if (lock) merchantAccess.requireOwnedForUpdate(merchantId, shopId, "店铺不存在");
-        else merchantAccess.requireOwned(merchantId, shopId, "店铺不存在");
+        if (lock)
+            merchantAccess.requireOwnedForUpdate(merchantId, shopId, "店铺不存在");
+        else
+            merchantAccess.requireOwned(merchantId, shopId, "店铺不存在");
         Order order = orderAccess.find(orderId);
-        if (order == null || !shopId.equals(order.getShopId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !shopId.equals(order.getShopId()))
+            throw new BusinessException(404, "订单不存在");
         return order;
     }
 
@@ -643,6 +918,10 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     }
 
     /** 为售后状态迁移建立短事务，外部退款调用在事务之外执行。 */
-    private TransactionTemplate tx() { return new TransactionTemplate(transactionManager); }
-    private record RefundContext(RefundAttempt attempt, PaymentAttempt payment, boolean newAttempt) {}
+    private TransactionTemplate tx() {
+        return new TransactionTemplate(transactionManager);
+    }
+
+    private record RefundContext(RefundAttempt attempt, PaymentAttempt payment, boolean newAttempt) {
+    }
 }

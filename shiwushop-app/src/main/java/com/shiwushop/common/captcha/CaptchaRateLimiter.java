@@ -11,6 +11,7 @@ import java.util.Map;
 
 @Component
 public class CaptchaRateLimiter {
+    /** 滑块接口限流的 Redis 键前缀，用于隔离不同操作及 Session、IP 维度。 */
     private static final String PREFIX = "shiwushop:captcha:rate:";
     private final RateLimiter limiter;
     private final long sessionRate;
@@ -25,16 +26,16 @@ public class CaptchaRateLimiter {
     private final long verifyFailureWindowMs;
 
     public CaptchaRateLimiter(RateLimiter limiter,
-            @Value("${shop.security.captcha.session-tokens-per-second}") long sessionRate,
-            @Value("${shop.security.captcha.session-burst}") long sessionBurst,
-            @Value("${shop.security.captcha.ip-tokens-per-second}") long ipRate,
-            @Value("${shop.security.captcha.ip-burst}") long ipBurst,
-            @Value("${shop.security.captcha.valid-session-tokens-per-second}") long validSessionRate,
-            @Value("${shop.security.captcha.valid-session-burst}") long validSessionBurst,
-            @Value("${shop.security.captcha.valid-ip-tokens-per-second}") long validIpRate,
-            @Value("${shop.security.captcha.valid-ip-burst}") long validIpBurst,
-            @Value("${shop.security.captcha.verify-failure-limit}") long verifyFailureLimit,
-            @Value("${shop.security.captcha.verify-failure-window-ms}") long verifyFailureWindowMs) {
+                              @Value("${shop.security.captcha.session-tokens-per-second}") long sessionRate,
+                              @Value("${shop.security.captcha.session-burst}") long sessionBurst,
+                              @Value("${shop.security.captcha.ip-tokens-per-second}") long ipRate,
+                              @Value("${shop.security.captcha.ip-burst}") long ipBurst,
+                              @Value("${shop.security.captcha.valid-session-tokens-per-second}") long validSessionRate,
+                              @Value("${shop.security.captcha.valid-session-burst}") long validSessionBurst,
+                              @Value("${shop.security.captcha.valid-ip-tokens-per-second}") long validIpRate,
+                              @Value("${shop.security.captcha.valid-ip-burst}") long validIpBurst,
+                              @Value("${shop.security.captcha.verify-failure-limit}") long verifyFailureLimit,
+                              @Value("${shop.security.captcha.verify-failure-window-ms}") long verifyFailureWindowMs) {
         if (sessionRate < 1 || sessionBurst < 1 || ipRate < 1 || ipBurst < 1
                 || validSessionRate < 1 || validSessionBurst < 1 || validIpRate < 1 || validIpBurst < 1
                 || verifyFailureLimit < 1 || verifyFailureWindowMs < 1) {
@@ -79,7 +80,7 @@ public class CaptchaRateLimiter {
 
     /** 为生成和校验分别检查会话桶与出口桶，避免两种成本共用额度。 */
     private void checkBuckets(String action, HttpServletRequest request,
-            long sessionRate, long sessionBurst, long ipRate, long ipBurst) {
+                              long sessionRate, long sessionBurst, long ipRate, long ipBurst) {
         // 会话额度允许短时重试；出口桶只给生成资源设置宽松总量上界。
         String sessionId = request.getSession(true).getId();
         checkBucket(PREFIX + action + ":session:" + limiter.digest(sessionId), sessionRate, sessionBurst);
@@ -89,7 +90,8 @@ public class CaptchaRateLimiter {
     /** 扣除一个令牌；额度耗尽时返回可重试时间。 */
     private void checkBucket(String key, long rate, long burst) {
         long retry = limiter.tokenBucketRetrySeconds(key, rate, burst);
-        if (retry > 0) reject(retry);
+        if (retry > 0)
+            reject(retry);
     }
 
     /** 对 Session ID 求摘要构造滑块校验失败键，Redis 中不存原值。 */

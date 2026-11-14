@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -30,8 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @ExtendWith(OutputCaptureExtension.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ShopReturnProfileHttpTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -50,13 +51,17 @@ class ShopReturnProfileHttpTest {
                 try (var ordinaryClient = CommerceFixture.login("http://127.0.0.1:" + port, ordinary)) {
                     assertEquals(404, ordinaryClient.get(path).statusCode());
                     assertEquals(404, ordinaryClient.request("PUT", path, profile()).statusCode());
-                    jdbc.update("INSERT INTO shops(owner_user_id,name,enabled) VALUES (?,?,1)", ordinary.id(), "普通用户店" + ordinary.id());
-                    Long ordinaryShop = jdbc.queryForObject("SELECT id FROM shops WHERE owner_user_id=?", Long.class, ordinary.id());
+                    jdbc.update("INSERT INTO shops(owner_user_id,name,enabled) VALUES (?,?,1)", ordinary.id(),
+                            "普通用户店" + ordinary.id());
+                    Long ordinaryShop = jdbc.queryForObject("SELECT id FROM shops WHERE owner_user_id=?", Long.class,
+                            ordinary.id());
                     try {
                         String ownPath = "/merchant/shops/" + ordinaryShop + "/return-profile";
                         assertEquals(403, ordinaryClient.get(ownPath).statusCode());
                         assertEquals(403, ordinaryClient.request("PUT", ownPath, profile()).statusCode());
-                    } finally { jdbc.update("DELETE FROM shops WHERE id=?", ordinaryShop); }
+                    } finally {
+                        jdbc.update("DELETE FROM shops WHERE id=?", ordinaryShop);
+                    }
                 }
                 assertEquals(403, client.request("PUT", path, profile(), false, Map.of()).statusCode());
                 try (var anonymous = new HttpAccountClient("http://127.0.0.1:" + port)) {
@@ -74,8 +79,10 @@ class ShopReturnProfileHttpTest {
                 assertFalse(publicShop.body().contains("13812345678"));
                 assertFalse(publicShop.body().contains("中山北路28号"));
                 var stored = jdbc.queryForMap("SELECT * FROM shop_return_profiles WHERE shop_id=?", shopId);
-                assertFalse(new String((byte[]) stored.get("consignee_ciphertext"), StandardCharsets.UTF_8).contains("张明"));
-                assertFalse(new String((byte[]) stored.get("detail_ciphertext"), StandardCharsets.UTF_8).contains("中山北路28号"));
+                assertFalse(new String((byte[]) stored.get("consignee_ciphertext"), StandardCharsets.UTF_8).contains(
+                        "张明"));
+                assertFalse(new String((byte[]) stored.get("detail_ciphertext"), StandardCharsets.UTF_8).contains(
+                        "中山北路28号"));
                 for (String column : new String[]{"contact_name_ciphertext", "contact_phone_ciphertext", "consignee_ciphertext", "phone_ciphertext", "detail_ciphertext"}) {
                     assertTrue(((byte[]) stored.get(column)).length > 28, column);
                 }
@@ -87,7 +94,8 @@ class ShopReturnProfileHttpTest {
                 maximum.put("district", "区".repeat(64));
                 maximum.put("detail", "路".repeat(255));
                 assertEquals(200, client.request("PUT", path, maximum).statusCode());
-                assertEquals("路".repeat(255), json.readTree(client.get(path).body()).path("data").path("detail").asString());
+                assertEquals("路".repeat(255),
+                        json.readTree(client.get(path).body()).path("data").path("detail").asString());
                 assertEquals(200, client.request("PUT", path, profile()).statusCode());
                 var invalid = new HashMap<>(profile());
                 invalid.put("phone", "123");
@@ -104,7 +112,8 @@ class ShopReturnProfileHttpTest {
                     var replacement = new HashMap<>(profile());
                     replacement.put("consignee", "李华");
                     assertEquals(200, otherClient.request("PUT", path, replacement).statusCode());
-                    assertEquals("李华", json.readTree(otherClient.get(path).body()).path("data").path("consignee").asString());
+                    assertEquals("李华",
+                            json.readTree(otherClient.get(path).body()).path("data").path("consignee").asString());
                 }
                 assertFalse(output.getAll().contains("张明"));
                 assertFalse(output.getAll().contains("13912345678"));
@@ -113,7 +122,8 @@ class ShopReturnProfileHttpTest {
                 // 红灯阶段尚无私密表；先检查存在性，保证首个行为失败不会破坏清理。
                 Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema=DATABASE() AND table_name='shop_return_profiles'", Integer.class);
-                if (exists == 1) jdbc.update("DELETE FROM shop_return_profiles WHERE shop_id=?", shopId);
+                if (exists == 1)
+                    jdbc.update("DELETE FROM shop_return_profiles WHERE shop_id=?", shopId);
                 jdbc.update("DELETE FROM shops WHERE id=?", shopId);
             }
         }

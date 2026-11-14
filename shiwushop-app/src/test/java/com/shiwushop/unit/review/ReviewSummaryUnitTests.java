@@ -3,6 +3,8 @@ package com.shiwushop.unit.review;
 import com.shiwushop.user.service.AccountAccess;
 import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.product.dto.review.ReviewCreateDTO;
+import com.shiwushop.product.dto.review.ReviewFollowUpDTO;
+import com.shiwushop.common.BusinessException;
 import com.shiwushop.product.entity.review.ProductReview;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.mapper.review.ProductReviewMapper;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -20,7 +23,10 @@ class ReviewSummaryUnitTests {
     @Test
     void fullRefundExcludesACountedReviewExactlyOnce() {
         ProductReview review = new ProductReview();
-        review.setId(6L); review.setProductId(4L); review.setRating(4); review.setCountedInSummary(true);
+        review.setId(6L);
+        review.setProductId(4L);
+        review.setRating(4);
+        review.setCountedInSummary(true);
         when(reviews.selectForUpdateByOrderItemId(9L)).thenReturn(review);
         when(reviews.excludeFromSummary(6L)).thenReturn(1);
         when(reviews.removeFromSummary(4L, 4)).thenReturn(1);
@@ -33,12 +39,14 @@ class ReviewSummaryUnitTests {
 
     @Test
     void partialRefundKeepsTheReviewInTheSummary() {
-        ProductReview review = new ProductReview(); review.setCountedInSummary(true);
+        ProductReview review = new ProductReview();
+        review.setCountedInSummary(true);
         when(reviews.selectForUpdateByOrderItemId(9L)).thenReturn(review);
         service.excludeFullyRefunded(9L, 1, 2);
         verify(reviews, never()).excludeFromSummary(any());
         verify(reviews, never()).removeFromSummary(any(), anyInt());
     }
+
     private final AccountAccess accounts = mock(AccountAccess.class);
     private final ProductReviewMapper reviews = mock(ProductReviewMapper.class);
     private final OutboxEventMapper outbox = mock(OutboxEventMapper.class);
@@ -52,9 +60,11 @@ class ReviewSummaryUnitTests {
         eligible.setBuyerUserId(3L);
         eligible.setProductId(4L);
         eligible.setOrderStatus("PAID");
-        eligible.setShipmentStatus("CONFIRMED");
+        eligible.setConfirmedQuantity(1);
+        eligible.setRefundedConfirmedQuantity(0);
         eligible.setQuantity(1);
         eligible.setRefundedQuantity(0);
+        when(reviews.lockOrder(2L)).thenReturn(2L);
         when(reviews.selectEligibilityForUpdate(5L)).thenReturn(eligible);
         when(reviews.selectIdByOrderItemId(5L)).thenReturn(null);
         when(reviews.insertReview(any())).thenAnswer(invocation -> {
@@ -68,6 +78,15 @@ class ReviewSummaryUnitTests {
 
         assertEquals(6L, service.create(3L, 2L, 5L, new ReviewCreateDTO(4, "评价", List.of())));
         verify(reviews).addToSummary(4L, 4);
+    }
+
+    @Test
+    void foreignFollowUpNeverLocksAnotherBuyersOrder() {
+        when(reviews.selectOrderIdByReviewId(6L, 3L)).thenReturn(null);
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.followUp(3L, 6L, new ReviewFollowUpDTO("补充评价", List.of()))).getCode());
+        verify(reviews).selectOrderIdByReviewId(6L, 3L);
+        verify(reviews, never()).lockOrder(any());
     }
 
     @Test

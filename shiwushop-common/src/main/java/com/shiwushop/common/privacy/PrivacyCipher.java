@@ -2,7 +2,6 @@ package com.shiwushop.common.privacy;
 
 import com.shiwushop.common.BusinessException;
 
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,9 @@ import java.util.Base64;
 
 @Component
 public class PrivacyCipher {
+    /** AES-GCM 随机初始化向量长度，单位为字节。 */
     private static final int IV_BYTES = 12;
+    /** AES-GCM 认证标签长度，单位为位，用于检测密文篡改。 */
     private static final int TAG_BITS = 128;
     private final SecureRandom random = new SecureRandom();
     private final String keyBase64;
@@ -72,7 +73,8 @@ public class PrivacyCipher {
         }
         try {
             byte[] key = Base64.getDecoder().decode(keyBase64);
-            if (key.length != 32) throw new BusinessException(503, "收货信息加密密钥配置错误");
+            if (key.length != 32)
+                throw new BusinessException(503, "收货信息加密密钥配置错误");
             return new SecretKeySpec(key, "AES");
         } catch (IllegalArgumentException e) {
             throw new BusinessException(503, "收货信息加密密钥配置错误");

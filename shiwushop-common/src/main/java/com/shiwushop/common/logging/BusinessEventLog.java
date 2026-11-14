@@ -8,9 +8,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /** 记录已完成的业务状态变化；事务回滚时不输出成功事件。 */
 public final class BusinessEventLog {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(BusinessEventLog.class);
 
-    private BusinessEventLog() {}
+    private BusinessEventLog() {
+    }
 
     /** 只记录固定事件名和内部数字 ID，避免把请求参数、密码、地址或渠道凭证写入日志。 */
     public static void committed(String module, String action, String entity, Long entityId) {
@@ -24,7 +26,8 @@ public final class BusinessEventLog {
             }
         };
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
+            if (!TransactionSynchronizationManager.isSynchronizationActive())
+                return;
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {

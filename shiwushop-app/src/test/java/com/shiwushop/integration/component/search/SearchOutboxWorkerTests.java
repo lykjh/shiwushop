@@ -26,11 +26,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SearchOutboxWorkerTests {
     private static final long EVENT_ID = -9000000002L;
     private static final long PRODUCT_ID = -9001L;
-    @Autowired JdbcTemplate db;
-    @Autowired OutboxEventMapper outbox;
-    @Autowired SearchIndexSource source;
-    @Autowired ObjectMapper json;
-    @Autowired Clock clock;
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    OutboxEventMapper outbox;
+    @Autowired
+    SearchIndexSource source;
+    @Autowired
+    ObjectMapper json;
+    @Autowired
+    Clock clock;
     private HttpServer server;
     private final AtomicReference<String> body = new AtomicReference<>();
     private int responseCode;
@@ -52,7 +57,8 @@ class SearchOutboxWorkerTests {
 
     @AfterEach
     void cleanUp() {
-        if (server != null) server.stop(0);
+        if (server != null)
+            server.stop(0);
         db.update("DELETE FROM outbox_events WHERE id = ?", EVENT_ID);
         db.update("DELETE FROM skus WHERE id = ?", PRODUCT_ID);
         db.update("DELETE FROM products WHERE id = ?", PRODUCT_ID);
@@ -72,7 +78,7 @@ class SearchOutboxWorkerTests {
         db.update("INSERT INTO skus(id, product_id, option_signature, price, stock) " +
                 "VALUES (?, ?, REPEAT('a', 64), 12.50, 3)", PRODUCT_ID, PRODUCT_ID);
         db.update("INSERT INTO outbox_events(id, event_type, aggregate_type, aggregate_id, payload, " +
-                "status, next_attempt_at) VALUES (?, 'SEARCH_PRODUCT_REFRESH', 'PRODUCT', ?, '{}', 'PENDING', NOW())",
+                        "status, next_attempt_at) VALUES (?, 'SEARCH_PRODUCT_REFRESH', 'PRODUCT', ?, '{}', 'PENDING', NOW())",
                 EVENT_ID, PRODUCT_ID);
         responseCode = 200;
         responseBody = "{\"items\":[{\"index\":{\"status\":201}}]}";
@@ -93,7 +99,7 @@ class SearchOutboxWorkerTests {
     @Test
     void failedBulkKeepsEventPendingForRetry() {
         db.update("INSERT INTO outbox_events(id, event_type, aggregate_type, aggregate_id, payload, " +
-                "status, next_attempt_at) VALUES (?, 'SEARCH_SHOP_REFRESH', 'SHOP', ?, '{}', 'PENDING', NOW())",
+                        "status, next_attempt_at) VALUES (?, 'SEARCH_SHOP_REFRESH', 'SHOP', ?, '{}', 'PENDING', NOW())",
                 EVENT_ID, PRODUCT_ID);
         responseCode = 503;
         responseBody = "{\"error\":\"offline\"}";
@@ -112,7 +118,7 @@ class SearchOutboxWorkerTests {
         db.update("INSERT INTO shops(id, owner_user_id, name, enabled) VALUES (?, ?, 'S01 shop', 1)",
                 PRODUCT_ID, PRODUCT_ID);
         db.update("INSERT INTO outbox_events(id, event_type, aggregate_type, aggregate_id, payload, " +
-                "status, next_attempt_at) VALUES (?, 'SEARCH_SHOP_REFRESH', 'SHOP', ?, '{}', 'PENDING', NOW())",
+                        "status, next_attempt_at) VALUES (?, 'SEARCH_SHOP_REFRESH', 'SHOP', ?, '{}', 'PENDING', NOW())",
                 EVENT_ID, PRODUCT_ID);
         responseCode = 200;
         responseBody = "{\"items\":[{\"index\":{\"status\":201}}]}";

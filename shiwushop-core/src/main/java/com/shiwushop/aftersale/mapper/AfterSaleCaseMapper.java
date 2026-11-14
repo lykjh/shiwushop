@@ -11,11 +11,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface AfterSaleCaseMapper extends BaseMapper<AfterSaleCase> {
+    @org.apache.ibatis.annotations.Select("SELECT EXISTS(SELECT 1 FROM after_sale_cases WHERE order_id=#{order} AND status IN ('REQUESTED','WAITING_RETURN','WAITING_RECEIPT','REFUNDING'))")
+    boolean hasOpen(long order);
+
     @Select("SELECT * FROM after_sale_cases WHERE id=#{id} FOR UPDATE")
     AfterSaleCase selectForUpdate(@Param("id") Long id);
 
     List<Long> selectBuyerIds(@Param("orderId") Long orderId, @Param("beforeId") Long beforeId,
                               @Param("limit") int limit);
+
     List<Long> selectMerchantIds(@Param("shopId") Long shopId, @Param("beforeId") Long beforeId,
                                  @Param("status") AfterSaleStatus status, @Param("limit") int limit);
 

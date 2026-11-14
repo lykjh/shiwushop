@@ -33,6 +33,7 @@ public class AdminAfterSaleTimeoutController {
                                                HttpServletRequest request) {
         return Result.success(service.list(SessionUser.requireId(request), beforeId, size));
     }
+
     /** 管理员查看单条超时待办。 */
     @GetMapping("/{id}")
     public Result<AfterSaleTimeoutTask> detail(@PathVariable @Positive Long id, HttpServletRequest request) {
@@ -47,8 +48,9 @@ public class AdminAfterSaleTimeoutController {
 
     /** 经办人以证据和结论关闭待办。 */
     @PostMapping("/{id}/close")
-    public Result<AfterSaleTimeoutTask> close(@PathVariable @Positive Long id, @Valid @RequestBody CloseAfterSaleTimeoutDTO dto,
-                                               HttpServletRequest request) {
+    public Result<AfterSaleTimeoutTask> close(@PathVariable @Positive Long id,
+                                              @Valid @RequestBody CloseAfterSaleTimeoutDTO dto,
+                                              HttpServletRequest request) {
         return Result.success(service.close(SessionUser.requireId(request), id, dto));
     }
 }

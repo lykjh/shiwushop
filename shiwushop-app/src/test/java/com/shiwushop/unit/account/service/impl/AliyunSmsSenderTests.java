@@ -1,4 +1,5 @@
 package com.shiwushop.unit.account.service.impl;
+
 import com.shiwushop.user.service.impl.*;
 
 import com.aliyun.dypnsapi20170525.Client;
@@ -41,9 +42,11 @@ class AliyunSmsSenderTests {
     @Test
     void frequencyRejectionIsNotTreatedAsSuccessfulDelivery() {
         try (MockedConstruction<Client> ignored = mockConstruction(Client.class,
-                (client, context) -> when(client.sendSmsVerifyCode(any())).thenReturn(response(false, "biz.FREQUENCY")))) {
+                (client, context) -> when(client.sendSmsVerifyCode(any())).thenReturn(
+                        response(false, "biz.FREQUENCY")))) {
             assertThatThrownBy(() -> sender.send("13800000001", "123456"))
-                    .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getCode()).isEqualTo(429));
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            error -> assertThat(error.getCode()).isEqualTo(429));
         }
     }
 
@@ -52,7 +55,8 @@ class AliyunSmsSenderTests {
         try (MockedConstruction<Client> ignored = mockConstruction(Client.class,
                 (client, context) -> when(client.sendSmsVerifyCode(any())).thenReturn(response(false, "OK")))) {
             assertThatThrownBy(() -> sender.send("13800000001", "123456"))
-                    .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getCode()).isEqualTo(503));
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            error -> assertThat(error.getCode()).isEqualTo(503));
         }
     }
 

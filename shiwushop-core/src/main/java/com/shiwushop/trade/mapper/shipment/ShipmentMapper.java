@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.shiwushop.trade.entity.shipment.Shipment;
 import com.shiwushop.trade.entity.status.ConfirmSource;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -11,12 +12,35 @@ import java.util.List;
 
 public interface ShipmentMapper extends BaseMapper<Shipment> {
     Shipment selectByOrderId(@Param("orderId") Long orderId);
+
     Shipment selectByOrderIdForUpdate(@Param("orderId") Long orderId);
+
+    @Select("SELECT * FROM shipments WHERE order_id=#{orderId} ORDER BY id")
+    List<Shipment> selectAllByOrderId(@Param("orderId") Long orderId);
+
+    @Select("SELECT * FROM shipments WHERE id=#{shipmentId} FOR UPDATE")
+    Shipment selectByIdForUpdate(@Param("shipmentId") Long shipmentId);
+
+    @Select("SELECT * FROM shipments WHERE order_id=#{orderId} AND request_key=#{requestKey} FOR UPDATE")
+    Shipment selectByRequestKeyForUpdate(@Param("orderId") Long orderId,
+                                         @Param("requestKey") String requestKey);
+
+    @Select("SELECT COUNT(*) FROM shipments WHERE order_id=#{orderId}")
+    int countByOrderId(@Param("orderId") Long orderId);
+
+    @Select("SELECT COUNT(*) FROM shipments WHERE order_id=#{orderId} AND allocation_state='NEEDS_REVIEW'")
+    int unresolvedAllocationCount(@Param("orderId") Long orderId);
+
     int confirm(@Param("shipmentId") Long shipmentId, @Param("source") ConfirmSource source,
                 @Param("now") LocalDateTime now);
+
     List<Long> selectDueIds(@Param("now") LocalDateTime now, @Param("limit") int limit);
+
     Long oldestDueSeconds(@Param("now") LocalDateTime now);
+
     long dueCount(@Param("now") LocalDateTime now);
+
     BigDecimal refundedAmount(@Param("orderId") Long orderId);
+
     int unresolvedAfterSaleCount(@Param("orderId") Long orderId);
 }

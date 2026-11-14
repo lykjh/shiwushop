@@ -26,9 +26,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class UserAuthRiskTests {
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService users;
-    @Autowired private CaptchaProofStore proofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private CaptchaProofStore proofs;
     private final String registerIp = "risk-test-" + UUID.randomUUID();
 
     @Test

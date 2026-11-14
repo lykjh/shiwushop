@@ -50,18 +50,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantSkuCreateTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private ProductOptionMapper optionMapper;
-    @Autowired private ProductOptionValueMapper valueMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private SkuOptionValueMapper linkMapper;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private ProductOptionMapper optionMapper;
+    @Autowired
+    private ProductOptionValueMapper valueMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private SkuOptionValueMapper linkMapper;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -84,13 +95,14 @@ class MerchantSkuCreateTests {
                 .andExpect(jsonPath("$.data.optionValueIds[0]").value(white.getId()))
                 .andExpect(jsonPath("$.data.optionValueIds[1]").value(small.getId()))
                 .andExpect(jsonPath("$.data.price").value(3999.00))
+                .andExpect(jsonPath("$.data.legacy").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.stock").value(0));
 
         Sku saved = skuMapper.selectOne(new LambdaQueryWrapper<Sku>()
                 .eq(Sku::getProductId, product.getId()));
         assertNotNull(saved);
         assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest((white.getId() + "," + small.getId()).getBytes(StandardCharsets.UTF_8))),
+                        .digest((white.getId() + "," + small.getId()).getBytes(StandardCharsets.UTF_8))),
                 saved.getOptionSignature());
         assertEquals(List.of(white.getId(), small.getId()),
                 linkMapper.selectValueIds(saved.getId()));
@@ -172,7 +184,8 @@ class MerchantSkuCreateTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private Shop shop(Long owner) {

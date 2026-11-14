@@ -14,8 +14,11 @@ import java.math.BigDecimal;
 public interface RefundAttemptMapper extends BaseMapper<RefundAttempt> {
     @Select("SELECT * FROM refund_attempts WHERE case_id=#{caseId} ORDER BY id DESC LIMIT 1")
     RefundAttempt selectLatest(@Param("caseId") Long caseId);
+
     BigDecimal successfulAmount(@Param("orderId") Long orderId);
+
     List<Long> unresolvedIds(@Param("before") LocalDateTime before, @Param("limit") int limit);
+
     Long oldestUnresolvedSeconds(@Param("before") LocalDateTime before, @Param("now") LocalDateTime now);
 
     // Claim housekeeping must not reset updated_at, which controls the next reconciliation scan.

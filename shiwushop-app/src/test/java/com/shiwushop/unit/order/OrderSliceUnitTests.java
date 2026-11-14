@@ -45,6 +45,7 @@ class OrderSliceUnitTests {
         assertEquals(List.of(41L, 40L), slice.items().stream().map(OrderSummaryVO::getId).toList());
         assertEquals(true, slice.hasMore());
         assertEquals(40L, slice.nextCursor());
+        verify(orders).rewardSummaries(List.of(41L, 40L));
         verify(orders).selectBuyerSlice(7L, cursor.getCreatedAt(), 42L, 3);
     }
 

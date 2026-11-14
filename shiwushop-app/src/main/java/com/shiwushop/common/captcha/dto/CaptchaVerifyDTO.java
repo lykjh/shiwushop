@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CaptchaVerifyDTO(
-        @NotBlank @Size(max = 128) String id,
-        @NotNull ImageCaptchaTrack track
+    /* 待验证的验证码挑战 ID。 */
+    @NotBlank @Size(max = 128) String id,
+    /* 图形验证码交互轨迹，交由验证码组件验证。 */
+    @NotNull ImageCaptchaTrack track
 ) {}

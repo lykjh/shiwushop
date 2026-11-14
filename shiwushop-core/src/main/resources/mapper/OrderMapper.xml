@@ -3,7 +3,8 @@
 <mapper namespace="com.shiwushop.trade.mapper.order.OrderMapper">
     <sql id="summaryColumns">
         SELECT o.id, o.shop_id AS shopId, s.name AS shopName,
-               o.total_amount AS totalAmount, o.status,
+               o.total_amount AS totalAmount, o.status,o.business_type,o.settlement_kind,o.fulfillment_state,o.member_level_code,
+               COALESCE(o.original_amount,o.total_amount) original_amount,o.discount_amount,
                (SELECT COUNT(*) FROM order_items item WHERE item.order_id = o.id) AS itemCount
     </sql>
 
@@ -29,6 +30,36 @@
                  OR (o.created_at = #{beforeCreatedAt} AND o.id &lt; #{beforeId}))
         </if>
         ORDER BY o.created_at DESC, o.id DESC LIMIT #{limit}
+    </select>
+
+    <select id="rewardSummaries" resultType="com.shiwushop.trade.vo.order.OrderRewardSummary">
+        WITH selected_items AS (
+            SELECT id, order_id FROM order_items WHERE order_id IN
+            <foreach collection="orderIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ), ranked_tasks AS (
+            SELECT i.order_id, t.reward_kind, t.status, t.exclusion_reason,
+                   ROW_NUMBER() OVER (PARTITION BY i.order_id, t.reward_kind
+                       ORDER BY FIELD(t.status, 'ATTENTION', 'WAIT_PAYMENT', 'WAIT_RECEIPT',
+                                      'WAIT_AFTERSALE', 'READY', 'APPLIED', 'EXCLUDED'), t.id) AS position_in_kind
+            FROM selected_items i JOIN member_reward_tasks t ON t.order_item_id=i.id
+        ), task_summary AS (
+            SELECT order_id,
+                   MAX(CASE WHEN reward_kind='POINTS' AND position_in_kind=1 THEN status END) AS point_status,
+                   MAX(CASE WHEN reward_kind='GROWTH' AND position_in_kind=1 THEN status END) AS growth_status,
+                   CASE WHEN COUNT(exclusion_reason)=COUNT(*) AND MIN(exclusion_reason)=MAX(exclusion_reason)
+                        THEN MIN(exclusion_reason) END AS exclusion_reason
+            FROM ranked_tasks GROUP BY order_id
+        ), points AS (
+            SELECT i.order_id, SUM(p.issued_units) AS credited, SUM(p.reversed_units) AS reversed
+            FROM selected_items i JOIN member_point_lots p ON p.order_item_id=i.id GROUP BY i.order_id
+        ), growth AS (
+            SELECT i.order_id, SUM(GREATEST(g.delta_amount,0)) AS credited, SUM(GREATEST(-g.delta_amount,0)) AS reversed
+            FROM selected_items i JOIN member_growth_entries g ON g.order_item_id=i.id GROUP BY i.order_id
+        )
+        SELECT t.order_id, t.point_status, t.growth_status, COALESCE(p.credited,0) AS credited_point_units,
+               COALESCE(g.credited,0) AS credited_growth_amount, COALESCE(p.reversed,0) AS clawed_back_point_units,
+               COALESCE(g.reversed,0) AS clawed_back_growth_amount, t.exclusion_reason
+        FROM task_summary t LEFT JOIN points p ON p.order_id=t.order_id LEFT JOIN growth g ON g.order_id=t.order_id
     </select>
 
     <select id="selectExpiredIds" resultType="long">

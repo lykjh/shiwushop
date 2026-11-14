@@ -19,7 +19,7 @@ public class CategoryController {
 
     /** 按 ID 查询公开分类的详情；分类不存在或不可见时由服务层处理。 */
     @GetMapping("/{id}")
-    public Result<CategoryDetailVO> detail(@PathVariable Long id){
+    public Result<CategoryDetailVO> detail(@PathVariable Long id) {
         return Result.success(categoryService.detail(id));
     }
 

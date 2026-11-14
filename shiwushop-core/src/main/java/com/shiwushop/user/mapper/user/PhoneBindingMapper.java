@@ -21,7 +21,9 @@ public interface PhoneBindingMapper {
 
     @Data
     class PhonePrivate {
+        /** 绑定手机号密文。 */
         private byte[] ciphertext;
+        /** 隐私数据加密密钥版本。 */
         private int keyVersion;
     }
 

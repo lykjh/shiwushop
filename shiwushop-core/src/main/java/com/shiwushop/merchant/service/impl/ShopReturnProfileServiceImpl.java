@@ -28,7 +28,8 @@ public class ShopReturnProfileServiceImpl implements ShopReturnProfileService {
     public ShopReturnProfileVO get(Long shopId, Long userId) {
         access.requireOwned(userId, shopId, "店铺不存在");
         ShopReturnProfile p = mapper.selectById(shopId);
-        if (p == null) throw new BusinessException(409, "店铺退货资料未配置");
+        if (p == null)
+            throw new BusinessException(409, "店铺退货资料未配置");
         return toVO(p);
     }
 
@@ -49,7 +50,10 @@ public class ShopReturnProfileServiceImpl implements ShopReturnProfileService {
         p.setCity(dto.getCity().strip());
         p.setDistrict(dto.getDistrict().strip());
         p.setDetailCiphertext(cipher.encrypt(shopId, "shop-return:detail", dto.getDetail().strip()));
-        if (existing == null) mapper.insert(p); else mapper.updateById(p);
+        if (existing == null)
+            mapper.insert(p);
+        else
+            mapper.updateById(p);
         BusinessEventLog.committed("merchant", "return-profile-save", "shop", shopId);
         return toVO(p);
     }
@@ -59,17 +63,21 @@ public class ShopReturnProfileServiceImpl implements ShopReturnProfileService {
     @Transactional(propagation = Propagation.MANDATORY)
     public ReturnDestinationSnapshot snapshotForReturn(Long shopId) {
         ShopReturnProfile p = mapper.selectForUpdate(shopId);
-        if (p == null) throw new BusinessException(409, "店铺退货资料未配置");
-        return new ReturnDestinationSnapshot(shopId, p.getKeyVersion(), p.getConsigneeCiphertext(), p.getPhoneCiphertext(),
+        if (p == null)
+            throw new BusinessException(409, "店铺退货资料未配置");
+        return new ReturnDestinationSnapshot(shopId, p.getKeyVersion(), p.getConsigneeCiphertext(),
+                p.getPhoneCiphertext(),
                 p.getProvince(), p.getCity(), p.getDistrict(), p.getDetailCiphertext());
     }
 
     /** 按快照原店铺和密钥版本解密，仅返回退货所需信息。 */
     @Override
     public ReturnDestinationVO decryptReturnDestination(ReturnDestinationSnapshot s) {
-        return new ReturnDestinationVO(cipher.decrypt(s.shopId(), "shop-return:consignee", s.keyVersion(), s.consigneeCiphertext()),
+        return new ReturnDestinationVO(
+                cipher.decrypt(s.shopId(), "shop-return:consignee", s.keyVersion(), s.consigneeCiphertext()),
                 cipher.decrypt(s.shopId(), "shop-return:phone", s.keyVersion(), s.phoneCiphertext()),
-                s.province(), s.city(), s.district(), cipher.decrypt(s.shopId(), "shop-return:detail", s.keyVersion(), s.detailCiphertext()));
+                s.province(), s.city(), s.district(),
+                cipher.decrypt(s.shopId(), "shop-return:detail", s.keyVersion(), s.detailCiphertext()));
     }
 
     /** 解密仅供店主读取的经营与退货资料。 */
@@ -80,6 +88,7 @@ public class ShopReturnProfileServiceImpl implements ShopReturnProfileService {
                 cipher.decrypt(id, "shop-return:contact-phone", version, p.getContactPhoneCiphertext()),
                 cipher.decrypt(id, "shop-return:consignee", version, p.getConsigneeCiphertext()),
                 cipher.decrypt(id, "shop-return:phone", version, p.getPhoneCiphertext()),
-                p.getProvince(), p.getCity(), p.getDistrict(), cipher.decrypt(id, "shop-return:detail", version, p.getDetailCiphertext()));
+                p.getProvince(), p.getCity(), p.getDistrict(),
+                cipher.decrypt(id, "shop-return:detail", version, p.getDetailCiphertext()));
     }
 }

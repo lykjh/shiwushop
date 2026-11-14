@@ -34,15 +34,24 @@ import static org.mockito.Mockito.doAnswer;
 
 @SpringBootTest
 class ShopOwnerSkuRaceTests {
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private RegisterService users;
-    @Autowired private ShopService shops;
-    @Autowired private ProductService products;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categories;
-    @Autowired private ProductMapper productMapper;
-    @MockitoSpyBean private SkuMapper skus;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private ShopService shops;
+    @Autowired
+    private ProductService products;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private ProductMapper productMapper;
+    @MockitoSpyBean
+    private SkuMapper skus;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void transferWaitsForAlreadyAuthorizedSkuUpdate() throws Exception {
@@ -83,7 +92,8 @@ class ShopOwnerSkuRaceTests {
             MerchantSkuUpdateDTO update = new MerchantSkuUpdateDTO();
             update.setPrice(new BigDecimal("12.00"));
             update.setStock(4);
-            var pending = workers.submit(() -> products.updateMerchantSku(oldOwner, product.getId(), sku.getId(), update));
+            var pending = workers.submit(
+                    () -> products.updateMerchantSku(oldOwner, product.getId(), sku.getId(), update));
             assertTrue(checkedOwner.await(10, TimeUnit.SECONDS));
             CountDownLatch transferStarted = new CountDownLatch(1);
             var transfer = workers.submit(() -> {

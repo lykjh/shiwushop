@@ -23,8 +23,8 @@ public class CaptchaServiceImpl implements CaptchaService {
     private final long generationWaitMs;
 
     public CaptchaServiceImpl(ImageCaptchaApplication captchaApplication, CaptchaProofStore proofStore,
-            @Value("${shop.security.captcha.generate-max-concurrent}") int maxConcurrent,
-            @Value("${shop.security.captcha.generate-wait-ms}") long generationWaitMs) {
+                              @Value("${shop.security.captcha.generate-max-concurrent}") int maxConcurrent,
+                              @Value("${shop.security.captcha.generate-wait-ms}") long generationWaitMs) {
         if (maxConcurrent < 1 || generationWaitMs < 1) {
             throw new IllegalArgumentException("滑块生成并发参数必须大于零");
         }

@@ -30,7 +30,9 @@ import java.util.Base64;
 @Service
 @RequiredArgsConstructor
 public class PasswordResetServiceImpl implements PasswordResetService {
+    /** 密码重置短信的用途标识，与登录和绑定验证码隔离。 */
     private static final String PURPOSE = "password-reset";
+    /** Session 中保存密码重设授权信息的属性名。 */
     private static final String GRANT = "passwordResetGrant";
     private final PhoneLookup phones;
     private final PhoneBindingMapper bindings;
@@ -46,7 +48,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     /** Session 存票据摘要而非原文；手机号也只保留 HMAC，支持 Redis Session 跨实例存取。 */
     private record Grant(Long userId, String phoneDigest, int authVersion,
-                         String ticketDigest, Instant expiresAt) implements Serializable {}
+                         String ticketDigest, Instant expiresAt) implements Serializable {
+    }
 
     /** 沿用发送冷却、号码额度和入口保护；未绑定号码不会注册账号或收到短信。 */
     @Override

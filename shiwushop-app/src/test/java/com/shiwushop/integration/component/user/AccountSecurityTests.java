@@ -1,4 +1,5 @@
 package com.shiwushop.integration.component.user;
+
 import com.shiwushop.support.LoginTestRequest;
 
 import com.shiwushop.support.TestRegistration;
@@ -31,11 +32,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AccountSecurityTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private StringRedisTemplate redis;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private StringRedisTemplate redis;
     private final List<String> createdAccounts = new ArrayList<>();
 
     @Test
@@ -110,5 +116,4 @@ class AccountSecurityTests {
             jdbc.update("DELETE FROM users WHERE id=?", userId);
         }
     }
-
 }

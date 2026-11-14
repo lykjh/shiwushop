@@ -9,4 +9,5 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 @TestConfiguration
 @EnableWebSecurity
 @Import(WebSecurityConfig.class)
-public class ControllerSliceSecurity {}
+public class ControllerSliceSecurity {
+}

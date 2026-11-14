@@ -45,5 +45,4 @@ public class CartController {
         cartService.delete(SessionUser.requireId(request), id);
         return Result.success();
     }
-
 }

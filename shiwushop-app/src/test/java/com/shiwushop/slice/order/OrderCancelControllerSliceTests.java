@@ -24,8 +24,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = {OrderCancellationController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class OrderCancelControllerSliceTests {
-    @Autowired private MockMvc mvc;
-    @MockitoBean private OrderPaymentService payments;
+    @Autowired
+    private MockMvc mvc;
+    @MockitoBean
+    private OrderPaymentService payments;
 
     @Test
     void buyerCanRequestCancellationWithCsrf() throws Exception {
@@ -35,6 +37,7 @@ class OrderCancelControllerSliceTests {
         mvc.perform(post("/orders/10/cancel").session(session).with(csrf()))
                 .andExpect(status().isOk());
     }
+
     @Test
     void pendingCancellationReturnsAccepted() throws Exception {
         MockHttpSession session = new MockHttpSession();
@@ -48,7 +51,7 @@ class OrderCancelControllerSliceTests {
     void invalidIdsAreRejectedAtEntry() throws Exception {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
-        for (String id : new String[] {"0", "-1", "abc", "9999999999999999999999"}) {
+        for (String id : new String[]{"0", "-1", "abc", "9999999999999999999999"}) {
             mvc.perform(post("/orders/" + id + "/cancel").session(session).with(csrf()))
                     .andExpect(status().isBadRequest());
         }

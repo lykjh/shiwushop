@@ -2,9 +2,10 @@ package com.shiwushop.common.pagination;
 
 import com.shiwushop.common.BusinessException;
 
-
 public final class PageSpec {
+    /** 页码，从 1 开始。 */
     private final int page;
+    /** 每页请求条数。 */
     private final int size;
 
     private PageSpec(int page, int size) {

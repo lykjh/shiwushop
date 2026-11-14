@@ -47,17 +47,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantSkuUpdateTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private ProductOptionMapper optionMapper;
-    @Autowired private ProductOptionValueMapper valueMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private SkuOptionValueMapper linkMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private ProductOptionMapper optionMapper;
+    @Autowired
+    private ProductOptionValueMapper valueMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private SkuOptionValueMapper linkMapper;
 
     @Test
     void changesOnlyPriceAndStockAndKeepsOptionOrder() throws Exception {
@@ -72,13 +83,14 @@ class MerchantSkuUpdateTests {
                 .andExpect(jsonPath("$.data.optionValueIds[0]").value(f.colorId))
                 .andExpect(jsonPath("$.data.optionValueIds[1]").value(f.capacityId))
                 .andExpect(jsonPath("$.data.price").value(3899.00))
+                .andExpect(jsonPath("$.data.legacy").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.stock").value(8));
 
         Sku saved = skuMapper.selectById(f.skuId);
         assertEquals(new BigDecimal("3899.00"), saved.getPrice());
         assertEquals(8, saved.getStock());
         assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest((f.colorId + "," + f.capacityId).getBytes(StandardCharsets.UTF_8))),
+                        .digest((f.colorId + "," + f.capacityId).getBytes(StandardCharsets.UTF_8))),
                 saved.getOptionSignature());
         assertEquals(List.of(f.colorId, f.capacityId), linkMapper.selectValueIds(f.skuId));
         assertEquals(1, jdbcTemplate.queryForObject(
@@ -181,7 +193,8 @@ class MerchantSkuUpdateTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = 'MERCHANT' WHERE username = ?", username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private MockHttpSession session(Long user) {
@@ -209,5 +222,6 @@ class MerchantSkuUpdateTests {
     }
 
     private record Fixture(MockHttpSession session, Long productId, Long skuId,
-                           Long colorId, Long capacityId) {}
+                           Long colorId, Long capacityId) {
+    }
 }

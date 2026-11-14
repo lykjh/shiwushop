@@ -16,8 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class DiscoveryControllerTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private Environment environment;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private Environment environment;
 
     /** 本地启动配置不能让默认测试打开消费者或连接商城的搜索服务。 */
     @Test

@@ -31,12 +31,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class BrandUpdateTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private BrandMapper brandMapper;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private BrandMapper brandMapper;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -131,7 +136,9 @@ class BrandUpdateTests {
     }
 
     private Long searchEvents(Long brandId) {
-        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?", Long.class, brandId);
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?",
+                Long.class, brandId);
     }
 
     private MockHttpSession sessionForRole(String role) {

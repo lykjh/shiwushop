@@ -20,12 +20,14 @@ import com.shiwushop.merchant.service.ShopService;
 import com.shiwushop.trade.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OrderServiceImpl implements OrderService {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -33,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final AccountAccess accountAccess;
     private final MerchantShopAccess merchantShopAccess;
     private final PrivacyCipher privacyCipher;
+
     /** 仅向订单买家返回详情；通过归属检查后才解密下单时的收货快照。 */
     @Override
     public OrderDetailVO detail(Long userId, Long orderId) {
@@ -42,11 +45,11 @@ public class OrderServiceImpl implements OrderService {
                         .eq(Order::getId, orderId)
                         .eq(Order::getUserId, userId));
 
-        if(order==null){
+        if (order == null) {
             throw new BusinessException(404, "订单不存在");
         }
         Shop shop = order.getShopId() == null ? null : shopService.findById(order.getShopId());
-        return toDetailVO(order, shop);
+        return toDetailVO(order, shop, false);
     }
 
     /** 按创建时间和 ID 游标列出买家订单，并拒绝其他买家的游标。 */
@@ -55,7 +58,8 @@ public class OrderServiceImpl implements OrderService {
         accountAccess.checkActive(userId);
         PageSpec.of(1, size);
         Order cursor = cursor(afterId);
-        if (cursor != null && !userId.equals(cursor.getUserId())) throw new BusinessException(400, "订单游标无效");
+        if (cursor != null && !userId.equals(cursor.getUserId()))
+            throw new BusinessException(400, "订单游标无效");
         List<OrderSummaryVO> rows = orderMapper.selectBuyerSlice(userId,
                 cursor == null ? null : cursor.getCreatedAt(), afterId, size + 1);
         return slice(rows, size);
@@ -68,7 +72,8 @@ public class OrderServiceImpl implements OrderService {
         PageSpec.of(1, size, "店铺或分页参数错误");
         merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
         Order cursor = cursor(afterId);
-        if (cursor != null && !shopId.equals(cursor.getShopId())) throw new BusinessException(400, "订单游标无效");
+        if (cursor != null && !shopId.equals(cursor.getShopId()))
+            throw new BusinessException(400, "订单游标无效");
         List<OrderSummaryVO> rows = orderMapper.selectMerchantSlice(shopId,
                 cursor == null ? null : cursor.getCreatedAt(), afterId, size + 1);
         return slice(rows, size);
@@ -76,10 +81,13 @@ public class OrderServiceImpl implements OrderService {
 
     /** 解析分页游标；非法或不存在的订单 ID 直接返回参数错误。 */
     private Order cursor(Long afterId) {
-        if (afterId == null) return null;
-        if (afterId <= 0) throw new BusinessException(400, "订单游标无效");
+        if (afterId == null)
+            return null;
+        if (afterId <= 0)
+            throw new BusinessException(400, "订单游标无效");
         Order order = orderMapper.selectById(afterId);
-        if (order == null) throw new BusinessException(400, "订单游标无效");
+        if (order == null)
+            throw new BusinessException(400, "订单游标无效");
         return order;
     }
 
@@ -87,6 +95,10 @@ public class OrderServiceImpl implements OrderService {
     private OrderSliceVO slice(List<OrderSummaryVO> rows, int size) {
         boolean hasMore = rows.size() > size;
         List<OrderSummaryVO> items = hasMore ? rows.subList(0, size) : rows;
+        if (!items.isEmpty()) {
+            var summaries = orderMapper.rewardSummaries(items.stream().map(OrderSummaryVO::getId).toList());
+            items.forEach(item -> item.setRewardSummary(summaries.get(item.getId())));
+        }
         return new OrderSliceVO(items, hasMore, hasMore ? items.getLast().getId() : null);
     }
 
@@ -101,11 +113,11 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException(404, "订单不存在");
         }
-        return toDetailVO(order, shop);
+        return toDetailVO(order, shop, true);
     }
 
     /** 收货信息仅在通过买家或店铺归属校验后解密，订单中读取的是下单时快照。 */
-    private OrderDetailVO toDetailVO(Order order, Shop shop) {
+    private OrderDetailVO toDetailVO(Order order, Shop shop, boolean merchant) {
         Long buyerId = order.getUserId();
         int version = order.getShippingKeyVersion();
         String consignee = privacyCipher.decrypt(buyerId, "orders:consignee", version, order.getConsigneeCiphertext());
@@ -116,16 +128,28 @@ public class OrderServiceImpl implements OrderService {
                 order.getStatus() == OrderStatus.UNPAID && order.getCancelRequestedAt() != null,
                 new OrderDetailVO.AddressSnapshot(consignee, phone,
                         order.getProvince() + order.getCity() + order.getDistrict() + detail),
-                itemsForOrder(order.getId()));
+                itemsForOrder(order.getId(), merchant), order.getBusinessType(), order.getSettlementKind(),
+                order.getFulfillmentState(),
+                order.getMemberLevelCode(),
+                order.getOriginalAmount() == null ? order.getTotalAmount() : order.getOriginalAmount(),
+                order.getDiscountAmount(),
+                0, orderMapper.rewardSummaries(List.of(order.getId())).get(order.getId()),
+                order.getFullyReceivedAt(), orderMapper.fulfillmentProgress(order.getId()));
     }
 
     /** 读取订单明细并按成交单价与数量计算每项小计。 */
-    private List<OrderItemVO> itemsForOrder(Long orderId) {
+    private List<OrderItemVO> itemsForOrder(Long orderId, boolean merchant) {
+        var benefits = orderItemMapper.benefits(orderId, merchant).stream()
+                .collect(java.util.stream.Collectors.groupingBy(OrderItemVO.Benefit::orderItemId));
         return orderItemMapper.selectForOrder(orderId).stream()
                 .map(item -> new OrderItemVO(item.getId(), item.getProductId(), item.getSkuId(),
                         item.getProductName(), item.getSkuSpec(), item.getQuantity(),
-                        item.getUnitPrice(), item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()))))
+                        item.getUnitPrice(), item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())),
+                        item.getItemKind(),
+                        item.getOriginalUnitPrice() == null ? item.getUnitPrice() : item.getOriginalUnitPrice(),
+                        item.getDiscountAmount(), item.getPayableAmount() == null ? item.getUnitPrice()
+                        .multiply(BigDecimal.valueOf(item.getQuantity())) : item.getPayableAmount(),
+                        item.getSourceActivityId(), benefits.getOrDefault(item.getId(), List.of())))
                 .toList();
     }
-
 }

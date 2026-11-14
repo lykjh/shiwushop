@@ -27,8 +27,10 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequiredArgsConstructor
 public class PaymentController {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
     private final OrderPaymentService paymentService;
+    /** 支付宝异步通知校验或处理失败时返回的协议响应文本。 */
     private static final String ALIPAY_NOTIFY_FAILURE = "failure";
 
     /**
@@ -49,7 +51,8 @@ public class PaymentController {
         var checkout = paymentService.checkoutPage(outTradeNo);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
-                .body(PaymentQrPage.render(checkout.qrCode(), checkout.amount(), checkout.payExpiresAt(), checkout.channel()));
+                .body(PaymentQrPage.render(checkout.qrCode(), checkout.amount(), checkout.payExpiresAt(),
+                        checkout.channel()));
     }
 
     /** 查询本人订单的本地支付状态，不主动请求支付网关。 */
@@ -83,5 +86,4 @@ public class PaymentController {
             return ResponseEntity.status(e.getCode() == 503 ? 503 : 400).body(ALIPAY_NOTIFY_FAILURE);
         }
     }
-
 }

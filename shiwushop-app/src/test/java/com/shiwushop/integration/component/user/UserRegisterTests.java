@@ -28,10 +28,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class UserRegisterTests {
-    @Autowired private MockMvc mockMvc;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private MeterRegistry metrics;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private MeterRegistry metrics;
     private final String remoteAddress = "test-" + UUID.randomUUID();
 
     private int countAccounts(String username) {
@@ -42,23 +46,23 @@ class UserRegisterTests {
 
     @Test
     void failedRegistrationLeavesNoRowsBehind() throws Exception {
-        String username="buyer_"+UUID.randomUUID().toString().replace("-","");
+        String username = "buyer_" + UUID.randomUUID().toString().replace("-", "");
         mockMvc.perform(register(username, "asdfg123456")).andExpect(status().isOk());
-        assertEquals(1,countAccounts(username));
+        assertEquals(1, countAccounts(username));
 
-        mockMvc.perform(register(username,"asdfg123456")).andExpect(status().isConflict());
-        assertEquals(1,countAccounts(username));
+        mockMvc.perform(register(username, "asdfg123456")).andExpect(status().isConflict());
+        assertEquals(1, countAccounts(username));
 
-        String bad="buyer_"+UUID.randomUUID().toString().replace("-","");
+        String bad = "buyer_" + UUID.randomUUID().toString().replace("-", "");
         mockMvc.perform(register(bad, "j12".repeat(25))).andExpect(status().isBadRequest());
-        assertEquals(0,countAccounts(bad));
+        assertEquals(0, countAccounts(bad));
 
-        String noProof ="buyer_"+UUID.randomUUID().toString().replace("-","");
+        String noProof = "buyer_" + UUID.randomUUID().toString().replace("-", "");
         mockMvc.perform(post("/users/register").remoteAddress(remoteAddress)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body(noProof,"asdfg123456")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(noProof, "asdfg123456")))
                 .andExpect(status().isForbidden());
-        assertEquals(0,countAccounts(noProof));
+        assertEquals(0, countAccounts(noProof));
     }
 
     @Test
@@ -78,7 +82,7 @@ class UserRegisterTests {
     }
 
     @Test
-    void passwordExactly72BytesIsAccepted()  throws Exception {
+    void passwordExactly72BytesIsAccepted() throws Exception {
         String username = "buyer_" + UUID.randomUUID().toString().replace("-", "");
         String password = "a".repeat(72);
         mockMvc.perform(register(username, password)).andExpect(status().isOk());
@@ -88,14 +92,14 @@ class UserRegisterTests {
     }
 
     @Test
-    void passwordContainingChineseCharactersIsRejected() throws Exception{
+    void passwordContainingChineseCharactersIsRejected() throws Exception {
         String username = "buyer_" + UUID.randomUUID().toString().replace("-", "");
 
         mockMvc.perform(register(username, "asdfg密123456"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.fields.password[0]").value("密码只能包含字母、数字和特定符号"));
 
-        assertEquals(0,countAccounts(username));
+        assertEquals(0, countAccounts(username));
     }
 
     @Test

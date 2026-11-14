@@ -4,7 +4,6 @@ import com.shiwushop.common.pagination.PageSpec;
 
 import com.shiwushop.common.BusinessException;
 
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

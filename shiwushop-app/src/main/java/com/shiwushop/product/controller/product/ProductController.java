@@ -55,6 +55,4 @@ public class ProductController {
     public Result<PublicProductDetailVO> publicDetail(@PathVariable @Positive Long id) {
         return Result.success(productService.publicDetail(id));
     }
-
-
 }

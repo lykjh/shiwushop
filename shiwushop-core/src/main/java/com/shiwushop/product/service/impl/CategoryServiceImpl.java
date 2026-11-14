@@ -20,16 +20,19 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService, com.shiwushop.merchant.service.ShopCategoryAccess {
     @Override
-    public void requireVisible(Long categoryId) { detail(categoryId); }
-
+    public void requireVisible(Long categoryId) {
+        detail(categoryId);
+    }
 
     private final CategoryMapper categoryMapper;
     private final OutboxEventMapper outboxEventMapper;
@@ -49,23 +52,22 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
         }
 
         Category parent = null;
-        if(dto.getParentId() != null){
+        if (dto.getParentId() != null) {
             parent = categoryMapper.selectById(dto.getParentId());
-            if(parent==null){
+            if (parent == null) {
                 throw new BusinessException(404, "父分类不存在");
             }
-            if(parent.getLevel()>=3){
+            if (parent.getLevel() >= 3) {
                 throw new BusinessException(400, "父分类级别不能超过3级");
             }
         }
-
 
         Category category = new Category();
         category.setParentId(dto.getParentId());
         category.setLevel(parent == null ? 1 : parent.getLevel() + 1);
         category.setName(name);
-        category.setVisible(dto.getVisible()==null ? 1 : dto.getVisible());
-        category.setSortOrder(dto.getSortOrder()==null ? 0 : dto.getSortOrder());
+        category.setVisible(dto.getVisible() == null ? 1 : dto.getVisible());
+        category.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
 
         try {
             categoryMapper.insert(category);
@@ -75,7 +77,6 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
         }
         return toVO(category);
     }
-
 
     /** 按层级、排序值和 ID 返回管理员可见的完整分类列表。 */
     @Override
@@ -118,8 +119,10 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
         // 移动分类时把子孙深度一并算入，确保整棵子树仍不超过三级。
         int descendantDepth = 0;
-        if (!children.isEmpty()) descendantDepth = 1;
-        if (!grandchildren.isEmpty()) descendantDepth = 2;
+        if (!children.isEmpty())
+            descendantDepth = 1;
+        if (!grandchildren.isEmpty())
+            descendantDepth = 2;
         if (newLevel + descendantDepth > 3) {
             throw new BusinessException(409, "父分类级别不能超过3级");
         }
@@ -153,9 +156,11 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
     /** 沿新父分类的祖先链向上检查，拒绝把分类移到自己或自己的后代之下。 */
     private Category validatedParent(Long id, Long parentId) {
-        if (parentId == null) return null;
+        if (parentId == null)
+            return null;
         Category parent = categoryMapper.selectById(parentId);
-        if (parent == null) throw new BusinessException(404, "父分类不存在");
+        if (parent == null)
+            throw new BusinessException(404, "父分类不存在");
         // 沿父链检查，禁止把分类移动到自己的子孙下面形成环。
         Category current = parent;
         while (current != null) {
@@ -175,13 +180,13 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
     @Transactional
     public void delete(Long id) {
         categoryMapper.lockTree();
-        if(categoryMapper.selectById(id)==null){
+        if (categoryMapper.selectById(id) == null) {
             throw new BusinessException(404, "分类不存在");
         }
 
-        if(categoryMapper.selectCount(
+        if (categoryMapper.selectCount(
                 new LambdaQueryWrapper<Category>()
-                        .eq(Category::getParentId, id)) > 0){
+                        .eq(Category::getParentId, id)) > 0) {
             throw new BusinessException(409, "请先删除子分类");
         }
 
@@ -197,19 +202,19 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
     @Override
     public CategoryDetailVO detail(Long id) {
         Category category = categoryMapper.selectById(id);
-        if(category==null){
+        if (category == null) {
             throw new BusinessException(404, "分类不存在");
         }
 
-        List<CategoryPathItemVO> path=new ArrayList<>();
+        List<CategoryPathItemVO> path = new ArrayList<>();
         Category current = category;
         while (current != null) {
-            if(!Integer.valueOf(1).equals(current.getVisible())){
+            if (!Integer.valueOf(1).equals(current.getVisible())) {
                 throw new BusinessException(404, "分类不存在");
             }
 
-            path.add(new CategoryPathItemVO(current.getId(),current.getName()));
-            current=current.getParentId()==null?null:categoryMapper.selectById(current.getParentId());
+            path.add(new CategoryPathItemVO(current.getId(), current.getName()));
+            current = current.getParentId() == null ? null : categoryMapper.selectById(current.getParentId());
         }
 
         Collections.reverse(path);
@@ -222,22 +227,22 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
     /** 返回顶层或指定父分类下可见的导航项，并标记各项是否有可见子分类。 */
     @Override
     public List<CategoryNavVO> list(Long parentId) {
-        if(parentId!=null){
-            if(parentId<=0){
+        if (parentId != null) {
+            if (parentId <= 0) {
                 throw new BusinessException(400, "分类ID必须大于0");
             }
             Category parent = categoryMapper.selectById(parentId);
-            if(parent==null||hasHiddenCategoryInPath(parent)){
+            if (parent == null || hasHiddenCategoryInPath(parent)) {
                 throw new BusinessException(404, "分类不存在");
             }
         }
 
         return categoryMapper.selectList(
-                new LambdaQueryWrapper<Category>()
-                        .isNull(parentId==null, Category::getParentId)
-                        .eq(parentId != null, Category::getParentId, parentId)
-                        .eq(Category::getVisible, 1)
-                        .orderByAsc(Category::getSortOrder, Category::getId))
+                        new LambdaQueryWrapper<Category>()
+                                .isNull(parentId == null, Category::getParentId)
+                                .eq(parentId != null, Category::getParentId, parentId)
+                                .eq(Category::getVisible, 1)
+                                .orderByAsc(Category::getSortOrder, Category::getId))
                 .stream()
                 .map(category -> new CategoryNavVO(
                         category.getId(),
@@ -245,7 +250,7 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
                         category.getLevel(),
                         categoryMapper.selectCount(new LambdaQueryWrapper<Category>()
                                 .eq(Category::getParentId, category.getId())
-                                .eq(Category::getVisible,1))>0,
+                                .eq(Category::getVisible, 1)) > 0,
                         category.getSortOrder()
                 )).toList();
     }

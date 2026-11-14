@@ -2,6 +2,7 @@ package com.shiwushop.trade.controller.shipment;
 
 import jakarta.validation.Valid;
 import com.shiwushop.trade.dto.shipment.ShipmentCreateDTO;
+import com.shiwushop.trade.dto.shipment.ShipmentPackageCreateDTO;
 import com.shiwushop.trade.vo.shipment.ShipmentVO;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 public class ShipmentController {
@@ -25,6 +28,36 @@ public class ShipmentController {
     public Result<ShipmentVO> ship(@PathVariable @Positive Long shopId, @PathVariable @Positive Long orderId,
                                    @Valid @RequestBody ShipmentCreateDTO body, HttpServletRequest request) {
         return Result.success(shipmentService.ship(SessionUser.requireId(request), shopId, orderId, body));
+    }
+
+    /** 店主按订单项件数登记一个包裹，请求键在同订单内幂等。 */
+    @PostMapping("/merchant/shops/{shopId}/orders/{orderId}/shipments")
+    public Result<ShipmentVO> shipPackage(@PathVariable @Positive Long shopId,
+                                          @PathVariable @Positive Long orderId,
+                                          @Valid @RequestBody ShipmentPackageCreateDTO body,
+                                          HttpServletRequest request) {
+        return Result.success(shipmentService.shipPackage(SessionUser.requireId(request), shopId, orderId, body));
+    }
+
+    @GetMapping("/merchant/shops/{shopId}/orders/{orderId}/shipments")
+    public Result<List<ShipmentVO>> merchantPackages(@PathVariable @Positive Long shopId,
+                                                     @PathVariable @Positive Long orderId,
+                                                     HttpServletRequest request) {
+        return Result.success(shipmentService.merchantPackages(SessionUser.requireId(request), shopId, orderId));
+    }
+
+    @GetMapping("/orders/{orderId}/shipments")
+    public Result<List<ShipmentVO>> buyerPackages(@PathVariable @Positive Long orderId,
+                                                  HttpServletRequest request) {
+        return Result.success(shipmentService.buyerPackages(SessionUser.requireId(request), orderId));
+    }
+
+    @PostMapping("/orders/{orderId}/shipments/{shipmentId}/confirm")
+    public Result<ShipmentVO> confirmPackage(@PathVariable @Positive Long orderId,
+                                             @PathVariable @Positive Long shipmentId,
+                                             HttpServletRequest request) {
+        return Result.success(shipmentService.confirmPackageByBuyer(
+                SessionUser.requireId(request), orderId, shipmentId));
     }
 
     /** 商家查看指定店铺订单的物流信息。 */

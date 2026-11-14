@@ -1,6 +1,6 @@
 package com.shiwushop.integration.aftersale;
 
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.support.CommerceFixture;
 import com.shiwushop.support.PaymentHttpFixture;
 import org.junit.jupiter.api.Test;
@@ -16,9 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         "spring.autoconfigure.exclude=", "spring.datasource.hikari.maximum-pool-size=2",
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class AfterSaleTimeoutPlanTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
-    @MockitoBean SdkAlipayGateway gateway;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
+    @MockitoBean(name = "localSimulationGateway")
+    LocalSimulationGateway gateway;
 
     @Test
     void measureAlreadyRecordedReviewCandidates() throws Exception {
@@ -37,7 +40,9 @@ class AfterSaleTimeoutPlanTest {
                     SELECT id,'REVIEW',requested_at,'2020-01-03 00:00:00',1,'OPEN',NOW()
                     FROM after_sale_cases WHERE order_id=? AND reason LIKE 'timeout-plan-%'
                     """, order);
-            assertEquals(10000, jdbc.queryForObject("SELECT COUNT(*) FROM after_sale_cases WHERE order_id=? AND reason LIKE 'timeout-plan-%'", Integer.class, order));
+            assertEquals(10000, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM after_sale_cases WHERE order_id=? AND reason LIKE 'timeout-plan-%'",
+                    Integer.class, order));
             var rows = jdbc.queryForList("""
                     EXPLAIN ANALYZE SELECT c.id FROM after_sale_cases c
                     WHERE c.status='REQUESTED' AND c.requested_at <= '2026-11-03 08:00:00'
@@ -46,13 +51,23 @@ class AfterSaleTimeoutPlanTest {
                     """, String.class);
             rows.forEach(System.out::println);
             System.out.println("QUEUE_NO_DUE");
-            jdbc.queryForList("EXPLAIN ANALYZE SELECT id FROM after_sale_timeout_tasks WHERE status='SCHEDULED' AND due_at <= '2026-11-03 08:00:00' ORDER BY due_at,id LIMIT 100", String.class).forEach(System.out::println);
-            jdbc.update("INSERT INTO after_sale_timeout_tasks(case_id,stage,basis_at,due_at,rule_version,status,created_at) SELECT id,'RETURN',requested_at,'2020-01-03 00:00:00',1,'SCHEDULED',NOW() FROM after_sale_cases WHERE order_id=? AND reason LIKE 'timeout-plan-%' LIMIT 1", order);
+            jdbc.queryForList(
+                    "EXPLAIN ANALYZE SELECT id FROM after_sale_timeout_tasks WHERE status='SCHEDULED' AND due_at <= '2026-11-03 08:00:00' ORDER BY due_at,id LIMIT 100",
+                    String.class).forEach(System.out::println);
+            jdbc.update(
+                    "INSERT INTO after_sale_timeout_tasks(case_id,stage,basis_at,due_at,rule_version,status,created_at) SELECT id,'RETURN',requested_at,'2020-01-03 00:00:00',1,'SCHEDULED',NOW() FROM after_sale_cases WHERE order_id=? AND reason LIKE 'timeout-plan-%' LIMIT 1",
+                    order);
             System.out.println("QUEUE_ONE_DUE");
-            jdbc.queryForList("EXPLAIN ANALYZE SELECT id FROM after_sale_timeout_tasks WHERE status='SCHEDULED' AND due_at <= '2026-11-03 08:00:00' ORDER BY due_at,id LIMIT 100", String.class).forEach(System.out::println);
+            jdbc.queryForList(
+                    "EXPLAIN ANALYZE SELECT id FROM after_sale_timeout_tasks WHERE status='SCHEDULED' AND due_at <= '2026-11-03 08:00:00' ORDER BY due_at,id LIMIT 100",
+                    String.class).forEach(System.out::println);
         } finally {
-            jdbc.update("DELETE t FROM after_sale_timeout_tasks t JOIN after_sale_cases c ON c.id=t.case_id WHERE c.order_id IN (SELECT id FROM orders WHERE user_id=?)", fixture.buyer.id());
-            jdbc.update("DELETE FROM after_sale_cases WHERE order_id IN (SELECT id FROM orders WHERE user_id=?) AND reason LIKE 'timeout-plan-%'", fixture.buyer.id());
+            jdbc.update(
+                    "DELETE t FROM after_sale_timeout_tasks t JOIN after_sale_cases c ON c.id=t.case_id WHERE c.order_id IN (SELECT id FROM orders WHERE user_id=?)",
+                    fixture.buyer.id());
+            jdbc.update(
+                    "DELETE FROM after_sale_cases WHERE order_id IN (SELECT id FROM orders WHERE user_id=?) AND reason LIKE 'timeout-plan-%'",
+                    fixture.buyer.id());
             fixture.close();
         }
     }

@@ -49,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.session.data.redis.autoconfigure.SessionDataRedisAutoConfiguration",
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "shop.media.root=./target/review-media-tests"
 })
@@ -56,18 +57,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Transactional
 class ReviewCreateTests {
     private final List<Path> mediaFiles = new ArrayList<>();
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private CategoryMapper categories;
-    @Autowired private CatalogMediaReferenceMapper mediaAssets;
-    @Autowired private ShopMapper shops;
-    @Autowired private ProductMapper products;
-    @Autowired private ProductReviewMapper reviews;
-    @Autowired private SkuMapper skus;
-    @Autowired private OrderMapper orders;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private CatalogMediaReferenceMapper mediaAssets;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private ProductMapper products;
+    @Autowired
+    private ProductReviewMapper reviews;
+    @Autowired
+    private SkuMapper skus;
+    @Autowired
+    private OrderMapper orders;
 
     @Test
     void onlyBuyerMayReviewConfirmedNonRefundedItemOnce() throws Exception {
@@ -124,14 +137,17 @@ class ReviewCreateTests {
                         + "shipped_at, auto_confirm_at, confirmed_at, confirm_source) "
                         + "VALUES (?, '测试快递', 'REVIEW-1', 'CONFIRMED', ?, NOW(), NOW(), NOW(), 'BUYER')",
                 order.getId(), other);
+        Long shipmentId = jdbc.queryForObject("SELECT id FROM shipments WHERE order_id=?", Long.class, order.getId());
+        jdbc.update("INSERT INTO shipment_items(shipment_id,order_item_id,quantity) VALUES (?,?,1)",
+                shipmentId, itemId);
         assertEquals("CONFIRMED", jdbc.queryForObject(
                 "SELECT status FROM shipments WHERE order_id=?", String.class, order.getId()));
         assertEquals("PAID", reviews.selectEligibilityForUpdate(itemId).getOrderStatus());
-        assertEquals("CONFIRMED", reviews.selectEligibilityForUpdate(itemId).getShipmentStatus());
+        assertEquals(1, reviews.selectEligibilityForUpdate(itemId).getConfirmedQuantity());
         mvc.perform(post(path, order.getId(), itemId).with(csrf()).session(session(other))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
         var created = mvc.perform(post(path, order.getId(), itemId).with(csrf()).session(session(buyer))
-                .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(jsonPath("$.data.id").isNumber()).andReturn();
         assertEquals(200, created.getResponse().getStatus(), created.getResponse().getContentAsString());
         assertEquals(true, mediaAssets.isPubliclyReferenced(mediaId));
@@ -151,11 +167,11 @@ class ReviewCreateTests {
         mvc.perform(post(followPath, reviewId).with(csrf()).session(session(other))
                 .contentType(MediaType.APPLICATION_JSON).content(followBody)).andExpect(status().isNotFound());
         mvc.perform(post(followPath, reviewId).with(csrf()).session(session(buyer))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"  \"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"  \"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post(followPath, reviewId).with(csrf()).session(session(buyer))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"content\":\"补充使用感受\",\"imageMediaIds\":[" + foreignMediaId + "]}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"补充使用感受\",\"imageMediaIds\":[" + foreignMediaId + "]}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post(followPath, reviewId).with(csrf()).session(session(buyer))
                 .contentType(MediaType.APPLICATION_JSON).content(followBody)).andExpect(status().isOk());
@@ -181,18 +197,19 @@ class ReviewCreateTests {
         mvc.perform(post(reportPath, reviewId).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"reason\":\"不实内容\"}")).andExpect(status().isUnauthorized());
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(buyer))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"不实内容\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"不实内容\"}"))
                 .andExpect(status().isConflict());
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(other))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\" \"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\" \"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(other))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"不实内容\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"不实内容\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(other))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"重复提交\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"重复提交\"}"))
                 .andExpect(status().isOk());
-        Long reportId = jdbc.queryForObject("SELECT id FROM product_review_reports WHERE review_id=? AND reporter_user_id=?",
+        Long reportId = jdbc.queryForObject(
+                "SELECT id FROM product_review_reports WHERE review_id=? AND reporter_user_id=?",
                 Long.class, reviewId, other);
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM product_review_reports WHERE review_id=?",
                 Integer.class, reviewId));
@@ -205,27 +222,27 @@ class ReviewCreateTests {
                 .andExpect(jsonPath("$.data.items[0].content").value("实际使用很好"))
                 .andExpect(jsonPath("$.data.items[0].buyerUserId").doesNotExist());
         mvc.perform(post(resolvePath, reportId).with(csrf()).session(session(buyer))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"KEEP\",\"reason\":\"核实保留\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"KEEP\",\"reason\":\"核实保留\"}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post(resolvePath, reportId).with(csrf()).session(session(admin))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"DELETE\",\"reason\":\"无效决定\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"DELETE\",\"reason\":\"无效决定\"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post(resolvePath, reportId).with(csrf()).session(session(admin))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"KEEP\",\"reason\":\"核实保留\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"KEEP\",\"reason\":\"核实保留\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post(resolvePath, reportId).with(csrf()).session(session(admin))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"HIDE\",\"reason\":\"重复处理\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"HIDE\",\"reason\":\"重复处理\"}"))
                 .andExpect(status().isConflict());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM product_review_moderation_audit WHERE report_id=?",
                 Integer.class, reportId));
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(secondReporter))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"违规图片\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"违规图片\"}"))
                 .andExpect(status().isOk());
         Long secondReportId = jdbc.queryForObject(
                 "SELECT id FROM product_review_reports WHERE review_id=? AND reporter_user_id=?",
                 Long.class, reviewId, secondReporter);
         mvc.perform(post(resolvePath, secondReportId).with(csrf()).session(session(admin))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"HIDE\",\"reason\":\"核实隐藏\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"HIDE\",\"reason\":\"核实隐藏\"}"))
                 .andExpect(status().isOk());
         assertEquals(2, searchEvents(product.getId()));
         assertEquals(false, mediaAssets.isPubliclyReferenced(mediaId));
@@ -235,13 +252,14 @@ class ReviewCreateTests {
         mvc.perform(get("/products/{productId}/review-summary", product.getId()))
                 .andExpect(jsonPath("$.data.reviewCount").value(0));
         mvc.perform(post(reportPath, reviewId).with(csrf()).session(session(admin))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"再次举报\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"再次举报\"}"))
                 .andExpect(status().isNotFound());
         jdbc.update("UPDATE product_reviews SET hidden_at=NULL, counted_in_summary=1 WHERE id=?", reviewId);
         reviews.addToSummary(product.getId(), 5);
 
         orders.insertCheckoutItem(order.getId(), sku.getId(), "第二件商品", "", 1, BigDecimal.TEN);
-        Long secondItemId = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?", Long.class, order.getId());
+        Long secondItemId = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?", Long.class,
+                order.getId());
         ProductReview second = new ProductReview();
         second.setOrderItemId(secondItemId);
         second.setProductId(product.getId());
@@ -268,18 +286,23 @@ class ReviewCreateTests {
         mvc.perform(get(listPath, product.getId()).param("size", "101")).andExpect(status().isBadRequest());
 
         orders.insertCheckoutItem(order.getId(), sku.getId(), "第三件商品", "", 1, BigDecimal.TEN);
-        Long refundedItem = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?", Long.class, order.getId());
+        Long refundedItem = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?", Long.class,
+                order.getId());
         jdbc.update("INSERT INTO after_sale_cases (order_id, type, status, reason, refund_amount, requested_at) "
                 + "VALUES (?, 'REFUND_ONLY', 'REFUNDED', '测试退款', 10, NOW())", order.getId());
-        Long caseId = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?", Long.class, order.getId());
-        jdbc.update("INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount) VALUES (?, ?, 1, 10)",
+        Long caseId = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?", Long.class,
+                order.getId());
+        jdbc.update(
+                "INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount) VALUES (?, ?, 1, 10)",
                 caseId, refundedItem);
         mvc.perform(post(path, order.getId(), refundedItem).with(csrf()).session(session(buyer))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
         jdbc.update("INSERT INTO after_sale_cases (order_id, type, status, reason, refund_amount, requested_at) "
                 + "VALUES (?, 'REFUND_ONLY', 'REFUNDED', '第二条评价对应退款', 10, NOW())", order.getId());
-        Long secondCaseId = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?", Long.class, order.getId());
-        jdbc.update("INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount) VALUES (?, ?, 1, 10)",
+        Long secondCaseId = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?", Long.class,
+                order.getId());
+        jdbc.update(
+                "INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount) VALUES (?, ?, 1, 10)",
                 secondCaseId, secondItemId);
         // 该退款由测试直接写库，模拟退款结算事务撤销评价计数。
         reviews.excludeFromSummary(second.getId());
@@ -320,6 +343,67 @@ class ReviewCreateTests {
                 .contentType(MediaType.APPLICATION_JSON).content(followBody)).andExpect(status().isConflict());
         jdbc.update("UPDATE products SET status='OFF_SALE' WHERE id=?", product.getId());
         mvc.perform(get(listPath, product.getId())).andExpect(status().isNotFound());
+
+        // 同订单的已确认包裹不能借给另一明细；退款仅减去未发货件数后才可评价。
+        Product splitProduct = new Product();
+        splitProduct.setShopId(shop.getId());
+        splitProduct.setCategoryId(category.getId());
+        splitProduct.setName("另一件待评价商品");
+        splitProduct.setStatus(ProductStatus.ON_SALE);
+        products.insert(splitProduct);
+        Sku splitSku = new Sku();
+        splitSku.setProductId(splitProduct.getId());
+        splitSku.setOptionSignature(UUID.randomUUID().toString().replace("-", "").repeat(2));
+        splitSku.setPrice(BigDecimal.TEN);
+        splitSku.setStock(2);
+        skus.insert(splitSku);
+        orders.insertCheckoutItem(order.getId(), splitSku.getId(), "多包裹商品", "", 2, BigDecimal.TEN);
+        Long splitItem = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?", Long.class,
+                order.getId());
+        String splitPath = "/orders/" + order.getId() + "/items/" + splitItem + "/review";
+        assertEquals(0, reviews.selectEligibilityForUpdate(splitItem).getConfirmedQuantity());
+        mvc.perform(post(splitPath).with(csrf()).session(session(buyer))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
+
+        jdbc.update("INSERT INTO shipments (order_id, carrier_name, tracking_no, status, shipped_by_user_id, "
+                        + "shipped_at, auto_confirm_at, confirmed_at, confirm_source) "
+                        + "VALUES (?, '测试快递', 'REVIEW-2', 'CONFIRMED', ?, NOW(), NOW(), NOW(), 'BUYER')",
+                order.getId(), other);
+        Long splitShipment = jdbc.queryForObject("SELECT MAX(id) FROM shipments WHERE order_id=?", Long.class,
+                order.getId());
+        jdbc.update("INSERT INTO shipment_items(shipment_id,order_item_id,quantity) VALUES (?,?,1)",
+                splitShipment, splitItem);
+        assertEquals(1, reviews.selectEligibilityForUpdate(splitItem).getConfirmedQuantity());
+        mvc.perform(post(splitPath).with(csrf()).session(session(buyer))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
+        jdbc.update("INSERT INTO after_sale_cases (order_id, type, status, reason, refund_amount, requested_at) "
+                + "VALUES (?, 'REFUND_ONLY', 'REFUNDED', '未发货退款', 10, NOW())", order.getId());
+        Long splitSale = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?", Long.class,
+                order.getId());
+        jdbc.update("INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount, source_kind) "
+                + "VALUES (?, ?, 1, 10, 'UNSHIPPED')", splitSale, splitItem);
+        assertEquals(1, reviews.selectEligibilityForUpdate(splitItem).getRefundedQuantity());
+        mvc.perform(post(splitPath).with(csrf()).session(session(buyer))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+        mvc.perform(post(splitPath).with(csrf()).session(session(buyer))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
+
+        orders.insertCheckoutItem(order.getId(), splitSku.getId(), "已确认件退款", "", 2, BigDecimal.TEN);
+        Long refundedConfirmedItem = jdbc.queryForObject("SELECT MAX(id) FROM order_items WHERE order_id=?",
+                Long.class, order.getId());
+        jdbc.update("INSERT INTO shipment_items(shipment_id,order_item_id,quantity) VALUES (?,?,1)",
+                splitShipment, refundedConfirmedItem);
+        jdbc.update("INSERT INTO after_sale_cases (order_id, type, status, reason, refund_amount, requested_at) "
+                + "VALUES (?, 'REFUND_ONLY', 'REFUNDED', '已收货退款', 10, NOW())", order.getId());
+        Long confirmedSale = jdbc.queryForObject("SELECT MAX(id) FROM after_sale_cases WHERE order_id=?",
+                Long.class, order.getId());
+        jdbc.update("INSERT INTO after_sale_items (case_id, order_item_id, quantity, refund_amount, source_kind, "
+                + "source_shipment_id) VALUES (?, ?, 1, 10, 'SHIPMENT', ?)",
+                confirmedSale, refundedConfirmedItem, splitShipment);
+        assertEquals(1, reviews.selectEligibilityForUpdate(refundedConfirmedItem).getRefundedConfirmedQuantity());
+        mvc.perform(post("/orders/{orderId}/items/{itemId}/review", order.getId(), refundedConfirmedItem)
+                        .with(csrf()).session(session(buyer)).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
     }
 
     private Long user() {
@@ -340,7 +424,8 @@ class ReviewCreateTests {
         Path file = root.resolve(storageKey);
         Files.write(file, new byte[]{1});
         mediaFiles.add(file);
-        jdbc.update("INSERT INTO media_assets (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status) "
+        jdbc.update(
+                "INSERT INTO media_assets (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status) "
                         + "VALUES (?, ?, 'image/png', 1, 1, 1, UNHEX(REPEAT('0', 64)), 'READY')",
                 userId, storageKey);
         return jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key=?", Long.class, storageKey);
@@ -348,7 +433,8 @@ class ReviewCreateTests {
 
     @AfterEach
     void deleteMediaFiles() throws Exception {
-        for (Path file : mediaFiles) Files.deleteIfExists(file);
+        for (Path file : mediaFiles)
+            Files.deleteIfExists(file);
     }
 
     private MockHttpSession session(Long userId) {

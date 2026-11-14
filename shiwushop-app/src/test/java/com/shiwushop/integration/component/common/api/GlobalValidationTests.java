@@ -21,7 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Import(GlobalValidationTests.FailingController.class)
 class GlobalValidationTests {
-    @Autowired private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
     @Test
     void invalidDtoListsFieldReasonsInResultEnvelope() throws Exception {

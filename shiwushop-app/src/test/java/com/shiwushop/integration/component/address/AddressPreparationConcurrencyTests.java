@@ -26,10 +26,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @AutoConfigureMockMvc
 class AddressPreparationConcurrencyTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void fiftyBuyersCanPrepareAddressesAtOnce() throws Exception {
@@ -54,10 +58,12 @@ class AddressPreparationConcurrencyTests {
                             .contentType("application/json").content(body)).andReturn().getResponse().getStatus();
                 })).toList();
                 start.countDown();
-                for (var response : responses) assertEquals(200, response.get(45, TimeUnit.SECONDS));
+                for (var response : responses)
+                    assertEquals(200, response.get(45, TimeUnit.SECONDS));
             }
             for (Long id : ids) {
-                assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM addresses WHERE user_id=?", Integer.class, id));
+                assertEquals(1,
+                        jdbc.queryForObject("SELECT COUNT(*) FROM addresses WHERE user_id=?", Integer.class, id));
             }
         } finally {
             for (Long id : ids) {

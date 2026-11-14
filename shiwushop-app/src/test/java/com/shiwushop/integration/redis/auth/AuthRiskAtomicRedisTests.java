@@ -6,6 +6,7 @@ import io.lettuce.core.cluster.SlotHash;
 import io.lettuce.core.RedisClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -23,23 +24,33 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AuthRiskAtomicRedisTests {
+    @BeforeAll
+    static void requireIsolatedRedis() {
+        assertEquals("127.0.0.1", System.getProperty("spring.data.redis.host"));
+        assertEquals(28379, Integer.getInteger("spring.data.redis.port"));
+        assertEquals(9, Integer.getInteger("spring.data.redis.database"));
+    }
+
     @Test
     void oneFailureUpdatesEverySignalAndTheSameMinuteRatio() {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
         String prefix = "shiwushop:test:{auth-risk}:" + UUID.randomUUID() + ":";
         List<String> keys = new ArrayList<>();
-        for (int i = 0; i < 10; i++) keys.add(prefix + i);
+        for (int i = 0; i < 10; i++)
+            keys.add(prefix + i);
         try {
-            for (String key : keys) assertEquals(SlotHash.getSlot(keys.getFirst()), SlotHash.getSlot(key));
+            for (String key : keys)
+                assertEquals(SlotHash.getSlot(keys.getFirst()), SlotHash.getSlot(key));
             RateLimiter limiter = new RateLimiter(redis);
             RateLimiter.AuthRiskSnapshot first = limiter.checkAuthRisk(keys, false, 300_000, 256, "session");
             assertEquals(1, first.requests());
             assertEquals(0, first.failures());
             limiter.recordAuthFailure(List.of(keys.get(0), keys.get(4), keys.get(1),
-                    keys.get(2), keys.get(3)), first.bucket(),
+                            keys.get(2), keys.get(3)), first.bucket(),
                     new long[]{300_000, 300_000, 60_000, 300_000},
                     new long[]{5, 5, 30, 60});
             RateLimiter.AuthRiskSnapshot second = limiter.checkAuthRisk(keys, false, 300_000, 256, "session");
@@ -59,7 +70,8 @@ class AuthRiskAtomicRedisTests {
 
     @Test
     void wrongTypeIsRejectedBeforeAnyFailureWrite() {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
@@ -80,13 +92,15 @@ class AuthRiskAtomicRedisTests {
 
     @Test
     void registrationAttemptsStayBoundedAcrossRotatingSessions() {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
         String prefix = "shiwushop:test:{auth-risk}:" + UUID.randomUUID() + ":";
         List<String> keys = new ArrayList<>();
-        for (int i = 0; i < 10; i++) keys.add(prefix + i);
+        for (int i = 0; i < 10; i++)
+            keys.add(prefix + i);
         try {
             RateLimiter limiter = new RateLimiter(redis);
             for (int i = 1; i <= 6; i++) {
@@ -107,7 +121,8 @@ class AuthRiskAtomicRedisTests {
 
     @Test
     void rotatingUaAndCookieKeepOnlyThreeCleanRegistrationRiskKeys() {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
@@ -127,28 +142,31 @@ class AuthRiskAtomicRedisTests {
                 keysBefore = connectionView.serverCommands().dbSize();
             }
             AuthRiskLimiter risk = new AuthRiskLimiter(limiter, new SimpleMeterRegistry(),
-                     5, 5, 30, 5, 16, 5, 30, 12, 60, 120, 0.5);
+                    5, 5, 30, 5, 16, 5, 30, 12, 60, 120, 0.5);
             for (int i = 0; i < 500; i++) {
                 MockHttpServletRequest request = new MockHttpServletRequest();
                 request.setRemoteAddr(address);
                 request.addHeader("User-Agent", "Mozilla/5.0 Chrome/" + i + ".0");
                 risk.registerRequiresCaptcha(request);
             }
-            for (String key : keys) assertEquals(true, redis.hasKey(key));
+            for (String key : keys)
+                assertEquals(true, redis.hasKey(key));
             assertEquals(16, redis.opsForHash().size(keys.get(1)));
             assertEquals(16, redis.opsForZSet().size(keys.get(2)));
             try (var connectionView = connection.getConnection()) {
                 long memoryAfter = Long.parseLong(connectionView.serverCommands()
                         .info("memory").getProperty("used_memory"));
                 long keysAfter = connectionView.serverCommands().dbSize();
-                RedisClient client = RedisClient.create("redis://127.0.0.1:16379");
+                RedisClient client = RedisClient.create("redis://" + System.getProperty("spring.data.redis.host") + ":" + System.getProperty("spring.data.redis.port") + "/" + System.getProperty("spring.data.redis.database"));
                 long trackedBytes = 0;
                 try (var direct = client.connect()) {
-                    for (String key : keys) trackedBytes += direct.sync().memoryUsage(key);
+                    for (String key : keys)
+                        trackedBytes += direct.sync().memoryUsage(key);
                 } finally {
                     client.shutdown();
                 }
-                System.out.printf("rotating 500 sessions: riskKeys=3 dbKeysDelta=%d trackedKeyBytes=%dB nodeMemoryDelta=%dB%n",
+                System.out.printf(
+                        "rotating 500 sessions: riskKeys=3 dbKeysDelta=%d trackedKeyBytes=%dB nodeMemoryDelta=%dB%n",
                         keysAfter - keysBefore, trackedBytes, memoryAfter - memoryBefore);
             }
         } finally {
@@ -159,13 +177,15 @@ class AuthRiskAtomicRedisTests {
 
     @Test
     void concurrentFailuresLeaveAllRelatedCountsEqual() throws Exception {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();
         String prefix = "shiwushop:test:{auth-risk}:" + UUID.randomUUID() + ":";
         List<String> keys = new ArrayList<>();
-        for (int i = 0; i < 10; i++) keys.add(prefix + i);
+        for (int i = 0; i < 10; i++)
+            keys.add(prefix + i);
         try (ExecutorService workers = Executors.newFixedThreadPool(8)) {
             RateLimiter limiter = new RateLimiter(redis);
             CountDownLatch start = new CountDownLatch(1);
@@ -175,14 +195,15 @@ class AuthRiskAtomicRedisTests {
                     start.await();
                     RateLimiter.AuthRiskSnapshot snapshot = limiter.checkAuthRisk(keys, false, 300_000, 256, "session");
                     limiter.recordAuthFailure(List.of(keys.get(0), keys.get(4), keys.get(1),
-                            keys.get(2), keys.get(3)), snapshot.bucket(),
+                                    keys.get(2), keys.get(3)), snapshot.bucket(),
                             new long[]{300_000, 300_000, 60_000, 300_000},
                             new long[]{50, 50, 50, 50});
                     return null;
                 }));
             }
             start.countDown();
-            for (Future<?> task : tasks) task.get();
+            for (Future<?> task : tasks)
+                task.get();
             RateLimiter.AuthRiskSnapshot finalState = limiter.checkAuthRisk(keys, false, 300_000, 256, "session");
             assertEquals(41, finalState.requests());
             assertEquals(40, finalState.failures());

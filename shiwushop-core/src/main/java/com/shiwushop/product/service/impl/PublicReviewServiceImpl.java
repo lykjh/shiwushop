@@ -29,19 +29,25 @@ public class PublicReviewServiceImpl implements PublicReviewService {
     @Override
     @Transactional(readOnly = true)
     public PublicReviewPageVO listPublic(Long productId, Long afterId, int size) {
-        if (!reviews.isPublicProduct(productId)) throw new BusinessException(404, "商品不存在");
+        if (!reviews.isPublicProduct(productId))
+            throw new BusinessException(404, "商品不存在");
         List<ProductReview> rows = reviews.selectPublicPage(productId, afterId, size + 1);
         boolean hasMore = rows.size() > size;
-        if (hasMore) rows = rows.subList(0, size);
-        if (rows.isEmpty()) return new PublicReviewPageVO(List.of(), false, null);
-        Map<Long, List<ReviewImageRow>> images = reviews.selectPublicImages(rows.stream().map(ProductReview::getId).toList())
+        if (hasMore)
+            rows = rows.subList(0, size);
+        if (rows.isEmpty())
+            return new PublicReviewPageVO(List.of(), false, null);
+        Map<Long, List<ReviewImageRow>> images = reviews.selectPublicImages(
+                        rows.stream().map(ProductReview::getId).toList())
                 .stream().collect(Collectors.groupingBy(ReviewImageRow::getReviewId));
         List<PublicReviewVO> items = rows.stream().map(row -> {
             List<ReviewImageRow> photos = images.getOrDefault(row.getId(), List.of());
             return new PublicReviewVO(row.getId(), row.getRating(), row.getContent(), row.getFollowUp(),
                     row.getCreatedAt(), row.getFollowUpAt(),
-                    photos.stream().filter(image -> "ORIGINAL".equals(image.getPhase())).map(ReviewImageRow::getMediaId).toList(),
-                    photos.stream().filter(image -> "FOLLOW_UP".equals(image.getPhase())).map(ReviewImageRow::getMediaId).toList());
+                    photos.stream().filter(image -> "ORIGINAL".equals(image.getPhase())).map(ReviewImageRow::getMediaId)
+                            .toList(),
+                    photos.stream().filter(image -> "FOLLOW_UP".equals(image.getPhase()))
+                            .map(ReviewImageRow::getMediaId).toList());
         }).toList();
         return new PublicReviewPageVO(items, hasMore, hasMore ? items.getLast().id() : null);
     }
@@ -50,7 +56,8 @@ public class PublicReviewServiceImpl implements PublicReviewService {
     @Override
     @Transactional(readOnly = true)
     public ReviewSummaryVO summary(Long productId) {
-        if (!reviews.isPublicProduct(productId)) throw new BusinessException(404, "商品不存在");
+        if (!reviews.isPublicProduct(productId))
+            throw new BusinessException(404, "商品不存在");
         return reviews.selectSummary(productId);
     }
 }

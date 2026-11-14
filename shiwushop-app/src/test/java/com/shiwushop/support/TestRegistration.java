@@ -9,7 +9,8 @@ import org.springframework.mock.web.MockHttpSession;
 import java.util.UUID;
 
 public final class TestRegistration {
-    private TestRegistration() {}
+    private TestRegistration() {
+    }
 
     public static void register(RegisterService users, CaptchaProofStore proofs, RegisterDTO dto) {
         MockHttpServletRequest request = new MockHttpServletRequest();

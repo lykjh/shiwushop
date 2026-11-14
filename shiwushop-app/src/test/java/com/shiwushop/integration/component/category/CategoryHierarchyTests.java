@@ -31,12 +31,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class CategoryHierarchyTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CategoryMapper categoryMapper;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categoryMapper;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -55,7 +60,9 @@ class CategoryHierarchyTests {
         assertEquals(2, categoryMapper.selectById(child).getLevel());
         assertEquals(3, categoryMapper.selectById(third).getLevel());
         for (long id : new long[]{root, child, third}) {
-            assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?", Long.class, id));
+            assertEquals(1L, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?",
+                    Long.class, id));
         }
 
         mockMvc.perform(get("/categories").param("parentId", String.valueOf(root)))

@@ -32,12 +32,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class BrandAdminTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private BrandMapper brandMapper;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private BrandMapper brandMapper;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -61,7 +66,9 @@ class BrandAdminTests {
                 .path("data").path("id").asLong();
         assertEquals(name, brandMapper.selectById(id).getName());
         assertEquals(logoMediaId, brandMapper.selectById(id).getLogoMediaId());
-        assertEquals(1L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?", Long.class, id));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?",
+                Long.class, id));
 
         mockMvc.perform(get("/admin/brands").session(admin))
                 .andExpect(status().isOk())

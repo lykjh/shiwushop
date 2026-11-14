@@ -34,9 +34,9 @@ public class MerchantOrderController {
      */
     @GetMapping("/{id}/orders")
     public Result<OrderSliceVO> orders(@PathVariable @Positive Long id,
-                                      @RequestParam(required = false) Long afterId,
-                                      @RequestParam(defaultValue = "20") int size,
-                                      HttpServletRequest request) {
+                                       @RequestParam(required = false) Long afterId,
+                                       @RequestParam(defaultValue = "20") int size,
+                                       HttpServletRequest request) {
         Long userId = SessionUser.requireId(request);
         if (request.getParameterMap().containsKey("page") || request.getParameterMap().containsKey("includeTotal"))
             throw new BusinessException(400, "订单列表使用游标翻页");
@@ -53,7 +53,7 @@ public class MerchantOrderController {
      */
     @GetMapping("/{shopId}/orders/{orderId}")
     public Result<OrderDetailVO> orderDetail(@PathVariable @Positive Long shopId, @PathVariable @Positive Long orderId,
-                                              HttpServletRequest request) {
+                                             HttpServletRequest request) {
         return Result.success(orderService.detailMerchant(SessionUser.requireId(request), shopId, orderId));
     }
 }

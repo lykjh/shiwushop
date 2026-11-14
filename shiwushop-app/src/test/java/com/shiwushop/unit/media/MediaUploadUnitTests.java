@@ -39,7 +39,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MediaUploadUnitTests {
-    @TempDir Path root;
+    @TempDir
+    Path root;
 
     @Test
     void streamsOriginalWithoutMaterializingMultipartBytes() throws Exception {
@@ -84,49 +85,71 @@ class MediaUploadUnitTests {
             assertEquals(0, files.count());
         }
     }
-    @Test void waitsForBusyProcessorAndRejectsOnlyWhenWaitingRoomIsFull() throws Exception {
+
+    @Test
+    void waitsForBusyProcessorAndRejectsOnlyWhenWaitingRoomIsFull() throws Exception {
         var service = service(1, 1, 3000);
-        var started = new CountDownLatch(1); var release = new CountDownLatch(1);
-        var blocked = heldImage(started, release); var normal = image();
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var blocked = heldImage(started, release);
+        var normal = image();
         try (var workers = Executors.newFixedThreadPool(2)) {
             try {
                 var first = workers.submit(() -> service.upload(1L, blocked));
                 assertTrue(started.await(3, TimeUnit.SECONDS));
                 var thread = new AtomicReference<Thread>();
-                var second = workers.submit(() -> {thread.set(Thread.currentThread()); return service.upload(1L, normal);});
+                var second = workers.submit(() -> {
+                    thread.set(Thread.currentThread());
+                    return service.upload(1L, normal);
+                });
                 awaitWaiting(thread);
                 var rejected = assertThrows(BusinessException.class, () -> service.upload(1L, normal));
                 assertEquals(429, rejected.getCode());
-                assertEquals(1, ((Map<?,?>) rejected.getData()).get("retryAfterSeconds"));
+                assertEquals(1, ((Map<?, ?>) rejected.getData()).get("retryAfterSeconds"));
                 release.countDown();
                 assertTrue(first.get(5, TimeUnit.SECONDS) > 0);
                 assertTrue(second.get(5, TimeUnit.SECONDS) > 0);
                 assertTrue(service.upload(1L, normal) > 0);
-            } finally {release.countDown();}
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void timeoutReturnsItsWaitingPlaceForTheNextRequest() throws Exception {
+    @Test
+    void timeoutReturnsItsWaitingPlaceForTheNextRequest() throws Exception {
         var service = service(1, 1, 250);
-        var started = new CountDownLatch(1); var release = new CountDownLatch(1);
-        var blocked = heldImage(started, release); var normal = image();
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var blocked = heldImage(started, release);
+        var normal = image();
         try (var workers = Executors.newFixedThreadPool(2)) {
             try {
                 var first = workers.submit(() -> service.upload(1L, blocked));
                 assertTrue(started.await(3, TimeUnit.SECONDS));
                 assertEquals(429, assertThrows(BusinessException.class, () -> service.upload(1L, normal)).getCode());
                 var thread = new AtomicReference<Thread>();
-                var next = workers.submit(() -> {thread.set(Thread.currentThread()); return service.upload(1L, normal);});
-                awaitWaiting(thread); release.countDown();
-                assertTrue(first.get(5, TimeUnit.SECONDS) > 0); assertTrue(next.get(5, TimeUnit.SECONDS) > 0);
-            } finally {release.countDown();}
+                var next = workers.submit(() -> {
+                    thread.set(Thread.currentThread());
+                    return service.upload(1L, normal);
+                });
+                awaitWaiting(thread);
+                release.countDown();
+                assertTrue(first.get(5, TimeUnit.SECONDS) > 0);
+                assertTrue(next.get(5, TimeUnit.SECONDS) > 0);
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void interruptedWaitPreservesInterruptAndReturnsItsWaitingPlace() throws Exception {
+    @Test
+    void interruptedWaitPreservesInterruptAndReturnsItsWaitingPlace() throws Exception {
         var service = service(1, 1, 3000);
-        var started = new CountDownLatch(1); var release = new CountDownLatch(1);
-        var blocked = heldImage(started, release); var normal = image();
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var blocked = heldImage(started, release);
+        var normal = image();
         try (var workers = Executors.newFixedThreadPool(2)) {
             try {
                 var first = workers.submit(() -> service.upload(1L, blocked));
@@ -135,19 +158,29 @@ class MediaUploadUnitTests {
                 var interrupted = workers.submit(() -> {
                     thread.set(Thread.currentThread());
                     var error = assertThrows(BusinessException.class, () -> service.upload(1L, normal));
-                    assertEquals(503, error.getCode()); return Thread.currentThread().isInterrupted();
+                    assertEquals(503, error.getCode());
+                    return Thread.currentThread().isInterrupted();
                 });
-                awaitWaiting(thread); thread.get().interrupt();
+                awaitWaiting(thread);
+                thread.get().interrupt();
                 assertTrue(interrupted.get(5, TimeUnit.SECONDS));
                 thread.set(null);
-                var next = workers.submit(() -> {thread.set(Thread.currentThread()); return service.upload(1L, normal);});
-                awaitWaiting(thread); release.countDown();
-                assertTrue(first.get(5, TimeUnit.SECONDS) > 0); assertTrue(next.get(5, TimeUnit.SECONDS) > 0);
-            } finally {release.countDown();}
+                var next = workers.submit(() -> {
+                    thread.set(Thread.currentThread());
+                    return service.upload(1L, normal);
+                });
+                awaitWaiting(thread);
+                release.countDown();
+                assertTrue(first.get(5, TimeUnit.SECONDS) > 0);
+                assertTrue(next.get(5, TimeUnit.SECONDS) > 0);
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void failedStorageReadReleasesProcessingAndAdmissionPlaces() throws Exception {
+    @Test
+    void failedStorageReadReleasesProcessingAndAdmissionPlaces() throws Exception {
         var service = service(1, 0, 1000);
         var broken = mock(MultipartFile.class);
         when(broken.getSize()).thenReturn(1L);
@@ -156,17 +189,23 @@ class MediaUploadUnitTests {
         assertTrue(service.upload(1L, image()) > 0);
     }
 
-    @ParameterizedTest @CsvSource({"0,1,10", "1,-1,10", "1,1,0"})
+    @ParameterizedTest
+    @CsvSource({"0,1,10", "1,-1,10", "1,1,0"})
     void invalidCapacityFailsBeforeAcceptingRequests(int concurrent, int waiting, long waitMillis) {
         assertThrows(IllegalArgumentException.class, () -> service(concurrent, waiting, waitMillis));
     }
 
     private MediaServiceImpl service(int concurrent, int waiting, long waitMillis) {
-        var assets = mock(MediaAssetMapper.class); var sequence = new AtomicLong();
-        doAnswer(call -> {((MediaAsset) call.getArgument(0)).setId(sequence.incrementAndGet()); return 1;})
+        var assets = mock(MediaAssetMapper.class);
+        var sequence = new AtomicLong();
+        doAnswer(call -> {
+            ((MediaAsset) call.getArgument(0)).setId(sequence.incrementAndGet());
+            return 1;
+        })
                 .when(assets).insert(any(MediaAsset.class));
         var service = new MediaServiceImpl(assets, mock(AccountAccess.class), concurrent, waiting, waitMillis);
-        ReflectionTestUtils.setField(service, "storageRoot", root.toString()); return service;
+        ReflectionTestUtils.setField(service, "storageRoot", root.toString());
+        return service;
     }
 
     private MultipartFile image() throws Exception {
@@ -177,15 +216,27 @@ class MediaUploadUnitTests {
 
     /** 在原图流读取边界挂起处理者，稳定制造“处理占满”的时序。 */
     private MultipartFile heldImage(CountDownLatch started, CountDownLatch release) throws Exception {
-        byte[] bytes = image().getBytes(); var file = mock(MultipartFile.class);
+        byte[] bytes = image().getBytes();
+        var file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn((long) bytes.length);
         when(file.getInputStream()).thenAnswer(call -> new InputStream() {
             final InputStream source = new ByteArrayInputStream(bytes);
-            @Override public int read() throws IOException {return source.read();}
-            @Override public int read(byte[] buffer, int offset, int length) throws IOException {
+
+            @Override
+            public int read() throws IOException {
+                return source.read();
+            }
+
+            @Override
+            public int read(byte[] buffer, int offset, int length) throws IOException {
                 started.countDown();
-                try {if (!release.await(5, TimeUnit.SECONDS)) throw new IOException("test release timed out");}
-                catch (InterruptedException error) {Thread.currentThread().interrupt(); throw new IOException(error);}
+                try {
+                    if (!release.await(5, TimeUnit.SECONDS))
+                        throw new IOException("test release timed out");
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException(error);
+                }
                 return source.read(buffer, offset, length);
             }
         });
@@ -196,7 +247,8 @@ class MediaUploadUnitTests {
     private void awaitWaiting(AtomicReference<Thread> thread) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         while (System.nanoTime() < deadline) {
-            if (thread.get() != null && thread.get().getState() == Thread.State.TIMED_WAITING) return;
+            if (thread.get() != null && thread.get().getState() == Thread.State.TIMED_WAITING)
+                return;
             Thread.sleep(1);
         }
         throw new AssertionError("request never entered bounded wait");

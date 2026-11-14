@@ -18,6 +18,9 @@ import com.shiwushop.product.mapper.product.ProductOptionValueMapper;
 import com.shiwushop.product.vo.query.product.SkuOptionValueRow;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.*;
 import java.util.function.Function;
 
@@ -34,19 +37,41 @@ public class TradingProductServiceImpl implements TradingProductService {
     private final CategoryService categoryService;
 
     @Override
-    public Sku findSku(Long id) { return skuMapper.selectById(id); }
+    public Sku findSku(Long id) {
+        return skuMapper.selectById(id);
+    }
+
     /** 加入调用方事务；锁在结算提交或回滚时一起释放。 */
     @Override
-    public Sku lockSku(Long id) { return skuMapper.selectForUpdate(id); }
+    public Sku lockSku(Long id) {
+        return skuMapper.selectForUpdate(id);
+    }
+
     @Override
-    public Product findProduct(Long id) { return productMapper.selectById(id); }
+    public Product findProduct(Long id) {
+        return productMapper.selectById(id);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Product requireMarketableProductForUpdate(Long shopId, Long productId) {
+        Product product = productMapper.selectForUpdate(productId);
+        if (product == null || !Objects.equals(shopId, product.getShopId()))
+            throw new BusinessException(404, "商品不存在");
+        if (product.getStatus() != ProductStatus.ON_SALE)
+            throw new BusinessException(409, "商品已下架");
+        return product;
+    }
+
     /** 查询店铺和分类状态后，返回该数量不可下单的原因；可购买时返回 null。 */
     @Override
     public String unavailableReason(Sku sku, Product product, int quantity) {
         String reason = productUnavailableReason(sku, product);
-        if (reason != null) return reason;
+        if (reason != null)
+            return reason;
         Shop shop = shopService.findById(product.getShopId());
-        if (shop == null || !Integer.valueOf(1).equals(shop.getEnabled())) return "店铺已暂停营业";
+        if (shop == null || !shop.isTradingEnabled())
+            return "店铺已暂停营业";
         boolean visible;
         try {
             categoryService.detail(product.getCategoryId());
@@ -60,26 +85,35 @@ public class TradingProductServiceImpl implements TradingProductService {
     /** 复用调用方已装载的数据判定可售性，避免列表逐项重复查询。 */
     private String unavailableReason(Sku sku, Product product, int quantity, Shop shop, boolean categoryVisible) {
         String reason = productUnavailableReason(sku, product);
-        if (reason != null) return reason;
-        if (shop == null || !Integer.valueOf(1).equals(shop.getEnabled())) return "店铺已暂停营业";
+        if (reason != null)
+            return reason;
+        if (shop == null || !shop.isTradingEnabled())
+            return "店铺已暂停营业";
         return stockOrCategoryReason(sku, quantity, categoryVisible);
     }
 
     private String productUnavailableReason(Sku sku, Product product) {
-        if (sku == null || product == null) return "商品不存在";
+        if (sku == null || product == null)
+            return "商品不存在";
+        if (!"ACTIVE".equals(sku.getStatus()))
+            return "SKU已停售";
         return product.getStatus() != ProductStatus.ON_SALE ? "商品已下架" : null;
     }
 
     private String stockOrCategoryReason(Sku sku, int quantity, boolean categoryVisible) {
-        if (!categoryVisible) return "分类已隐藏";
-        if (sku.getStock() < quantity) return "库存不足";
+        if (!categoryVisible)
+            return "分类已隐藏";
+        if (sku.getStock() < quantity)
+            return "库存不足";
         return null;
     }
+
     @Override
     public List<String> optionNames(Long skuId) {
         return skuOptionValueMapper.selectValueIds(skuId).stream().map(optionValueMapper::selectById)
                 .filter(Objects::nonNull).map(ProductOptionValue::getValueName).toList();
     }
+
     @Override
     public Map<Long, CartProduct> cartProducts(Map<Long, Integer> quantities) {
         Map<Long, Sku> skus = loadById(quantities.keySet(),
@@ -124,8 +158,8 @@ public class TradingProductServiceImpl implements TradingProductService {
 
     /** 去重后每批最多查询 200 个 ID，避免购物车展示时为每项分别访问数据库。 */
     private <T> Map<Long, T> loadById(Collection<Long> ids,
-                                       Function<Collection<Long>, List<T>> select,
-                                       Function<T, Long> idOf) {
+                                      Function<Collection<Long>, List<T>> select,
+                                      Function<T, Long> idOf) {
         List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(ids));
         Map<Long, T> result = new HashMap<>();
         for (int start = 0; start < distinctIds.size(); start += 200) {
@@ -139,12 +173,13 @@ public class TradingProductServiceImpl implements TradingProductService {
     /** 沿已批量装载的分类父链检查可见性；缺少分类也视为不可购买。 */
     private boolean categoryVisible(Long id, Map<Long, Category> categories) {
         Category current = categories.get(id);
-        if (current == null) return false;
+        if (current == null)
+            return false;
         while (current != null) {
-            if (!Integer.valueOf(1).equals(current.getVisible())) return false;
+            if (!Integer.valueOf(1).equals(current.getVisible()))
+                return false;
             current = current.getParentId() == null ? null : categories.get(current.getParentId());
         }
         return true;
     }
-
 }

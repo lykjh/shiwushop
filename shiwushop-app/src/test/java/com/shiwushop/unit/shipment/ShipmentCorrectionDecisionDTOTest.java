@@ -3,10 +3,12 @@ package com.shiwushop.unit.shipment;
 import com.shiwushop.trade.dto.shipment.correction.ShipmentCorrectionDecisionDTO;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ShipmentCorrectionDecisionDTOTest {
-    @Test void decisionRequiresChoiceAndLimitsRemark() {
+    @Test
+    void decisionRequiresChoiceAndLimitsRemark() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertFalse(validator.validate(new ShipmentCorrectionDecisionDTO(null, null)).isEmpty());

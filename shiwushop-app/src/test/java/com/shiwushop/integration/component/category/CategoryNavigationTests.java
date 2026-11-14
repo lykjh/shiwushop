@@ -21,8 +21,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class CategoryNavigationTests {
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private CategoryMapper categoryMapper;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private CategoryMapper categoryMapper;
 
     @Test
     void listsVisibleRootsAndDirectChildrenWithHasChildren() throws Exception {

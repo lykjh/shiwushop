@@ -3,26 +3,31 @@
 <mapper namespace="com.shiwushop.common.media.mapper.MediaAssetMapper">
     <select id="selectReadyOwnedForUpdate" resultType="long">
         SELECT id FROM media_assets
-        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId} AND status = 'READY'
+        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId} AND status = 'READY' AND purpose = 'PUBLIC'
+        FOR UPDATE
+    </select>
+    <select id="selectReadyCredentialOwnedForUpdate" resultType="long">
+        SELECT id FROM media_assets
+        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId} AND status = 'READY' AND purpose = 'CREDENTIAL'
         FOR UPDATE
     </select>
 
     <select id="selectOwnedStatusForUpdate" resultType="string">
         SELECT status FROM media_assets
-        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId}
+        WHERE id = #{mediaId} AND uploaded_by_user_id = #{userId} AND purpose = 'PUBLIC'
         FOR UPDATE
     </select>
 
     <insert id="insert" parameterType="com.shiwushop.common.media.entity.MediaAsset" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO media_assets
-        (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status)
+        (uploaded_by_user_id, storage_key, mime_type, byte_size, width, height, sha256, status, purpose)
         VALUES (#{uploadedByUserId}, #{storageKey}, #{mimeType}, #{byteSize},
-                #{width}, #{height}, #{sha256}, #{status})
+                #{width}, #{height}, #{sha256}, #{status}, #{purpose})
     </insert>
 
     <select id="selectReady" resultType="com.shiwushop.common.media.entity.MediaAsset">
         SELECT id, uploaded_by_user_id AS uploadedByUserId, storage_key AS storageKey,
-               mime_type AS mimeType, byte_size AS byteSize, width, height, status
+               mime_type AS mimeType, byte_size AS byteSize, width, height, status, purpose
         FROM media_assets WHERE id = #{mediaId} AND status = 'READY'
     </select>
 

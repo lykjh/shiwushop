@@ -49,13 +49,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class SmsLoginFlowTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private UserProfileMapper profiles;
-    @Autowired private UserAccountMapper accounts;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private PhoneLookup lookup;
-    @Autowired private StringRedisTemplate redis;
-    @MockitoBean private SmsSender sender;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private UserProfileMapper profiles;
+    @Autowired
+    private UserAccountMapper accounts;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PhoneLookup lookup;
+    @Autowired
+    private StringRedisTemplate redis;
+    @MockitoBean
+    private SmsSender sender;
 
     private final Map<String, String> sentCodes = new ConcurrentHashMap<>();
     private final List<Long> userIds = new ArrayList<>();
@@ -83,7 +90,7 @@ class SmsLoginFlowTests {
             String digest = lookup.digest(phone);
             String prefix = "shiwushop:sms:{" + digest + "}";
             redis.delete(List.of(prefix + ":sends", prefix + ":cooldown"));
-            for (String purpose : List.of("bind", "login")) {
+            for (String purpose : List.of("bind", "entry")) {
                 redis.delete(prefix + ":" + purpose + ":code");
             }
         }
@@ -103,7 +110,7 @@ class SmsLoginFlowTests {
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String bindingCode = sentCodes.get(phone);
-        mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, bindingCode)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/users/phone/bind/confirm").with(csrf()).session(existing)
@@ -116,32 +123,32 @@ class SmsLoginFlowTests {
                 .isEqualTo(1);
 
         redis.delete("shiwushop:sms:{" + lookup.digest(phone) + "}:cooldown");
-        mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String loginCode = sentCodes.get(phone);
-        var result = mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
+        var result = mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, loginCode)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(userId)).andReturn();
         MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
         assertThat(session.getAttribute("userId")).isEqualTo(userId);
         assertThat(session.getAttribute("authVersion")).isEqualTo(1);
         mvc.perform(get("/users/me").session(session)).andExpect(status().isOk());
-        mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, loginCode)))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void unknownNumberGetsGenericSendResultWithoutSmsOrSession() throws Exception {
+    void retiredRoutesAreAbsentAndNeverSendSms() throws Exception {
         String phone = nextPhone();
         mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(200));
-        verify(sender, never()).send(eq(phone), anyString());
+                        .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, "123456")))
+                .andExpect(status().isNotFound());
         mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, "123456")))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isNotFound());
+        verify(sender, never()).send(anyString(), anyString());
     }
 
     @Test
@@ -162,22 +169,23 @@ class SmsLoginFlowTests {
                 .andExpect(status().isConflict());
 
         redis.delete("shiwushop:sms:{" + lookup.digest(phone) + "}:cooldown");
-        mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String correct = sentCodes.get(phone);
         for (int i = 0; i < 5; i++) {
-            mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
-                            .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, "000000".equals(correct) ? "000001" : "000000")))
+            mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(codeBody(phone, "000000".equals(correct) ? "000001" : "000000")))
                     .andExpect(status().isUnauthorized());
         }
-        mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, correct)))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void providerFailureLeavesNoUsableCodeAndDisabledAccountGetsNoSms() throws Exception {
+    void providerFailureLeavesNoUsableCodeAndDisabledAccountCannotLogin() throws Exception {
         Long userId = createUser();
         String phone = nextPhone();
         doAnswer(call -> {
@@ -201,16 +209,18 @@ class SmsLoginFlowTests {
         clearInvocations(sender);
         jdbc.update("UPDATE user_accounts SET status='DISABLED' WHERE user_id=?", userId);
         redis.delete("shiwushop:sms:{" + digest + "}:cooldown");
-        mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
-        verify(sender, never()).send(eq(phone), anyString());
-        assertThat(sentCodes).isEmpty();
+        verify(sender).send(eq(phone), anyString());
+        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+                        .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void invalidPhoneNeverCallsSmsProvider() throws Exception {
-        mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"bad\"}"))
                 .andExpect(status().isBadRequest());
         verify(sender, never()).send(anyString(), anyString());

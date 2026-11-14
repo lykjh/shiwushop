@@ -25,6 +25,7 @@ import com.shiwushop.product.entity.status.ProductStatus;
 
 import com.shiwushop.user.dto.user.RegisterDTO;
 import com.shiwushop.product.dto.product.ProductStatusUpdateDTO;
+import com.shiwushop.product.dto.product.ProductListingDecisionDTO;
 import com.shiwushop.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -56,20 +57,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantProductStatusTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private ProductService productService;
-    @Autowired private PublicProductService publicProductService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private ProductImageMapper imageMapper;
-    @Autowired private ProductOptionMapper optionMapper;
-    @Autowired private ProductOptionValueMapper valueMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private SkuOptionValueMapper linkMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private ProductService productService;
+    @Autowired
+    private PublicProductService publicProductService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private ProductImageMapper imageMapper;
+    @Autowired
+    private ProductOptionMapper optionMapper;
+    @Autowired
+    private ProductOptionValueMapper valueMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private SkuOptionValueMapper linkMapper;
 
     @Test
     void rejectsInvalidProductIdsAtHttpEntry() throws Exception {
@@ -87,16 +102,20 @@ class MerchantProductStatusTests {
         MockHttpSession session = session(f.owner);
 
         mockMvc.perform(request(f.product.getId(), "ON_SALE", session))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(f.product.getId()))
-                .andExpect(jsonPath("$.data.status").value("ON_SALE"));
+                .andExpect(status().isConflict());
+        Long revision = productMapper.selectById(f.product.getId()).getRevision();
+        productService.submitListing(f.owner, f.product.getId(), revision);
+        Long reviewer = user();
+        jdbcTemplate.update("UPDATE user_accounts SET role='ADMIN' WHERE user_id=?", reviewer);
+        productService.decideListing(reviewer, f.product.getId(),
+                new ProductListingDecisionDTO(revision, true, null));
         assertEquals(ProductStatus.ON_SALE, productMapper.selectById(f.product.getId()).getStatus());
 
         mockMvc.perform(request(f.product.getId(), "OFF_SALE", session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("OFF_SALE"));
         assertEquals(ProductStatus.OFF_SALE, productMapper.selectById(f.product.getId()).getStatus());
-        assertEquals(2, jdbcTemplate.queryForObject(
+        assertEquals(3, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, f.product.getId()));
     }
@@ -216,9 +235,11 @@ class MerchantProductStatusTests {
 
     private void image(Product product, Long owner) {
         String key = "test/product-status-" + UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
-                "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
-        Long mediaId = jdbcTemplate.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class, key);
+        jdbcTemplate.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
+                        "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
+        Long mediaId = jdbcTemplate.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class,
+                key);
         ProductImage image = new ProductImage();
         image.setProductId(product.getId());
         image.setMediaId(mediaId);
@@ -231,7 +252,8 @@ class MerchantProductStatusTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = 'MERCHANT' WHERE username = ?", username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private MockHttpSession session(Long user) {
@@ -240,5 +262,6 @@ class MerchantProductStatusTests {
         return session;
     }
 
-    private record Fixture(Long owner, Shop shop, Product product, Sku sku) {}
+    private record Fixture(Long owner, Shop shop, Product product, Sku sku) {
+    }
 }

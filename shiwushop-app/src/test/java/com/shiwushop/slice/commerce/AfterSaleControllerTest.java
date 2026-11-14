@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,8 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = {AfterSaleController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class AfterSaleControllerTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean AfterSaleService service;
+    @Autowired
+    MockMvc mvc;
+    @MockitoBean
+    AfterSaleService service;
 
     @ParameterizedTest
     @ValueSource(strings = {"{\"type\":\"UNKNOWN\",\"reason\":\"商品损坏\",\"items\":[{\"orderItemId\":1,\"quantity\":1}]}",
@@ -43,6 +46,7 @@ class AfterSaleControllerTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
+
     @ParameterizedTest
     @ValueSource(strings = {"0", "-1", "not-a-number", "9223372036854775808"})
     void rejectsInvalidWithdrawalId(String id) throws Exception {

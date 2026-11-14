@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 @Component
 public class AliyunSmsSender implements SmsSender {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(AliyunSmsSender.class);
     private final String accessKeyId;
     private final String accessKeySecret;
@@ -72,6 +73,5 @@ public class AliyunSmsSender implements SmsSender {
                 throw new BusinessException(429, "验证码发送过于频繁，请稍后再试");
             throw new BusinessException(503, "短信渠道暂时不可用");
         }
-
     }
 }

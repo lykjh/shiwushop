@@ -1,10 +1,12 @@
 package com.shiwushop.slice.user;
+
 import com.shiwushop.support.ControllerSliceSecurity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import com.shiwushop.user.controller.user.SmsEntryController;
@@ -26,11 +28,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SmsEntryController.class)
-@ContextConfiguration(classes={SmsEntryController.class, GlobalExceptionHandler.class})
+@ContextConfiguration(classes = {SmsEntryController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class SmsEntryControllerTests {
-    @MockitoBean private SmsEntryService service;
-    @Autowired private MockMvc mvc;
+    @MockitoBean
+    private SmsEntryService service;
+    @Autowired
+    private MockMvc mvc;
 
     @Test
     void threeRoutesForwardValidatedFieldsAndKeepTheirResponseShapes() throws Exception {
@@ -42,15 +46,15 @@ class SmsEntryControllerTests {
                 .thenReturn(new LoginVO(7L, "swaccount"));
 
         mvc.perform(post("/users/sms/entry/send").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"phone\":\"13800000000\"}"))
+                        .content("{\"phone\":\"13800000000\"}"))
                 .andExpect(status().isOk());
         verify(service).sendCode(org.mockito.ArgumentMatchers.eq("13800000000"), any());
         mvc.perform(post("/users/sms/entry/verify").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"phone\":\"13800000000\",\"code\":\"123456\"}"))
+                        .content("{\"phone\":\"13800000000\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.state").value("SET_PASSWORD_REQUIRED"));
         mvc.perform(post("/users/sms/entry/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"phone\":\"13800000000\",\"registrationTicket\":\"ticket\",\"password\":\"Shop123!\"}"))
+                        .content("{\"phone\":\"13800000000\",\"registrationTicket\":\"ticket\",\"password\":\"Shop123!\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.username").value("swaccount"));
     }
 }

@@ -1,10 +1,10 @@
 package com.shiwushop.integration.component.media;
 
 import com.shiwushop.support.TestRegistration;
+import com.shiwushop.support.LoginTestRequest;
 
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.user.dto.user.RegisterDTO;
-import com.shiwushop.support.LoginTestRequest;
 import com.shiwushop.user.service.RegisterService;
 import com.shiwushop.common.media.service.MediaService;
 import com.shiwushop.common.media.MediaOrphanCleanup;
@@ -42,20 +42,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = "shop.media.root=./target/media-security-tests")
 class MediaSecurityTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private MediaService mediaService;
-    @Autowired private MediaOrphanCleanup orphanCleanup;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private MediaService mediaService;
+    @Autowired
+    private MediaOrphanCleanup orphanCleanup;
+    @Autowired
+    private JdbcTemplate jdbc;
     private final List<Long> userIds = new ArrayList<>();
     private final List<Long> mediaIds = new ArrayList<>();
     private final List<Long> productIds = new ArrayList<>();
@@ -72,13 +79,14 @@ class MediaSecurityTests {
         ImageIO.write(image, "png", source);
         byte[] input = source.toByteArray();
         String response = mvc.perform(multipart("/media").file(new MockMultipartFile(
-                        "file", "misleading.jpg", "text/plain", input)).session(owner))
+                        "file", "misleading.jpg", "text/plain", input)).session(owner).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").isNumber())
                 .andReturn().getResponse().getContentAsString();
         Long mediaId = ((Number) JsonPath.read(response, "$.data.id")).longValue();
         mediaIds.add(mediaId);
-        assertEquals("image/png", jdbc.queryForObject("SELECT mime_type FROM media_assets WHERE id=?", String.class, mediaId));
+        assertEquals("image/png",
+                jdbc.queryForObject("SELECT mime_type FROM media_assets WHERE id=?", String.class, mediaId));
         byte[] output = mvc.perform(get("/media/{id}", mediaId).session(owner))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
@@ -90,11 +98,13 @@ class MediaSecurityTests {
         mvc.perform(get("/media/{id}", mediaId).session(other)).andExpect(status().isNotFound());
 
         String suffix = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO shops (owner_user_id,name,enabled) VALUES (?,?,1)", userIds.getFirst(), "媒体店铺" + suffix);
+        jdbc.update("INSERT INTO shops (owner_user_id,name,enabled) VALUES (?,?,1)", userIds.getFirst(),
+                "媒体店铺" + suffix);
         Long shopId = jdbc.queryForObject("SELECT id FROM shops WHERE name=?", Long.class, "媒体店铺" + suffix);
         shopIds.add(shopId);
         jdbc.update("INSERT INTO categories (name,level,visible,sort_order) VALUES (?,1,1,0)", "媒体分类" + suffix);
-        Long categoryId = jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, "媒体分类" + suffix);
+        Long categoryId = jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class,
+                "媒体分类" + suffix);
         categoryIds.add(categoryId);
         jdbc.update("INSERT INTO products (shop_id,category_id,name,status) VALUES (?,?,?,'ON_SALE')",
                 shopId, categoryId, "媒体商品" + suffix);
@@ -123,10 +133,10 @@ class MediaSecurityTests {
         MockHttpSession owner = account();
         int before = jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class);
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "fake.png", "image/png",
-                        "<script>alert(1)</script>".getBytes())).session(owner))
+                        "<script>alert(1)</script>".getBytes())).session(owner).with(csrf()))
                 .andExpect(status().isBadRequest());
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "large.png", "image/png",
-                        new byte[10 * 1024 * 1024 + 1])).session(owner))
+                        new byte[10 * 1024 * 1024 + 1])).session(owner).with(csrf()))
                 .andExpect(status().isPayloadTooLarge());
         ByteArrayOutputStream small = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB), "png", small);
@@ -136,7 +146,7 @@ class MediaSecurityTests {
         crc.update(pixelBomb, 12, 17);
         ByteBuffer.wrap(pixelBomb, 29, 4).putInt((int) crc.getValue());
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "bomb.png", "image/png",
-                        pixelBomb)).session(owner))
+                        pixelBomb)).session(owner).with(csrf()))
                 .andExpect(status().isPayloadTooLarge());
         assertEquals(before, jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class));
     }
@@ -154,7 +164,7 @@ class MediaSecurityTests {
         try {
             ReflectionTestUtils.setField(mediaService, "storageRoot", blocker.resolve("images").toString());
             mvc.perform(multipart("/media").file(new MockMultipartFile("file", "test.png", "image/png",
-                            image.toByteArray())).session(owner))
+                            image.toByteArray())).session(owner).with(csrf()))
                     .andExpect(status().isServiceUnavailable())
                     .andExpect(jsonPath("$.message").value("图片暂时无法保存"));
             assertEquals(before, jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class));
@@ -176,7 +186,8 @@ class MediaSecurityTests {
         FileTime old = FileTime.from(Instant.now().minus(48, ChronoUnit.HOURS));
         Files.setLastModifiedTime(retained, old);
         Files.setLastModifiedTime(orphan, old);
-        jdbc.update("INSERT INTO media_assets (uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) "
+        jdbc.update(
+                "INSERT INTO media_assets (uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) "
                         + "VALUES (?,?,'image/png',8,1,1,UNHEX(SHA2(?,256)),'READY')",
                 userIds.getFirst(), retainedKey, retainedKey);
         mediaIds.add(jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key=?", Long.class, retainedKey));
@@ -201,8 +212,10 @@ class MediaSecurityTests {
             jdbc.update("DELETE FROM product_images WHERE product_id=?", id);
             jdbc.update("DELETE FROM products WHERE id=?", id);
         }
-        for (Long id : categoryIds) jdbc.update("DELETE FROM categories WHERE id=?", id);
-        for (Long id : shopIds) jdbc.update("DELETE FROM shops WHERE id=?", id);
+        for (Long id : categoryIds)
+            jdbc.update("DELETE FROM categories WHERE id=?", id);
+        for (Long id : shopIds)
+            jdbc.update("DELETE FROM shops WHERE id=?", id);
         for (Long id : mediaIds) {
             String key = jdbc.queryForObject("SELECT storage_key FROM media_assets WHERE id=?", String.class, id);
             jdbc.update("DELETE FROM media_assets WHERE id=?", id);

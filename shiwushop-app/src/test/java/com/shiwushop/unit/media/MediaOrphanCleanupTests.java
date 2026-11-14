@@ -19,7 +19,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class MediaOrphanCleanupTests {
-    @TempDir Path root;
+    @TempDir
+    Path root;
 
     @Test
     void removesOnlyOldUnreferencedImagesAndUploadTemps() throws Exception {

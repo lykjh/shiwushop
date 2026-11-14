@@ -40,16 +40,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class MerchantOrderListTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private ShopMapper shops;
-    @Autowired private OrderMapper orders;
-    @Autowired private CategoryMapper categories;
-    @Autowired private ProductMapper products;
-    @Autowired private SkuMapper skus;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private OrderMapper orders;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private ProductMapper products;
+    @Autowired
+    private SkuMapper skus;
 
     @Test
     void pagesOwnShopOrdersEvenWhenPaused() throws Exception {
@@ -57,7 +67,9 @@ class MerchantOrderListTests {
         Shop shop = shop(owner, 0), foreign = shop(nextOwner, 1);
         Order oldest = order(buyer, shop), newest = order(buyer, shop);
         Order foreignOrder = order(buyer, foreign);
-        item(oldest, 1); item(oldest, 2); item(newest, 1);
+        item(oldest, 1);
+        item(oldest, 2);
+        item(newest, 1);
         mvc.perform(get("/merchant/shops/{id}/orders?size=1", shop.getId()).session(session(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].id").value(newest.getId()))
@@ -72,7 +84,8 @@ class MerchantOrderListTests {
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId())
                         .param("afterId", foreignOrder.getId().toString()).session(session(owner)))
                 .andExpect(status().isBadRequest());
-        shop.setOwnerUserId(nextOwner); shops.updateById(shop);
+        shop.setOwnerUserId(nextOwner);
+        shops.updateById(shop);
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(owner)))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(nextOwner)))
@@ -103,31 +116,60 @@ class MerchantOrderListTests {
         jdbc.update("UPDATE user_accounts SET role=? WHERE username=?", role, username);
         return jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username=?", Long.class, username);
     }
+
     private MockHttpSession session(Long userId) {
-        MockHttpSession session = new MockHttpSession(); session.setAttribute("userId", userId); return session;
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("userId", userId);
+        return session;
     }
+
     private Shop shop(Long owner, int enabled) {
-        Shop s = new Shop(); s.setOwnerUserId(owner); s.setName("店铺-" + UUID.randomUUID());
-        s.setEnabled(enabled); shops.insert(s); return s;
+        Shop s = new Shop();
+        s.setOwnerUserId(owner);
+        s.setName("店铺-" + UUID.randomUUID());
+        s.setEnabled(enabled);
+        shops.insert(s);
+        return s;
     }
+
     private Order order(Long buyer, Shop shop) {
-        Order o = new Order(); o.setUserId(buyer); o.setShopId(shop.getId());
-        o.setTotalAmount(new BigDecimal("10.00")); o.setStatus(OrderStatus.UNPAID);
+        Order o = new Order();
+        o.setUserId(buyer);
+        o.setShopId(shop.getId());
+        o.setTotalAmount(new BigDecimal("10.00"));
+        o.setStatus(OrderStatus.UNPAID);
         o.setPayExpiresAt(LocalDateTime.now().plusMinutes(15));
         o.setConsigneeCiphertext(cipher.encrypt(buyer, "orders:consignee", "张三"));
         o.setPhoneCiphertext(cipher.encrypt(buyer, "orders:phone", "13800138000"));
         o.setDetailCiphertext(cipher.encrypt(buyer, "orders:detail", "测试地址"));
-        o.setProvince("北京市"); o.setCity("北京市"); o.setDistrict("海淀区");
-        o.setShippingKeyVersion(1); orders.insert(o); return o;
+        o.setProvince("北京市");
+        o.setCity("北京市");
+        o.setDistrict("海淀区");
+        o.setShippingKeyVersion(1);
+        orders.insert(o);
+        return o;
     }
+
     private void item(Order order, int index) {
-        Category category = new Category(); category.setName("分类-" + UUID.randomUUID());
-        category.setLevel(1); category.setVisible(1); category.setSortOrder(0); categories.insert(category);
-        Product product = new Product(); product.setShopId(order.getShopId()); product.setCategoryId(category.getId());
-        product.setName("商品-" + UUID.randomUUID()); product.setStatus(ProductStatus.DRAFT); products.insert(product);
-        Sku sku = new Sku(); sku.setProductId(product.getId());
-        String hex = UUID.randomUUID().toString().replace("-", ""); sku.setOptionSignature(hex + hex);
-        sku.setPrice(new BigDecimal("10.00")); sku.setStock(1); skus.insert(sku);
+        Category category = new Category();
+        category.setName("分类-" + UUID.randomUUID());
+        category.setLevel(1);
+        category.setVisible(1);
+        category.setSortOrder(0);
+        categories.insert(category);
+        Product product = new Product();
+        product.setShopId(order.getShopId());
+        product.setCategoryId(category.getId());
+        product.setName("商品-" + UUID.randomUUID());
+        product.setStatus(ProductStatus.DRAFT);
+        products.insert(product);
+        Sku sku = new Sku();
+        sku.setProductId(product.getId());
+        String hex = UUID.randomUUID().toString().replace("-", "");
+        sku.setOptionSignature(hex + hex);
+        sku.setPrice(new BigDecimal("10.00"));
+        sku.setStock(1);
+        skus.insert(sku);
         jdbc.update("INSERT INTO order_items(order_id,sku_id,product_name,sku_spec,quantity,unit_price) " +
                 "VALUES (?,?,?,?,1,10.00)", order.getId(), sku.getId(), "商品", "规格" + index);
     }

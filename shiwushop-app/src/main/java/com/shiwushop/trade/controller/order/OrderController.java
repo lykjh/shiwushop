@@ -15,13 +15,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-
 @RestController
 @RequestMapping("/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
     private final OrderService orderService;
+
     /** 读取当前买家的指定订单详情；订单归属由服务层确认。 */
     @GetMapping("/{id}")
     public Result<OrderDetailVO> detail(@PathVariable Long id, HttpServletRequest request) {
@@ -31,12 +31,11 @@ public class OrderController {
     /** 使用订单 ID 游标列出当前买家的订单；拒绝页码和总数参数。 */
     @GetMapping
     public Result<OrderSliceVO> list(@RequestParam(required = false) Long afterId,
-                                    @RequestParam(defaultValue = "20") int size,
-                                    HttpServletRequest request) {
+                                     @RequestParam(defaultValue = "20") int size,
+                                     HttpServletRequest request) {
         Long userId = SessionUser.requireId(request);
         if (request.getParameterMap().containsKey("page") || request.getParameterMap().containsKey("includeTotal"))
             throw new BusinessException(400, "订单列表使用游标翻页");
         return Result.success(orderService.list(userId, afterId, size));
     }
-
 }

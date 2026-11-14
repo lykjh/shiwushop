@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 负责密码登录、会话和当前账号入口；短信登录由 SmsLoginController 处理。 */
+/** 负责密码登录、会话和当前账号入口；短信登录由 SmsEntryController 处理。 */
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -48,7 +48,8 @@ public class LoginController {
         if (session != null) {
             Long userId = SessionUser.currentId(request);
             session.invalidate();
-            if (userId != null) BusinessEventLog.committed("user", "logout", "user", userId);
+            if (userId != null)
+                BusinessEventLog.committed("user", "logout", "user", userId);
         }
         return Result.success();
     }

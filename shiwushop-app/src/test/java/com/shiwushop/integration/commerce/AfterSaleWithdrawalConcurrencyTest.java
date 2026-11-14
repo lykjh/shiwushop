@@ -4,7 +4,7 @@ import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
 import com.shiwushop.aftersale.service.AfterSaleService;
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.support.CommerceFixture;
 import com.shiwushop.support.PaymentHttpFixture;
 import com.shiwushop.trade.service.AfterSaleOrderService;
@@ -36,11 +36,16 @@ import static org.mockito.Mockito.doAnswer;
         "spring.autoconfigure.exclude=", "spring.datasource.hikari.maximum-pool-size=2",
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 class AfterSaleWithdrawalConcurrencyTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired AfterSaleService service;
-    @MockitoBean SdkAlipayGateway gateway;
-    @MockitoSpyBean AfterSaleOrderService orders;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Autowired
+    AfterSaleService service;
+    @MockitoBean(name = "localSimulationGateway")
+    LocalSimulationGateway gateway;
+    @MockitoSpyBean
+    AfterSaleOrderService orders;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -71,19 +76,22 @@ class AfterSaleWithdrawalConcurrencyTest {
                 });
                 try {
                     assertTrue(entered.await(10, TimeUnit.SECONDS));
-                    service.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale, new AfterSaleReviewDTO(true, null));
+                    service.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale,
+                            new AfterSaleReviewDTO(true, null));
                 } finally {
                     release.countDown();
                 }
                 var failure = assertThrows(ExecutionException.class, () -> pending.get(10, TimeUnit.SECONDS));
                 assertInstanceOf(BusinessException.class, failure.getCause());
                 assertEquals(409, ((BusinessException) failure.getCause()).getCode());
-                assertEquals("REFUNDING", jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
+                assertEquals("REFUNDING",
+                        jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
             } finally {
                 release.countDown();
             }
         }
     }
+
     @Test
     void shipmentBeforeWithdrawalOrderLockAllowsOnlyShipment() throws Exception {
         PaymentHttpFixture.configure(gateway);
@@ -123,13 +131,17 @@ class AfterSaleWithdrawalConcurrencyTest {
                 var failure = assertThrows(ExecutionException.class, () -> pending.get(10, TimeUnit.SECONDS));
                 assertInstanceOf(BusinessException.class, failure.getCause());
                 assertEquals(409, ((BusinessException) failure.getCause()).getCode());
-                assertEquals("WAITING_RECEIPT", jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
-                assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM return_shipments WHERE case_id=?", Integer.class, sale));
+                assertEquals("WAITING_RECEIPT",
+                        jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
+                assertEquals(1,
+                        jdbc.queryForObject("SELECT COUNT(*) FROM return_shipments WHERE case_id=?", Integer.class,
+                                sale));
             } finally {
                 release.countDown();
             }
         }
     }
+
     @Test
     void withdrawalHoldingOrderLockMakesConcurrentReviewFail() throws Exception {
         PaymentHttpFixture.configure(gateway);
@@ -162,7 +174,8 @@ class AfterSaleWithdrawalConcurrencyTest {
                     assertTrue(locked.await(10, TimeUnit.SECONDS));
                     var review = pool.submit(() -> {
                         reviewStarted.countDown();
-                        return service.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale, new AfterSaleReviewDTO(true, null));
+                        return service.review(fixture.catalog.merchant.id(), fixture.catalog.shop, sale,
+                                new AfterSaleReviewDTO(true, null));
                     });
                     assertTrue(reviewStarted.await(10, TimeUnit.SECONDS));
                     assertThrows(TimeoutException.class, () -> review.get(300, TimeUnit.MILLISECONDS));
@@ -171,7 +184,8 @@ class AfterSaleWithdrawalConcurrencyTest {
                     var failure = assertThrows(ExecutionException.class, () -> review.get(10, TimeUnit.SECONDS));
                     assertInstanceOf(BusinessException.class, failure.getCause());
                     assertEquals(409, ((BusinessException) failure.getCause()).getCode());
-                    assertEquals("CLOSED", jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
+                    assertEquals("CLOSED",
+                            jdbc.queryForObject("SELECT status FROM after_sale_cases WHERE id=?", String.class, sale));
                 } finally {
                     release.countDown();
                 }

@@ -11,13 +11,18 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.ObjectMapper;
+
 import java.sql.DriverManager;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.springframework.beans.factory.annotation.Value;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,11 +32,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class UserProfileHttpTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
-    @Value("${spring.datasource.url}") String url;
-    @Value("${spring.datasource.username}") String dbUser;
-    @Value("${spring.datasource.password}") String dbPassword;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Value("${spring.datasource.url}")
+    String url;
+    @Value("${spring.datasource.username}")
+    String dbUser;
+    @Value("${spring.datasource.password}")
+    String dbPassword;
     TestAccounts accounts;
     TestAccounts.Account user;
     TestAccounts.Account other;
@@ -55,12 +65,14 @@ class UserProfileHttpTest {
         client.close();
         jdbc.update("UPDATE users SET avatar_media_id=NULL WHERE id IN (?,?)", user.id(), other.id());
         jdbc.update("DELETE FROM media_assets WHERE uploaded_by_user_id IN (?,?)", user.id(), other.id());
+        jdbc.update("DELETE FROM user_private WHERE user_id IN (?,?)", user.id(), other.id());
         accounts.close();
     }
 
     long media(long owner, String status) {
         String key = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) VALUES (?,?, 'image/png',1,1,1,?,?)",
+        jdbc.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) VALUES (?,?, 'image/png',1,1,1,?,?)",
                 owner, key, new byte[32], status);
         return jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key=?", Long.class, key);
     }
@@ -81,9 +93,64 @@ class UserProfileHttpTest {
         assertEquals("😀", json.readTree(response.body()).path("data").path("nickname").asString());
         assertEquals(200, client.request("PUT", "/users/profile", body("b", second)).statusCode());
         assertEquals(200, client.request("PUT", "/users/profile", body("b", second)).statusCode());
-        assertEquals(second, jdbc.queryForObject("SELECT avatar_media_id FROM users WHERE id=?", Long.class, user.id()));
+        assertEquals(second,
+                jdbc.queryForObject("SELECT avatar_media_id FROM users WHERE id=?", Long.class, user.id()));
         assertEquals(200, client.request("PUT", "/users/profile", body("b", null)).statusCode());
         assertNull(jdbc.queryForObject("SELECT avatar_media_id FROM users WHERE id=?", Long.class, user.id()));
+    }
+
+    @Test
+    void emailIsPrivateAndOldRequestsPreserveItUntilExplicitClear() throws Exception {
+        byte[] phoneCiphertext = new byte[]{1, 2, 3};
+        jdbc.update("INSERT INTO user_private(user_id,phone_ciphertext,key_version) VALUES(?,?,1)",
+                user.id(), phoneCiphertext);
+        var save = body("first", null);
+        save.put("email", "Reader+tag@GMAIL.com");
+        var response = client.request("PUT", "/users/profile", save);
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("Reader+tag@GMAIL.com", json.readTree(response.body()).path("data").path("email").asString());
+        byte[] stored = jdbc.queryForObject("SELECT email_ciphertext FROM user_private WHERE user_id=?", byte[].class, user.id());
+        assertTrue(stored != null && !Arrays.equals(stored, "Reader+tag@GMAIL.com".getBytes(StandardCharsets.UTF_8)));
+        assertTrue(Arrays.equals(phoneCiphertext,
+                jdbc.queryForObject("SELECT phone_ciphertext FROM user_private WHERE user_id=?", byte[].class, user.id())));
+        assertEquals(200, client.request("PUT", "/users/profile", body("second", null)).statusCode());
+        assertEquals("Reader+tag@GMAIL.com",
+                json.readTree(client.get("/users/profile").body()).path("data").path("email").asString());
+        try (var stranger = new HttpAccountClient("http://127.0.0.1:" + port)) {
+            stranger.csrf();
+            assertEquals(200, stranger.post("/users/login", Map.of(
+                    "username", other.username(), "password", other.password())).statusCode());
+            assertTrue(json.readTree(stranger.get("/users/profile").body()).path("data").path("email").isNull());
+        }
+        var clear = body("second", null);
+        clear.put("email", null);
+        assertEquals(200, client.request("PUT", "/users/profile", clear).statusCode());
+        assertTrue(json.readTree(client.get("/users/profile").body()).path("data").path("email").isNull());
+        assertNull(jdbc.queryForObject("SELECT email_ciphertext FROM user_private WHERE user_id=?", byte[].class, user.id()));
+        assertTrue(Arrays.equals(phoneCiphertext,
+                jdbc.queryForObject("SELECT phone_ciphertext FROM user_private WHERE user_id=?", byte[].class, user.id())));
+    }
+
+    @Test
+    void emailRejectsInvalidValuesWithoutChangingProfile() throws Exception {
+        var save = body("original", null);
+        save.put("email", "a@qq.com");
+        assertEquals(200, client.request("PUT", "/users/profile", save).statusCode());
+        for (String invalid : new String[]{"", " a@qq.com", "a@qq.com ", "a@example.com", "a..b@gmail.com",
+                "a".repeat(65) + "@163.com", "无@qq.com"}) {
+            var candidate = body("changed", null);
+            candidate.put("email", invalid);
+            assertEquals(400, client.request("PUT", "/users/profile", candidate).statusCode(), invalid);
+        }
+        assertEquals("original", jdbc.queryForObject("SELECT nickname FROM users WHERE id=?", String.class, user.id()));
+        assertEquals("a@qq.com",
+                json.readTree(client.get("/users/profile").body()).path("data").path("email").asString());
+        var max = body("max", null);
+        max.put("email", "a".repeat(64) + "@gmail.com");
+        assertEquals(200, client.request("PUT", "/users/profile", max).statusCode());
+        assertEquals("max", jdbc.queryForObject("SELECT nickname FROM users WHERE id=?", String.class, user.id()));
+        assertEquals("a".repeat(64) + "@gmail.com",
+                json.readTree(client.get("/users/profile").body()).path("data").path("email").asString());
     }
 
     @Test
@@ -103,7 +170,8 @@ class UserProfileHttpTest {
     void acceptsFortySupplementaryCharactersAndRejectsFortyOne() throws Exception {
         assertEquals(200, client.request("PUT", "/users/profile", body("😀".repeat(40), null)).statusCode());
         assertEquals(400, client.request("PUT", "/users/profile", body("😀".repeat(41), null)).statusCode());
-        assertEquals("😀".repeat(40), json.readTree(client.get("/users/profile").body()).path("data").path("nickname").asString());
+        assertEquals("😀".repeat(40),
+                json.readTree(client.get("/users/profile").body()).path("data").path("nickname").asString());
     }
 
     @Test
@@ -116,9 +184,11 @@ class UserProfileHttpTest {
 
     @Test
     void updatingProfileDoesNotChangeAccountFields() throws Exception {
-        var before = jdbc.queryForMap("SELECT username,password_hash,role FROM user_accounts WHERE user_id=?", user.id());
+        var before = jdbc.queryForMap("SELECT username,password_hash,role FROM user_accounts WHERE user_id=?",
+                user.id());
         assertEquals(200, client.request("PUT", "/users/profile", body("b", null)).statusCode());
-        assertEquals(before, jdbc.queryForMap("SELECT username,password_hash,role FROM user_accounts WHERE user_id=?", user.id()));
+        assertEquals(before,
+                jdbc.queryForMap("SELECT username,password_hash,role FROM user_accounts WHERE user_id=?", user.id()));
     }
 
     @Test
@@ -126,8 +196,11 @@ class UserProfileHttpTest {
         assertEquals(200, client.request("PUT", "/users/profile", body("mine", null)).statusCode());
         try (var stranger = new HttpAccountClient("http://127.0.0.1:" + port)) {
             stranger.csrf();
-            assertEquals(200, stranger.post("/users/login", Map.of("username", other.username(), "password", other.password())).statusCode());
-            assertEquals(other.username(), json.readTree(stranger.get("/users/profile").body()).path("data").path("nickname").asString());
+            assertEquals(200,
+                    stranger.post("/users/login", Map.of("username", other.username(), "password", other.password()))
+                            .statusCode());
+            assertEquals(other.username(),
+                    json.readTree(stranger.get("/users/profile").body()).path("data").path("nickname").asString());
         }
     }
 

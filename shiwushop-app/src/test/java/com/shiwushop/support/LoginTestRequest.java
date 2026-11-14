@@ -11,7 +11,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /** Supplies a test-only session-bound proof; image matching is outside these login tests. */
 public final class LoginTestRequest {
-    private LoginTestRequest() {}
+    private LoginTestRequest() {
+    }
 
     public static MockHttpServletRequestBuilder login(CaptchaProofStore proofs, String username, String password) {
         MockHttpSession session = new MockHttpSession();

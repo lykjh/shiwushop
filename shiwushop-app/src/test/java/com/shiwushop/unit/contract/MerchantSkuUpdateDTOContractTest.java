@@ -5,6 +5,7 @@ import com.shiwushop.support.DtoContract;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
 import java.util.stream.Stream;
 
 /** MerchantSkuUpdateDTO 的必填、格式及临界值；不启动容器。 */
@@ -23,8 +24,10 @@ class MerchantSkuUpdateDTOContractTest {
                 Arguments.of("stock 非法边界 6", "{\"price\":\"19.90\",\"stock\":null}", false),
                 Arguments.of("stock 非法边界 7", "{\"price\":\"19.90\",\"stock\":-1}", false));
     }
-    @ParameterizedTest(name="{0}") @MethodSource("boundaries")
-    void verifiesBoundary(String name,String body,boolean valid) {
-        DtoContract.verify(MerchantSkuUpdateDTO.class,body,valid);
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("boundaries")
+    void verifiesBoundary(String name, String body, boolean valid) {
+        DtoContract.verify(MerchantSkuUpdateDTO.class, body, valid);
     }
 }

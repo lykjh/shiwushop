@@ -12,16 +12,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class RegisterDTO {
 
+    /** 登录用户名。 */
     @NotBlank(message = "账号不能为空")
-    @Size(min=4,max=100,message = "账号长度在4到100个字符之间")
-    @Pattern(regexp = "[a-zA-Z0-9._-]+",message = "账号只能包含字母、数字、点、下划线和连字符")
+    @Size(min = 4, max = 100, message = "账号长度在4到100个字符之间")
+    @Pattern(regexp = "[a-zA-Z0-9._-]+", message = "账号只能包含字母、数字、点、下划线和连字符")
     private String username;
+    /** 用户提交的明文密码，仅用于当前认证或注册处理。 */
     @NotBlank(message = "密码不能为空")
-    @Size(min=8,max=72,message = "密码长度在8到72个字符之间")
+    @Size(min = 8, max = 72, message = "密码长度在8到72个字符之间")
     @Pattern(regexp = "[!-~]*", message = "密码只能包含字母、数字和特定符号")
     private String password;
 
     // 注册时提交当前 Session 的一次性滑块凭证。
     private String captchaProof;
-
 }

@@ -58,19 +58,32 @@ import static org.mockito.Mockito.doAnswer;
 
 @SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=20")
 class ShopOwnerOtherWriteRaceTests {
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private RegisterService users;
-    @Autowired private ShopService shops;
-    @Autowired private ProductService products;
-    @Autowired private ShipmentService shipments;
-    @Autowired private AfterSaleService afterSales;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private PrivacyCipher cipher;
-    @MockitoSpyBean private MerchantShopAccess merchantAccess;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private ShopService shops;
+    @Autowired
+    private ProductService products;
+    @Autowired
+    private ShipmentService shipments;
+    @Autowired
+    private AfterSaleService afterSales;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PrivacyCipher cipher;
+    @MockitoSpyBean
+    private MerchantShopAccess merchantAccess;
 
     @Test
     void transferredShopRejectsAllInFlightMerchantWrites() throws Exception {
@@ -99,11 +112,15 @@ class ShopOwnerOtherWriteRaceTests {
 
         CountDownLatch checkedOwner = new CountDownLatch(10);
         CountDownLatch proceed = new CountDownLatch(1);
-        doAnswer(call -> {
+        org.mockito.stubbing.Answer<Object> beforeShopLock = call -> {
             checkedOwner.countDown();
             assertTrue(proceed.await(10, TimeUnit.SECONDS));
             return call.callRealMethod();
-        }).when(merchantAccess).requireOwnedForUpdate(eq(oldOwner), eq(shop.getId()), anyString());
+        };
+        doAnswer(beforeShopLock).when(merchantAccess)
+                .requireOwnedForUpdate(eq(oldOwner), eq(shop.getId()), anyString());
+        doAnswer(beforeShopLock).when(merchantAccess)
+                .requireRoleForUpdate(eq(oldOwner), eq(shop.getId()), anyString(), anyString());
 
         try (var workers = Executors.newFixedThreadPool(10)) {
             MerchantProductCreateDTO draft = new MerchantProductCreateDTO();
@@ -191,6 +208,7 @@ class ShopOwnerOtherWriteRaceTests {
                     + "WHERE product_id IN (SELECT id FROM products WHERE shop_id=?))", shop.getId());
             jdbc.update("DELETE FROM product_options WHERE product_id IN (SELECT id FROM products WHERE shop_id=?)",
                     shop.getId());
+            jdbc.update("DELETE FROM after_sale_timeout_tasks WHERE case_id=?", caseId);
             jdbc.update("DELETE FROM after_sale_cases WHERE id=?", caseId);
             jdbc.update("DELETE FROM products WHERE shop_id=?", shop.getId());
             jdbc.update("DELETE FROM orders WHERE shop_id=?", shop.getId());
@@ -202,7 +220,8 @@ class ShopOwnerOtherWriteRaceTests {
         }
     }
 
-    private String outcome(Future<?> action) throws ExecutionException, java.util.concurrent.TimeoutException, InterruptedException {
+    private String outcome(
+            Future<?> action) throws ExecutionException, java.util.concurrent.TimeoutException, InterruptedException {
         try {
             action.get(10, TimeUnit.SECONDS);
             return "WROTE";

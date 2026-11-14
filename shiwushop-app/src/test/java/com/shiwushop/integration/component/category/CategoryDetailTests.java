@@ -20,8 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class CategoryDetailTests {
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private CategoryMapper categoryMapper;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private CategoryMapper categoryMapper;
 
     @Test
     void returnsPathFromRootToThirdLevel() throws Exception {

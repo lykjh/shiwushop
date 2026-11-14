@@ -47,15 +47,24 @@ import static org.mockito.Mockito.when;
         "shop.privacy.key-v1-base64=QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="
 })
 class SmsHttpSessionLiveTests {
-    @Autowired private UserProfileMapper profiles;
-    @Autowired private UserAccountMapper accounts;
-    @Autowired private PhoneLookup lookup;
-    @Autowired private PrivacyCipher privacy;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private StringRedisTemplate redis;
-    @Autowired private SessionRepository<? extends Session> sessions;
-    @MockitoBean private SmsSender sender;
-    @LocalServerPort private int port;
+    @Autowired
+    private UserProfileMapper profiles;
+    @Autowired
+    private UserAccountMapper accounts;
+    @Autowired
+    private PhoneLookup lookup;
+    @Autowired
+    private PrivacyCipher privacy;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private StringRedisTemplate redis;
+    @Autowired
+    private SessionRepository<? extends Session> sessions;
+    @MockitoBean
+    private SmsSender sender;
+    @LocalServerPort
+    private int port;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -72,28 +81,34 @@ class SmsHttpSessionLiveTests {
         account.setRole(AccountRole.USER);
         account.setStatus(AccountStatus.ACTIVE);
         accounts.insert(account);
-        jdbc.update("INSERT INTO user_private (user_id, phone_ciphertext, phone_lookup_hash, key_version) VALUES (?,?,?,1)",
+        jdbc.update(
+                "INSERT INTO user_private (user_id, phone_ciphertext, phone_lookup_hash, key_version) VALUES (?,?,?,1)",
                 userId, privacy.encrypt(userId, "login-phone", phone), lookup.digest(phone));
 
         AtomicReference<String> code = new AtomicReference<>();
         when(sender.configured()).thenReturn(true);
-        doAnswer(call -> { code.set(call.getArgument(1)); return null; })
+        doAnswer(call -> {
+            code.set(call.getArgument(1));
+            return null;
+        })
                 .when(sender).send(anyString(), anyString());
         CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         try (HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build()) {
-            URI sendUri = uri("/users/sms/send");
+            URI sendUri = uri("/users/sms/entry/send");
             String body = "{\"phone\":\"" + phone + "\"}";
-            assertEquals(403, client.send(post(sendUri, body, null), HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertEquals(403,
+                    client.send(post(sendUri, body, null), HttpResponse.BodyHandlers.ofString()).statusCode());
 
             HttpResponse<String> csrf = client.send(HttpRequest.newBuilder(uri("/users/csrf")).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, csrf.statusCode());
             String token = json.readTree(csrf.body()).path("data").asString();
-            assertEquals(200, client.send(post(sendUri, body, token), HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertEquals(200,
+                    client.send(post(sendUri, body, token), HttpResponse.BodyHandlers.ofString()).statusCode());
             assertNotNull(code.get());
 
-            HttpResponse<String> login = client.send(post(uri("/users/sms/login"),
-                    "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", token),
+            HttpResponse<String> login = client.send(post(uri("/users/sms/entry/verify"),
+                            "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", token),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, login.statusCode());
             assertEquals(userId.longValue(), json.readTree(login.body()).path("data").path("id").asLong());
@@ -105,8 +120,8 @@ class SmsHttpSessionLiveTests {
                     Long.class, lookup.digest(phone)));
             assertEquals(200, client.send(HttpRequest.newBuilder(uri("/users/me")).GET().build(),
                     HttpResponse.BodyHandlers.ofString()).statusCode());
-            assertEquals(401, client.send(post(uri("/users/sms/login"),
-                    "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", token),
+            assertEquals(409, client.send(post(uri("/users/sms/entry/verify"),
+                            "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", token),
                     HttpResponse.BodyHandlers.ofString()).statusCode());
             assertEquals(userId, sessions.findById(sessionId).getAttribute("userId"));
         } finally {
@@ -115,7 +130,7 @@ class SmsHttpSessionLiveTests {
             jdbc.update("DELETE FROM users WHERE id=?", userId);
             redis.delete("shiwushop:auth:state:" + userId);
             String prefix = "shiwushop:sms:{" + lookup.digest(phone) + "}";
-            redis.delete(List.of(prefix + ":sends", prefix + ":cooldown", prefix + ":login:code"));
+            redis.delete(List.of(prefix + ":sends", prefix + ":cooldown", prefix + ":entry:code"));
         }
     }
 
@@ -125,7 +140,10 @@ class SmsHttpSessionLiveTests {
                 .nextInt(100_000_000));
         AtomicReference<String> code = new AtomicReference<>();
         when(sender.configured()).thenReturn(true);
-        doAnswer(call -> { code.set(call.getArgument(1)); return null; })
+        doAnswer(call -> {
+            code.set(call.getArgument(1));
+            return null;
+        })
                 .when(sender).send(anyString(), anyString());
         CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         Long userId = null;
@@ -138,7 +156,7 @@ class SmsHttpSessionLiveTests {
             assertEquals(200, client.send(post(uri("/users/sms/entry/send"), phoneBody, csrf),
                     HttpResponse.BodyHandlers.ofString()).statusCode());
             HttpResponse<String> verified = client.send(post(uri("/users/sms/entry/verify"),
-                    "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", csrf),
+                            "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", csrf),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, verified.statusCode());
             assertEquals("SET_PASSWORD_REQUIRED", json.readTree(verified.body()).path("data").path("state").asString());
@@ -174,7 +192,8 @@ class SmsHttpSessionLiveTests {
 
     private HttpRequest post(URI uri, String body, String csrf) {
         HttpRequest.Builder request = HttpRequest.newBuilder(uri).header("Content-Type", "application/json");
-        if (csrf != null) request.header("X-CSRF-TOKEN", csrf);
+        if (csrf != null)
+            request.header("X-CSRF-TOKEN", csrf);
         return request.POST(HttpRequest.BodyPublishers.ofString(body)).build();
     }
 }

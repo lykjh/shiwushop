@@ -1,10 +1,12 @@
 package com.shiwushop.slice.payment;
+
 import com.shiwushop.support.ControllerSliceSecurity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import com.shiwushop.common.BusinessException;
@@ -24,15 +26,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PaymentController.class)
-@ContextConfiguration(classes={PaymentController.class, GlobalExceptionHandler.class})
+@ContextConfiguration(classes = {PaymentController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class PaymentCheckoutControllerSliceTests {
-    @MockitoBean private OrderPaymentService payments;
-    @Autowired private MockMvc mvc;
+    @MockitoBean
+    private OrderPaymentService payments;
+    @Autowired
+    private MockMvc mvc;
 
     @Test
     void databaseFailureReturnsRetryableCallbackFailure() throws Exception {
-        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("database unavailable"))
+        org.mockito.Mockito.doThrow(
+                        new org.springframework.dao.DataAccessResourceFailureException("database unavailable"))
                 .when(payments).notifyPaid(org.mockito.ArgumentMatchers.anyMap());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/payments/alipay/notify")
                         .with(csrf()).contentType("application/x-www-form-urlencoded").param("out_trade_no", "SHIWUSHOP1"))

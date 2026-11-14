@@ -13,14 +13,17 @@ import java.util.List;
 
 @Data
 public class MerchantSkuCreateDTO {
+    /** 组成 SKU 的规格选项值 ID 列表。 */
     @NotEmpty
     private List<@NotNull @Positive Long> optionValueIds;
 
+    /** 商品单价，单位元。 */
     @NotNull
     @DecimalMin("0.01")
     @Digits(integer = 8, fraction = 2)
     private BigDecimal price;
 
+    /** 普通可售库存件数。 */
     @NotNull
     @Min(0)
     private Integer stock;

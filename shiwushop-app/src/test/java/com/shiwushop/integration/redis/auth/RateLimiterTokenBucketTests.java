@@ -12,7 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class RateLimiterTokenBucketTests {
     @Test
     void burstIsAtomicAndRefillsOverTime() throws Exception {
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", 16379);
+        assertEquals("127.0.0.1", System.getProperty("spring.data.redis.host"));
+        assertEquals(28379, Integer.getInteger("spring.data.redis.port"));
+        assertEquals(9, Integer.getInteger("spring.data.redis.database"));
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(System.getProperty("spring.data.redis.host"), Integer.getInteger("spring.data.redis.port"));
+        connection.setDatabase(Integer.getInteger("spring.data.redis.database"));
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         redis.afterPropertiesSet();

@@ -4,14 +4,21 @@ import com.shiwushop.product.dto.product.MerchantProductCreateDTO;
 import com.shiwushop.product.dto.product.MerchantProductUpdateDTO;
 import com.shiwushop.product.dto.product.ProductOptionsUpdateDTO;
 import com.shiwushop.product.dto.product.ProductStatusUpdateDTO;
+import com.shiwushop.product.dto.product.ProductRevisionDTO;
+import com.shiwushop.product.dto.product.ProductDisplayAttributesDTO;
 import com.shiwushop.product.dto.sku.MerchantSkuCreateDTO;
 import com.shiwushop.product.dto.sku.MerchantSkuUpdateDTO;
+import com.shiwushop.product.dto.sku.SkuStatusUpdateDTO;
+import com.shiwushop.product.dto.sku.SkuStockUpdateDTO;
 import com.shiwushop.product.vo.product.MerchantProductDetailVO;
 import com.shiwushop.product.vo.product.MerchantProductPageVO;
 import com.shiwushop.product.vo.product.MerchantProductVO;
 import com.shiwushop.product.vo.product.ProductOptionVO;
 import com.shiwushop.product.vo.product.ProductStatusVO;
+import com.shiwushop.product.vo.product.ProductListingVO;
+import com.shiwushop.product.vo.product.DisplayAttributeVO;
 import com.shiwushop.product.vo.sku.MerchantSkuVO;
+import com.shiwushop.product.vo.sku.SkuStatusVO;
 
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
@@ -79,6 +86,25 @@ public class MerchantProductController {
                 SessionUser.requireId(request), productId, skuId, dto));
     }
 
+    /** 库存岗位独立调整普通库存，价格和规格不随请求改变。 */
+    @PutMapping("/{productId}/skus/{skuId}/stock")
+    public Result<MerchantSkuVO> updateSkuStock(@PathVariable @Positive Long productId,
+                                                @PathVariable @Positive Long skuId,
+                                                @Valid @RequestBody SkuStockUpdateDTO dto,
+                                                HttpServletRequest request) {
+        return Result.success(productService.updateSkuStock(
+                SessionUser.requireId(request), productId, skuId, dto.stock()));
+    }
+
+    /** 停售会保留库存与旧订单，但新下单在SKU锁后拒绝。 */
+    @PutMapping("/{productId}/skus/{skuId}/status")
+    public Result<SkuStatusVO> updateSkuStatus(@PathVariable @Positive Long productId,
+                                               @PathVariable @Positive Long skuId,
+                                               @Valid @RequestBody SkuStatusUpdateDTO dto,
+                                               HttpServletRequest request) {
+        return Result.success(productService.updateSkuStatus(SessionUser.requireId(request), productId, skuId, dto.status()));
+    }
+
     /** 调整商品上架状态；上架条件和状态转换由商品服务校验。 */
     @PutMapping("/{id}/status")
     public Result<ProductStatusVO> updateStatus(
@@ -87,6 +113,33 @@ public class MerchantProductController {
             HttpServletRequest request) {
         return Result.success(productService.updateMerchantProductStatus(
                 SessionUser.requireId(request), id, dto));
+    }
+
+    @PostMapping("/{id}/submit")
+    public Result<ProductListingVO> submitListing(@PathVariable @Positive Long id,
+                                                  @Valid @RequestBody ProductRevisionDTO body,
+                                                  HttpServletRequest request) {
+        return Result.success(productService.submitListing(SessionUser.requireId(request), id, body.revision()));
+    }
+
+    @PostMapping("/{id}/archive")
+    public Result<ProductStatusVO> archive(@PathVariable @Positive Long id,
+                                           @Valid @RequestBody ProductRevisionDTO body,
+                                           HttpServletRequest request) {
+        return Result.success(productService.archive(SessionUser.requireId(request), id, body.revision()));
+    }
+
+    @PostMapping("/{id}/restore")
+    public Result<ProductStatusVO> restore(@PathVariable @Positive Long id, HttpServletRequest request) {
+        return Result.success(productService.restore(SessionUser.requireId(request), id));
+    }
+
+    /** 展示参数单独替换，不改变销售规格和SKU组合。 */
+    @PutMapping("/{id}/display-attributes")
+    public Result<List<DisplayAttributeVO>> replaceDisplayAttributes(@PathVariable @Positive Long id,
+                                                                      @Valid @RequestBody ProductDisplayAttributesDTO body,
+                                                                      HttpServletRequest request) {
+        return Result.success(productService.replaceDisplayAttributes(SessionUser.requireId(request), id, body));
     }
 
     /** 分页列出当前商家指定店铺的商品，包括商家可见的非公开状态。 */
@@ -107,5 +160,4 @@ public class MerchantProductController {
             HttpServletRequest request) {
         return Result.success(productService.merchantDetail(SessionUser.requireId(request), id));
     }
-
 }

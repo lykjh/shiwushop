@@ -29,11 +29,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 class ShipmentConcurrencyTests {
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ShipmentService service;
-    @Autowired private ShipmentMapper shipments;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ShipmentService service;
+    @Autowired
+    private ShipmentMapper shipments;
     private final List<Long> orderIds = new ArrayList<>();
     private final List<Long> shopIds = new ArrayList<>();
+    private final List<Long> categoryIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
 
     @AfterEach
@@ -43,10 +47,19 @@ class ShipmentConcurrencyTests {
                     "(SELECT id FROM shipments WHERE order_id=?)", orderId);
             jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id IN " +
                     "(SELECT id FROM shipments WHERE order_id=?)", orderId);
+            jdbc.update("DELETE si FROM shipment_items si JOIN shipments s ON s.id=si.shipment_id " +
+                    "WHERE s.order_id=?", orderId);
             jdbc.update("DELETE FROM shipments WHERE order_id=?", orderId);
+            jdbc.update("DELETE FROM order_items WHERE order_id=?", orderId);
             jdbc.update("DELETE FROM orders WHERE id=?", orderId);
         }
-        for (Long shopId : shopIds) jdbc.update("DELETE FROM shops WHERE id=?", shopId);
+        for (Long shopId : shopIds) {
+            jdbc.update("DELETE s FROM skus s JOIN products p ON p.id=s.product_id WHERE p.shop_id=?", shopId);
+            jdbc.update("DELETE FROM products WHERE shop_id=?", shopId);
+            jdbc.update("DELETE FROM shops WHERE id=?", shopId);
+        }
+        for (Long categoryId : categoryIds)
+            jdbc.update("DELETE FROM categories WHERE id=?", categoryId);
         for (Long userId : userIds) {
             jdbc.update("DELETE FROM user_accounts WHERE user_id=?", userId);
             jdbc.update("DELETE FROM users WHERE id=?", userId);
@@ -74,7 +87,8 @@ class ShipmentConcurrencyTests {
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM shipments WHERE order_id=?",
                 Integer.class, fixture.orderId()));
         Shipment shipment = shipments.selectByOrderId(fixture.orderId());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Integer.class, shipment.getId()));
     }
 
@@ -144,6 +158,17 @@ class ShipmentConcurrencyTests {
         jdbc.update("INSERT INTO shops (owner_user_id,name,enabled) VALUES (?,?,1)", merchant, shopName);
         Long shopId = jdbc.queryForObject("SELECT id FROM shops WHERE name=?", Long.class, shopName);
         shopIds.add(shopId);
+        String categoryName = "并发物流分类-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO categories(name,level,visible,sort_order) VALUES (?,1,1,0)", categoryName);
+        Long category = jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, categoryName);
+        categoryIds.add(category);
+        String productName = "并发物流商品-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO products(shop_id,category_id,name,status) VALUES (?,?,?,'ON_SALE')",
+                shopId, category, productName);
+        Long product = jdbc.queryForObject("SELECT id FROM products WHERE name=?", Long.class, productName);
+        jdbc.update("INSERT INTO skus(product_id,option_signature,price,stock) VALUES (?,?,40,1)",
+                product, UUID.randomUUID().toString().replace("-", "").repeat(2));
+        Long sku = jdbc.queryForObject("SELECT id FROM skus WHERE product_id=?", Long.class, product);
         jdbc.update("INSERT INTO orders (user_id,shop_id,total_amount,status,pay_expires_at,paid_at," +
                         "consignee_ciphertext,phone_ciphertext,province,city,district,detail_ciphertext,shipping_key_version) " +
                         "VALUES (?,?,?,'PAID',NOW(),NOW(),?,?,?,?,?,?,1)",
@@ -152,6 +177,8 @@ class ShipmentConcurrencyTests {
         Long orderId = jdbc.queryForObject("SELECT id FROM orders WHERE shop_id=? AND user_id=?",
                 Long.class, shopId, buyer);
         orderIds.add(orderId);
+        jdbc.update("INSERT INTO order_items(order_id,sku_id,product_name,sku_spec,quantity,unit_price) " +
+                "VALUES (?,?,?,'标准版',1,40)", orderId, sku, productName);
         return new Fixture(merchant, buyer, shopId, orderId);
     }
 
@@ -165,5 +192,6 @@ class ShipmentConcurrencyTests {
         return userId;
     }
 
-    private record Fixture(Long merchant, Long buyer, Long shopId, Long orderId) { }
+    private record Fixture(Long merchant, Long buyer, Long shopId, Long orderId) {
+    }
 }

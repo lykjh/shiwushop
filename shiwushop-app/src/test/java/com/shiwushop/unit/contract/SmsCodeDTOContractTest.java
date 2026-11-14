@@ -5,6 +5,7 @@ import com.shiwushop.support.DtoContract;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
 import java.util.stream.Stream;
 
 /** SmsCodeDTO 的必填、格式及临界值；不启动容器。 */
@@ -20,8 +21,10 @@ class SmsCodeDTOContractTest {
                 Arguments.of("code 非法边界 5", "{\"phone\":\"13812345678\",\"code\":\"abc123\"}", false),
                 Arguments.of("code 非法边界 6", "{\"phone\":\"13812345678\",\"code\":\"１２３４５６\"}", false));
     }
-    @ParameterizedTest(name="{0}") @MethodSource("boundaries")
-    void verifiesBoundary(String name,String body,boolean valid) {
-        DtoContract.verify(SmsCodeDTO.class,body,valid);
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("boundaries")
+    void verifiesBoundary(String name, String body, boolean valid) {
+        DtoContract.verify(SmsCodeDTO.class, body, valid);
     }
 }

@@ -35,14 +35,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class CategoryDeleteTests {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
 
-    @Autowired private MockMvc mockMvc;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ShopMapper shopMapper;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ShopMapper shopMapper;
 
     @Test
     void deletesEmptyCategoryAndReturns404ForMissingCategory() throws Exception {
@@ -52,7 +59,9 @@ class CategoryDeleteTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
         assertNull(categoryMapper.selectById(category.getId()));
-        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?", Long.class, category.getId()));
+        assertEquals(1L, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?",
+                Long.class, category.getId()));
 
         mockMvc.perform(delete("/admin/categories/{id}", category.getId()).session(adminSession()))
                 .andExpect(status().isNotFound());

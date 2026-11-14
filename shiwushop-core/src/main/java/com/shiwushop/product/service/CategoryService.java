@@ -6,12 +6,12 @@ import com.shiwushop.product.vo.category.CategoryDetailVO;
 import com.shiwushop.product.vo.category.CategoryNavVO;
 import com.shiwushop.product.vo.category.CategoryVO;
 
-
 import java.util.List;
 
 public interface CategoryService {
     /** 创建分类并检查其父分类与层级约束。 */
     CategoryVO create(CategoryCreateDTO dto);
+
     /** 返回管理员可见的全部分类。 */
     List<CategoryVO> adminList();
 

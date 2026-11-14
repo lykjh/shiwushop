@@ -21,6 +21,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 public class SearchOutboxWorker {
+    /** 搜索刷新事件每批扫描的受影响商品数量上限。 */
     private static final int BATCH = 200;
     private final OutboxEventMapper outbox;
     private final SearchIndexSource source;
@@ -31,8 +32,8 @@ public class SearchOutboxWorker {
 
     /** 注入搜索事件、数据库当前状态和搜索网关；开关决定定时消费者是否执行。 */
     public SearchOutboxWorker(OutboxEventMapper outbox, SearchIndexSource source,
-                             SearchGateway search, ObjectMapper json, Clock clock,
-                             @Value("${shop.search.worker-enabled:false}") boolean enabled) {
+                              SearchGateway search, ObjectMapper json, Clock clock,
+                              @Value("${shop.search.worker-enabled:false}") boolean enabled) {
         this.outbox = outbox;
         this.source = source;
         this.search = search;
@@ -48,20 +49,24 @@ public class SearchOutboxWorker {
     @Scheduled(initialDelayString = "${shop.search.worker-scan-delay-ms:2000}",
             fixedDelayString = "${shop.search.worker-scan-delay-ms:2000}", scheduler = "searchTaskScheduler")
     public void processNext() {
-        if (!enabled) return;
+        if (!enabled)
+            return;
         LocalDateTime now = LocalDateTime.now(clock);
         OutboxEventMapper.SearchEvent event = outbox.selectPendingSearchEvent(now);
-        if (event == null) return;
+        if (event == null)
+            return;
         String token = UUID.randomUUID().toString();
         // Search bulk is idempotent by document ID; the DB lease prevents concurrent fanout checkpoints.
-        if (outbox.claimSearchEvent(event.getId(), token, now, now.plusSeconds(60)) != 1) return;
+        if (outbox.claimSearchEvent(event.getId(), token, now, now.plusSeconds(60)) != 1)
+            return;
         try (MDC.MDCCloseable ignored = MDC.putCloseable("eventId", event.getId().toString())) {
             try {
                 process(event, token);
             } catch (BusinessException | DataAccessException failure) {
                 log.warn("搜索索引事件处理失败，eventId={}", event.getId(), failure);
                 if (failure instanceof BusinessException business && business.getCode() == 400
-                        || event.getAttempts() >= 9) outbox.markDead(event.getId(), token);
+                        || event.getAttempts() >= 9)
+                    outbox.markDead(event.getId(), token);
                 else {
                     long delay = Math.min(300, 1L << Math.min(event.getAttempts() + 1, 8));
                     outbox.markRetry(event.getId(), token, LocalDateTime.now(clock).plusSeconds(delay));
@@ -94,7 +99,8 @@ public class SearchOutboxWorker {
                     source.lookupDocument(type, event.getAggregateId())));
         }
         Map<Long, Map<String, Object>> documents = source.productDocuments(ids);
-        for (long id : ids) actions.add(new Action("shiwushop-products-v2", id, documents.get(id)));
+        for (long id : ids)
+            actions.add(new Action("shiwushop-products-v2", id, documents.get(id)));
         write(actions);
         if (ids.size() == BATCH)
             outbox.checkpointSearchEvent(event.getId(), token, ids.getLast());
@@ -107,7 +113,8 @@ public class SearchOutboxWorker {
 
     /** 把文档变化编码成批量索引请求，逐项检查搜索服务的写入结果。 */
     private void write(List<Action> actions) {
-        if (actions.isEmpty()) return;
+        if (actions.isEmpty())
+            return;
         StringBuilder ndjson = new StringBuilder();
         for (Action action : actions) {
             String operation = action.document() == null ? "delete" : "index";
@@ -136,5 +143,6 @@ public class SearchOutboxWorker {
     }
 
     /** 一项批量搜索写入；document 为空表示从索引删除该 ID。 */
-    private record Action(String index, long id, Map<String, Object> document) {}
+    private record Action(String index, long id, Map<String, Object> document) {
+    }
 }

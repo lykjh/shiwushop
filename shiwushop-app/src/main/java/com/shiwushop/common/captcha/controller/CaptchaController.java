@@ -49,7 +49,8 @@ public class CaptchaController {
         try {
             proof = captchaService.verifyAndIssueProof(body.id(), body.track(), session.getId());
         } catch (BusinessException e) {
-            if (e.getCode() == 400) captchaRateLimiter.recordValidFailure(session.getId());
+            if (e.getCode() == 400)
+                captchaRateLimiter.recordValidFailure(session.getId());
             throw e;
         }
         captchaRateLimiter.clearValidFailures(session.getId());

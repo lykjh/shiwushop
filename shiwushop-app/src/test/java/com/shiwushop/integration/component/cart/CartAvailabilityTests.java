@@ -44,24 +44,36 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class CartAvailabilityTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private ProductOptionMapper optionMapper;
-    @Autowired private ProductOptionValueMapper valueMapper;
-    @Autowired private SkuOptionValueMapper linkMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private ProductOptionMapper optionMapper;
+    @Autowired
+    private ProductOptionValueMapper valueMapper;
+    @Autowired
+    private SkuOptionValueMapper linkMapper;
     private final ObjectMapper om = new ObjectMapper();
 
     @Test
     void showsOptionsAndAvailabilityWhenStockOrShopChanges() throws Exception {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
-        Long buyerId = jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        Long buyerId = jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", buyerId);
 

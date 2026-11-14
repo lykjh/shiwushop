@@ -40,16 +40,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class PublicProductListTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CategoryMapper categories;
-    @Autowired private BrandMapper brands;
-    @Autowired private ShopMapper shops;
-    @Autowired private ProductMapper products;
-    @Autowired private SkuMapper skus;
-    @Autowired private ProductImageMapper images;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private BrandMapper brands;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private ProductMapper products;
+    @Autowired
+    private SkuMapper skus;
+    @Autowired
+    private ProductImageMapper images;
 
     @Test
     void filtersVisibleProductsAndUsesNewBrandMediaSalesTables() throws Exception {
@@ -186,34 +196,69 @@ class PublicProductListTests {
         TestRegistration.register(users, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         return jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
     }
+
     private Category category(Long parent, int level, int visible) {
-        Category c = new Category(); c.setName("分类-" + UUID.randomUUID()); c.setParentId(parent);
-        c.setLevel(level); c.setVisible(visible); c.setSortOrder(0); categories.insert(c); return c;
+        Category c = new Category();
+        c.setName("分类-" + UUID.randomUUID());
+        c.setParentId(parent);
+        c.setLevel(level);
+        c.setVisible(visible);
+        c.setSortOrder(0);
+        categories.insert(c);
+        return c;
     }
+
     private Brand brand() {
-        Brand b = new Brand(); b.setName("品牌-" + UUID.randomUUID()); b.setEnabled(1); brands.insert(b); return b;
+        Brand b = new Brand();
+        b.setName("品牌-" + UUID.randomUUID());
+        b.setEnabled(1);
+        brands.insert(b);
+        return b;
     }
+
     private Shop shop(Long owner, int enabled) {
-        Shop s = new Shop(); s.setOwnerUserId(owner); s.setName("店铺-" + UUID.randomUUID());
-        s.setEnabled(enabled); shops.insert(s); return s;
+        Shop s = new Shop();
+        s.setOwnerUserId(owner);
+        s.setName("店铺-" + UUID.randomUUID());
+        s.setEnabled(enabled);
+        shops.insert(s);
+        return s;
     }
+
     private Product product(Category category, Shop shop, Brand brand, String status) {
-        Product p = new Product(); p.setCategoryId(category.getId()); p.setShopId(shop.getId());
-        p.setName("商品-" + UUID.randomUUID()); p.setStatus(ProductStatus.valueOf(status)); products.insert(p);
-        if (brand != null) products.insertBrand(p.getId(), brand.getId());
+        Product p = new Product();
+        p.setCategoryId(category.getId());
+        p.setShopId(shop.getId());
+        p.setName("商品-" + UUID.randomUUID());
+        p.setStatus(ProductStatus.valueOf(status));
+        products.insert(p);
+        if (brand != null)
+            products.insertBrand(p.getId(), brand.getId());
         return p;
     }
+
     private void sku(Product product, String price, int stock) {
-        Sku s = new Sku(); s.setProductId(product.getId());
+        Sku s = new Sku();
+        s.setProductId(product.getId());
         String hex = UUID.randomUUID().toString().replace("-", "");
-        s.setOptionSignature(hex + hex); s.setPrice(new BigDecimal(price)); s.setStock(stock); skus.insert(s);
+        s.setOptionSignature(hex + hex);
+        s.setPrice(new BigDecimal(price));
+        s.setStock(stock);
+        skus.insert(s);
     }
+
     private Long cover(Product product, Long owner) {
         String key = "test/public-product-" + UUID.randomUUID();
-        jdbc.update("INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
-                "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
+        jdbc.update(
+                "INSERT INTO media_assets(uploaded_by_user_id,storage_key,mime_type,byte_size,width,height,sha256,status) " +
+                        "VALUES (?,?,'image/png',10,1,1,UNHEX(SHA2(?,256)),'READY')", owner, key, key);
         Long mediaId = jdbc.queryForObject("SELECT id FROM media_assets WHERE storage_key = ?", Long.class, key);
-        ProductImage image = new ProductImage(); image.setProductId(product.getId()); image.setMediaId(mediaId);
-        image.setIsCover(1); image.setSortOrder(0); images.insert(image); return mediaId;
+        ProductImage image = new ProductImage();
+        image.setProductId(product.getId());
+        image.setMediaId(mediaId);
+        image.setIsCover(1);
+        image.setSortOrder(0);
+        images.insert(image);
+        return mediaId;
     }
 }

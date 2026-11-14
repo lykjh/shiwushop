@@ -3,7 +3,7 @@ package com.shiwushop.integration.component.payment;
 import com.shiwushop.support.TestRegistration;
 
 import com.shiwushop.payment.service.AlipayGateway;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.trade.entity.status.OrderStatus;
 import com.shiwushop.trade.entity.status.PaymentAttemptStatus;
 
@@ -53,20 +53,34 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 class PaymentConcurrencyTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private OrderPaymentService paymentService;
-    @Autowired private RegisterService userService;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private OrderItemMapper itemMapper;
-    @Autowired private PaymentAttemptMapper paymentMapper;
-    @Autowired private Clock businessClock;
-    @MockitoBean private SdkAlipayGateway gateway;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private OrderPaymentService paymentService;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private OrderItemMapper itemMapper;
+    @Autowired
+    private PaymentAttemptMapper paymentMapper;
+    @Autowired
+    private Clock businessClock;
+    @MockitoBean(name = "localSimulationGateway")
+    private LocalSimulationGateway gateway;
 
     @Test
     void concurrentStartAndConfirmationCreateOneAttemptAndOnePaidOrder() throws Exception {
@@ -161,7 +175,8 @@ class PaymentConcurrencyTests {
             assertEquals(OrderStatus.PAID, orderMapper.selectById(orderId).getStatus());
             assertEquals(PaymentAttemptStatus.SUCCESS, paymentMapper.selectById(attempt.getId()).getStatus());
             assertEquals(2L, productMapper.getSoldCount(product.getId()));
-            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                     Integer.class, product.getId()));
 
             // 到期扫描和支付宝通知同时确认另一张订单，不能取消并返库存。
@@ -210,14 +225,23 @@ class PaymentConcurrencyTests {
             assertEquals(OrderStatus.PAID, orderMapper.selectById(overdueId).getStatus());
             assertEquals(0, skuMapper.selectById(sku.getId()).getStock());
             assertEquals(3L, productMapper.getSoldCount(product.getId()));
-            assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
+            assertEquals(2, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                     Integer.class, product.getId()));
         } finally {
             workers.shutdownNow();
-            if (product != null && product.getId() != null) jdbc.update(
-                    "DELETE FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?", product.getId());
-            if (order != null && order.getId() != null) jdbc.update("DELETE FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)", order.getId());
-            if (overdue != null && overdue.getId() != null) jdbc.update("DELETE FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)", overdue.getId());
+            if (product != null && product.getId() != null)
+                jdbc.update(
+                        "DELETE FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
+                        product.getId());
+            if (order != null && order.getId() != null)
+                jdbc.update(
+                        "DELETE FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)",
+                        order.getId());
+            if (overdue != null && overdue.getId() != null)
+                jdbc.update(
+                        "DELETE FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)",
+                        overdue.getId());
             if (overdue != null && overdue.getId() != null) {
                 paymentMapper.delete(new LambdaQueryWrapper<PaymentAttempt>()
                         .eq(PaymentAttempt::getOrderId, overdue.getId()));
@@ -232,13 +256,16 @@ class PaymentConcurrencyTests {
                         .eq(OrderItem::getOrderId, order.getId()));
                 orderMapper.deleteById(order.getId());
             }
-            if (sku != null && sku.getId() != null) skuMapper.deleteById(sku.getId());
+            if (sku != null && sku.getId() != null)
+                skuMapper.deleteById(sku.getId());
             if (product != null && product.getId() != null) {
                 jdbc.update("DELETE FROM product_sales_stats WHERE product_id=?", product.getId());
                 productMapper.deleteById(product.getId());
             }
-            if (category != null && category.getId() != null) categoryMapper.deleteById(category.getId());
-            if (shop != null && shop.getId() != null) shopMapper.deleteById(shop.getId());
+            if (category != null && category.getId() != null)
+                categoryMapper.deleteById(category.getId());
+            if (shop != null && shop.getId() != null)
+                shopMapper.deleteById(shop.getId());
             jdbc.update("DELETE FROM user_accounts WHERE user_id=?", buyer.getId());
             jdbc.update("DELETE FROM user_private WHERE user_id=?", buyer.getId());
             jdbc.update("DELETE FROM users WHERE id=?", buyer.getId());

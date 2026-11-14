@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -30,13 +31,15 @@ import java.util.TreeMap;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** 参数校验错误响应中字段级错误明细的键名。 */
     private static final String FIELDS = "fields";
 
     /** 按业务异常的 HTTP 状态返回错误；限流响应附带 Retry-After。 */
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<Result<Object>> handle(BusinessException e){
+    public ResponseEntity<Result<Object>> handle(BusinessException e) {
         Result<Object> result = Result.error(e.getCode(), e.getMessage());
         result.setData(e.getData());
         ResponseEntity.BodyBuilder response = ResponseEntity.status(e.getCode());
@@ -74,6 +77,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Result<Object>> handleUnreadable() {
         return badRequest("请求体格式错误", null);
+    }
+
+    @ExceptionHandler(RequestRejectedException.class)
+    public ResponseEntity<Result<Object>> handleRejectedRequest() {
+        return badRequest("请求格式不合法", null);
     }
 
     /** Spring MVC 在入口校验 Path 和查询参数，Service 不再重复校验相同参数。 */

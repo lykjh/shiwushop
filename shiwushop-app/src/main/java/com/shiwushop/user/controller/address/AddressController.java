@@ -44,5 +44,4 @@ public class AddressController {
         addressService.delete(SessionUser.requireId(request), id);
         return Result.success();
     }
-
 }

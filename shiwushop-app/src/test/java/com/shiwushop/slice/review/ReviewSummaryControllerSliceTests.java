@@ -1,11 +1,14 @@
 package com.shiwushop.slice.review;
+
 import com.shiwushop.support.ControllerSliceSecurity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import com.shiwushop.common.GlobalExceptionHandler;
 
 import com.shiwushop.product.controller.review.ProductReviewController;
@@ -24,11 +27,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ProductReviewController.class)
-@ContextConfiguration(classes={ProductReviewController.class, GlobalExceptionHandler.class})
+@ContextConfiguration(classes = {ProductReviewController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class ReviewSummaryControllerSliceTests {
-    @MockitoBean private PublicReviewService reviews;
-    @Autowired private MockMvc mvc;
+    @MockitoBean
+    private PublicReviewService reviews;
+    @Autowired
+    private MockMvc mvc;
 
     @Test
     void summaryEndpointKeepsItsPublicResponseShape() throws Exception {

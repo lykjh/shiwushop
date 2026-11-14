@@ -34,7 +34,8 @@ public class SearchGateway {
     public String openPit() {
         JsonNode result = call("/shiwushop-products-read/_search/point_in_time?keep_alive=2m", null);
         String id = result.path("pit_id").asText();
-        if (id.isBlank()) throw new BusinessException(503, "搜索快照创建失败");
+        if (id.isBlank())
+            throw new BusinessException(503, "搜索快照创建失败");
         return id;
     }
 

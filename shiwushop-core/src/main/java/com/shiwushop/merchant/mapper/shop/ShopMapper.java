@@ -9,10 +9,16 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.time.LocalDate;
 
 public interface ShopMapper extends BaseMapper<Shop> {
     @Select("SELECT * FROM shops WHERE id = #{shopId} FOR UPDATE")
     Shop selectForUpdate(@Param("shopId") Long shopId);
+
+    @Select("SELECT id FROM shops WHERE enabled=1 AND qualification_valid_until < #{today} " +
+            "ORDER BY qualification_valid_until,id LIMIT 1000")
+    List<Long> selectExpiredQualificationIds(@Param("today") LocalDate today);
+
     List<ShopPublicVO> selectPublicPage(@Param("categoryId") Long categoryId,
                                         @Param("size") int size,
                                         @Param("offset") long offset);

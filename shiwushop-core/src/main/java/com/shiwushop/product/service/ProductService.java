@@ -11,8 +11,12 @@ import com.shiwushop.product.vo.product.MerchantProductPageVO;
 import com.shiwushop.product.vo.product.MerchantProductVO;
 import com.shiwushop.product.vo.product.ProductOptionVO;
 import com.shiwushop.product.vo.product.ProductStatusVO;
+import com.shiwushop.product.vo.product.ProductListingVO;
+import com.shiwushop.product.dto.product.ProductListingDecisionDTO;
+import com.shiwushop.product.dto.product.ProductDisplayAttributesDTO;
+import com.shiwushop.product.vo.product.DisplayAttributeVO;
 import com.shiwushop.product.vo.sku.MerchantSkuVO;
-
+import com.shiwushop.product.vo.sku.SkuStatusVO;
 
 import java.util.List;
 
@@ -30,16 +34,29 @@ public interface ProductService {
     /** 修改商品下已存在 SKU 的价格、库存等商家字段。 */
     MerchantSkuVO updateMerchantSku(Long userId, Long productId, Long skuId, MerchantSkuUpdateDTO dto);
 
+    /** 库存岗位只改普通库存，不接触价格或销售规格。 */
+    MerchantSkuVO updateSkuStock(Long userId, Long productId, Long skuId, int stock);
+
     /** 为商家商品创建一种新的 SKU 规格组合。 */
     MerchantSkuVO createMerchantSku(Long userId, Long productId, MerchantSkuCreateDTO dto);
 
+    SkuStatusVO updateSkuStatus(Long userId, Long productId, Long skuId, String status);
+
     /** 校验上架条件并切换商家商品的展示状态。 */
     ProductStatusVO updateMerchantProductStatus(Long userId, Long productId, ProductStatusUpdateDTO dto);
+
+    ProductStatusVO archive(Long userId, Long productId, Long revision);
+
+    ProductStatusVO restore(Long userId, Long productId);
+
+    ProductListingVO submitListing(Long userId, Long productId, Long revision);
+    ProductListingVO decideListing(Long reviewerId, Long productId, ProductListingDecisionDTO decision);
+
+    List<DisplayAttributeVO> replaceDisplayAttributes(Long userId, Long productId, ProductDisplayAttributesDTO request);
 
     /** 返回商家管理页所需的商品、规格与 SKU 详情。 */
     MerchantProductDetailVO merchantDetail(Long userId, Long productId);
 
     /** 分页查询商家所属店铺的商品管理列表。 */
     MerchantProductPageVO listMerchantProducts(Long userId, Long shopId, int page, int size);
-
 }

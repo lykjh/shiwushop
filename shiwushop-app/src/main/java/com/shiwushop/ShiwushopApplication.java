@@ -11,7 +11,8 @@ import java.time.ZoneId;
 
 @MapperScan({"com.shiwushop.user.mapper", "com.shiwushop.product.mapper", "com.shiwushop.merchant.mapper",
         "com.shiwushop.trade.mapper", "com.shiwushop.aftersale.mapper", "com.shiwushop.payment.mapper",
-        "com.shiwushop.common.media.mapper", "com.shiwushop.common.outbox"})
+        "com.shiwushop.common.media.mapper", "com.shiwushop.common.outbox", "com.shiwushop.member.mapper",
+        "com.shiwushop.marketing.mapper"})
 @SpringBootApplication
 @EnableScheduling
 public class ShiwushopApplication {
@@ -25,5 +26,4 @@ public class ShiwushopApplication {
     public static void main(String[] args) {
         SpringApplication.run(ShiwushopApplication.class, args);
     }
-
 }

@@ -41,16 +41,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class ShipmentFlowTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mvc;
-    @Autowired private RegisterService users;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private ShopMapper shops;
-    @Autowired private OrderMapper orders;
-    @Autowired private ShipmentMapper shipments;
-    @Autowired private OutboxEventMapper outbox;
-    @Autowired private ShipmentService shipmentService;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mvc;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private ShopMapper shops;
+    @Autowired
+    private OrderMapper orders;
+    @Autowired
+    private ShipmentMapper shipments;
+    @Autowired
+    private OutboxEventMapper outbox;
+    @Autowired
+    private ShipmentService shipmentService;
 
     @Test
     void shipsOnceAndBuyerConfirmationIsIdempotent() throws Exception {
@@ -72,12 +82,16 @@ class ShipmentFlowTests {
         mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"carrierName\":\"顺丰速运\",\"trackingNo\":\"OTHER\"}"))
                 .andExpect(status().isConflict());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM shipments WHERE order_id=?", Integer.class, order.getId()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CREATED' AND target_id=?",
+        assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM shipments WHERE order_id=?", Integer.class, order.getId()));
+        assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CREATED' AND target_id=?",
+                        Integer.class, shipments.selectByOrderId(order.getId()).getId()));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Integer.class, shipments.selectByOrderId(order.getId()).getId()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
-                Integer.class, shipments.selectByOrderId(order.getId()).getId()));
-        Long eventId = jdbc.queryForObject("SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
+        Long eventId = jdbc.queryForObject(
+                "SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Long.class, shipments.selectByOrderId(order.getId()).getId());
         assertEquals(shipments.selectByOrderId(order.getId()).getId(),
                 outbox.selectShipmentEvent(eventId).getShipmentId());
@@ -89,7 +103,8 @@ class ShipmentFlowTests {
         mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).session(session(buyer)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.confirmSource").value("BUYER"));
         assertEquals(ShipmentStatus.CONFIRMED, shipments.selectByOrderId(order.getId()).getStatus());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CONFIRMED_BY_BUYER' AND target_id=?",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CONFIRMED_BY_BUYER' AND target_id=?",
                 Integer.class, shipments.selectByOrderId(order.getId()).getId()));
         assertEquals(OrderStatus.PAID, orders.selectById(order.getId()).getStatus());
     }
@@ -153,14 +168,23 @@ class ShipmentFlowTests {
         shipments.updateById(shipment);
 
         String tradeNo = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO payment_attempts (order_id,channel,out_trade_no,app_id,seller_id,amount,status,paid_at) " +
+        jdbc.update(
+                "INSERT INTO payment_attempts (order_id,channel,out_trade_no,app_id,seller_id,amount,status,paid_at) " +
                         "VALUES (?,'ALIPAY_SANDBOX',?,'app','seller',40,'SUCCESS',NOW())", order.getId(), tradeNo);
-        Long paymentId = jdbc.queryForObject("SELECT id FROM payment_attempts WHERE out_trade_no=?", Long.class, tradeNo);
+        Long paymentId = jdbc.queryForObject("SELECT id FROM payment_attempts WHERE out_trade_no=?", Long.class,
+                tradeNo);
         jdbc.update("INSERT INTO after_sale_cases (order_id,type,status,reason,refund_amount,requested_at) " +
                 "VALUES (?,'REFUND_ONLY','REFUNDED','测试',40,NOW())", order.getId());
-        Long caseId = jdbc.queryForObject("SELECT id FROM after_sale_cases WHERE order_id=?", Long.class, order.getId());
-        jdbc.update("INSERT INTO refund_attempts (case_id,payment_attempt_id,out_request_no,amount,status,requested_at,resolved_at) " +
-                "VALUES (?,?,?,40,'SUCCESS',NOW(),NOW())", caseId, paymentId, UUID.randomUUID().toString());
+        Long caseId = jdbc.queryForObject("SELECT id FROM after_sale_cases WHERE order_id=?", Long.class,
+                order.getId());
+        Long itemId = jdbc.queryForObject("SELECT id FROM order_items WHERE order_id=?", Long.class,
+                order.getId());
+        jdbc.update("INSERT INTO after_sale_items(case_id,order_item_id,quantity,refund_amount,source_kind,"
+                        + "source_shipment_id) VALUES (?,?,1,40,'SHIPMENT',?)",
+                caseId, itemId, shipment.getId());
+        jdbc.update(
+                "INSERT INTO refund_attempts (case_id,payment_attempt_id,out_request_no,amount,status,requested_at,resolved_at) " +
+                        "VALUES (?,?,?,40,'SUCCESS',NOW(),NOW())", caseId, paymentId, UUID.randomUUID().toString());
 
         assertFalse(shipmentService.dueShipmentIds().contains(shipment.getId()));
         shipmentService.confirmDue(shipment.getId());
@@ -196,9 +220,21 @@ class ShipmentFlowTests {
         order.setDistrict("海淀区");
         order.setShippingKeyVersion(1);
         order.setPayExpiresAt(LocalDateTime.now().plusMinutes(15));
-        if (status == OrderStatus.PAID) order.setPaidAt(LocalDateTime.now());
+        if (status == OrderStatus.PAID)
+            order.setPaidAt(LocalDateTime.now());
         order.setStatus(status);
         orders.insert(order);
+        String categoryName = "物流分类-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO categories(name,level,visible,sort_order) VALUES (?,1,1,0)", categoryName);
+        Long category = jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, categoryName);
+        String productName = "物流商品-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO products(shop_id,category_id,name,status) VALUES (?,?,?,'ON_SALE')",
+                shop.getId(), category, productName);
+        Long product = jdbc.queryForObject("SELECT id FROM products WHERE name=?", Long.class, productName);
+        jdbc.update("INSERT INTO skus(product_id,option_signature,price,stock) VALUES (?,?,40,1)",
+                product, UUID.randomUUID().toString().replace("-", "").repeat(2));
+        Long sku = jdbc.queryForObject("SELECT id FROM skus WHERE product_id=?", Long.class, product);
+        orders.insertCheckoutItem(order.getId(), sku, productName, "标准版", 1, new BigDecimal("40.00"));
         return order;
     }
 

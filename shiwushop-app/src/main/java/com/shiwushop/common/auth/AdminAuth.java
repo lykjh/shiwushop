@@ -1,6 +1,5 @@
 package com.shiwushop.common.auth;
 
-import com.shiwushop.common.auth.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

@@ -14,7 +14,9 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
 import java.time.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -35,13 +37,17 @@ class PasswordResetServiceImplTest {
     UserAccount account;
     final Instant issuedAt = Instant.parse("2026-11-02T08:00:00Z");
 
-    @BeforeEach void prepare() {
+    @BeforeEach
+    void prepare() {
         // 发送边界在真实 HTTP 集成测试中覆盖，此类只测试核验与重设。
         service = new PasswordResetServiceImpl(phones, bindings, accounts, challenges, null,
                 loginLimiter, limiter, cache, clock);
         request = new MockHttpServletRequest();
-        account = new UserAccount(); account.setUserId(71L); account.setStatus(AccountStatus.ACTIVE);
-        account.setAuthVersion(2); account.setPasswordHash(encoder.encode("Shop123!"));
+        account = new UserAccount();
+        account.setUserId(71L);
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setAuthVersion(2);
+        account.setPasswordHash(encoder.encode("Shop123!"));
         when(clock.instant()).thenReturn(issuedAt);
         when(phones.digest("13812345678")).thenReturn("phone-hmac");
         when(phones.codeMac("password-reset", "phone-hmac", "123456")).thenReturn("code-hmac");
@@ -53,9 +59,11 @@ class PasswordResetServiceImplTest {
         when(limiter.digest(anyString())).thenAnswer(call -> "digest:" + call.getArgument(0));
     }
 
-    @Test void validProofWritesBcryptAndRaisesAuthVersionWithoutLogin() {
+    @Test
+    void validProofWritesBcryptAndRaisesAuthVersionWithoutLogin() {
         var proof = service.verify("13812345678", "123456", request);
-        assertEquals(300, proof.expiresInSeconds()); assertTrue(proof.resetTicket().matches("[A-Za-z0-9_-]{43}"));
+        assertEquals(300, proof.expiresInSeconds());
+        assertTrue(proof.resetTicket().matches("[A-Za-z0-9_-]{43}"));
         assertNull(request.getSession().getAttribute("userId"));
         service.reset(proof.resetTicket(), "Shop456!", request);
         var hash = ArgumentCaptor.forClass(String.class);
@@ -66,11 +74,13 @@ class PasswordResetServiceImplTest {
                 () -> service.reset(proof.resetTicket(), "Shop789!", request)).getCode());
     }
 
-    @ParameterizedTest @ValueSource(longs = {299, 300, 301})
+    @ParameterizedTest
+    @ValueSource(longs = {299, 300, 301})
     void expiryUsesStrictFiveMinuteDeadline(long seconds) {
         var proof = service.verify("13812345678", "123456", request);
         when(clock.instant()).thenReturn(issuedAt.plusSeconds(seconds));
-        if (seconds < 300) service.reset(proof.resetTicket(), "Shop456!", request);
+        if (seconds < 300)
+            service.reset(proof.resetTicket(), "Shop456!", request);
         else {
             assertEquals(401, assertThrows(BusinessException.class,
                     () -> service.reset(proof.resetTicket(), "Shop456!", request)).getCode());
@@ -78,35 +88,45 @@ class PasswordResetServiceImplTest {
         }
     }
 
-    @Test void expiredWhileWaitingForAccountLockIsRejected() {
+    @Test
+    void expiredWhileWaitingForAccountLockIsRejected() {
         var proof = service.verify("13812345678", "123456", request);
-        when(accounts.lockById(71L)).thenAnswer(call -> {when(clock.instant()).thenReturn(issuedAt.plusSeconds(300)); return account;});
+        when(accounts.lockById(71L)).thenAnswer(call -> {
+            when(clock.instant()).thenReturn(issuedAt.plusSeconds(300));
+            return account;
+        });
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.reset(proof.resetTicket(), "Shop456!", request)).getCode());
     }
 
-    @Test void wrongCodeNeverCreatesGrant() {
+    @Test
+    void wrongCodeNeverCreatesGrant() {
         when(challenges.consume(anyString(), anyString(), anyString())).thenReturn(false);
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
-        assertNull(request.getSession(false)); verifyNoInteractions(accounts);
+        assertNull(request.getSession(false));
+        verifyNoInteractions(accounts);
     }
 
-    @Test void unboundPhoneDoesNotCreateAccountOrGrant() {
+    @Test
+    void unboundPhoneDoesNotCreateAccountOrGrant() {
         when(bindings.findUserId("phone-hmac")).thenReturn(null);
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
-        assertNull(request.getSession(false)); verifyNoInteractions(accounts);
+        assertNull(request.getSession(false));
+        verifyNoInteractions(accounts);
     }
 
-    @Test void disabledAccountCannotObtainGrant() {
+    @Test
+    void disabledAccountCannotObtainGrant() {
         account.setStatus(AccountStatus.DISABLED);
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
         assertNull(request.getSession(false));
     }
 
-    @Test void ticketIsBoundToSessionAndLatestVerification() {
+    @Test
+    void ticketIsBoundToSessionAndLatestVerification() {
         var old = service.verify("13812345678", "123456", request);
         var latest = service.verify("13812345678", "123456", request);
         assertEquals(401, assertThrows(BusinessException.class,
@@ -116,7 +136,8 @@ class PasswordResetServiceImplTest {
         service.reset(latest.resetTicket(), "Shop456!", request);
     }
 
-    @ParameterizedTest @ValueSource(strings = {"missing", "disabled", "version", "phone"})
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "disabled", "version", "phone"})
     void accountChangesAfterVerificationInvalidateGrant(String change) {
         var proof = service.verify("13812345678", "123456", request);
         switch (change) {
@@ -130,14 +151,16 @@ class PasswordResetServiceImplTest {
         verify(accounts, never()).changePassword(anyLong(), anyInt(), anyString());
     }
 
-    @Test void identicalPasswordIsRejectedAndValidProofCanBeCorrected() {
+    @Test
+    void identicalPasswordIsRejectedAndValidProofCanBeCorrected() {
         var proof = service.verify("13812345678", "123456", request);
         assertEquals(400, assertThrows(BusinessException.class,
                 () -> service.reset(proof.resetTicket(), "Shop123!", request)).getCode());
         service.reset(proof.resetTicket(), "Shop456!", request);
     }
 
-    @Test void authCacheFailureStopsPasswordUpdate() {
+    @Test
+    void authCacheFailureStopsPasswordUpdate() {
         var proof = service.verify("13812345678", "123456", request);
         doThrow(new BusinessException(503, "账号校验暂不可用")).when(cache).blockUntilTransactionEnds(anyLong(), any());
         assertEquals(503, assertThrows(BusinessException.class,
@@ -145,15 +168,19 @@ class PasswordResetServiceImplTest {
         verify(accounts, never()).changePassword(anyLong(), anyInt(), anyString());
     }
 
-    @Test void databaseFailurePropagatesAndSpentProofIsNotRestored() {
+    @Test
+    void databaseFailurePropagatesAndSpentProofIsNotRestored() {
         var proof = service.verify("13812345678", "123456", request);
-        when(accounts.changePassword(eq(71L), eq(2), anyString())).thenThrow(new DataAccessResourceFailureException("offline"));
-        assertThrows(DataAccessResourceFailureException.class, () -> service.reset(proof.resetTicket(), "Shop456!", request));
+        when(accounts.changePassword(eq(71L), eq(2), anyString())).thenThrow(
+                new DataAccessResourceFailureException("offline"));
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> service.reset(proof.resetTicket(), "Shop456!", request));
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.reset(proof.resetTicket(), "Shop456!", request)).getCode());
     }
 
-    @Test void conditionalWriteConflictIsReported() {
+    @Test
+    void conditionalWriteConflictIsReported() {
         var proof = service.verify("13812345678", "123456", request);
         when(accounts.changePassword(eq(71L), eq(2), anyString())).thenReturn(0);
         assertEquals(409, assertThrows(BusinessException.class,

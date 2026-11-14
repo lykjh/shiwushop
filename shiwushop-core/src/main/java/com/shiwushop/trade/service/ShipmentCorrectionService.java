@@ -9,9 +9,22 @@ import com.shiwushop.trade.vo.shipment.correction.ShipmentCorrectionRequestVO;
 
 public interface ShipmentCorrectionService {
     ShipmentCorrectionRequestVO request(Long userId, Long shopId, Long orderId, ShipmentCorrectionRequestDTO body);
+
+    ShipmentCorrectionRequestVO requestPackage(Long userId, Long shopId, Long orderId, Long shipmentId,
+                                               ShipmentCorrectionRequestDTO body);
+
     ShipmentCorrectionRequestVO decide(Long userId, Long id, ShipmentCorrectionDecisionDTO body);
+
     ShipmentCorrectionHistoryPageVO buyerHistory(Long userId, Long orderId);
+
+    ShipmentCorrectionHistoryPageVO buyerPackageHistory(Long userId, Long orderId, Long shipmentId);
+
     ShipmentCorrectionHistoryPageVO merchantHistory(Long userId, Long shopId, Long orderId);
+
+    ShipmentCorrectionHistoryPageVO merchantPackageHistory(Long userId, Long shopId, Long orderId,
+                                                           Long shipmentId);
+
     ShipmentCorrectionRequestVO merchantRequest(Long userId, Long shopId, Long orderId, Long correctionId);
+
     ShipmentCorrectionAdminPageVO adminList(ShipmentCorrectionStatus status, Long afterId, int size);
 }

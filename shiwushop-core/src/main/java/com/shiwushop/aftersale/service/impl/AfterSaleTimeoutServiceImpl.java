@@ -31,11 +31,16 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
     private final AfterSaleCaseMapper cases;
     private final PlatformTransactionManager transactions;
     private final Clock clock;
-    @Value("${shop.aftersale.timeout-review-hours:48}") private long reviewHours;
-    @Value("${shop.aftersale.timeout-return-days:7}") private long returnDays;
-    @Value("${shop.aftersale.timeout-receipt-days:7}") private long receiptDays;
-    @Value("${shop.aftersale.timeout-refund-hours:24}") private long refundHours;
-    @Value("${shop.aftersale.timeout-rule-version:1}") private int ruleVersion;
+    @Value("${shop.aftersale.timeout-review-hours:48}")
+    private long reviewHours;
+    @Value("${shop.aftersale.timeout-return-days:7}")
+    private long returnDays;
+    @Value("${shop.aftersale.timeout-receipt-days:7}")
+    private long receiptDays;
+    @Value("${shop.aftersale.timeout-refund-hours:24}")
+    private long refundHours;
+    @Value("${shop.aftersale.timeout-rule-version:1}")
+    private int ruleVersion;
 
     /** 业务状态变更同事务登记下一期限并过期旧阶段，保留已关闭历史。 */
     @Override
@@ -90,13 +95,16 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
             case "REVIEW" -> sale.getStatus() == AfterSaleStatus.REQUESTED ? sale.getRequestedAt() : null;
             case "RETURN" -> sale.getStatus() == AfterSaleStatus.WAITING_RETURN ? sale.getReviewedAt() : null;
             case "RECEIPT" -> {
-                if (sale.getStatus() != AfterSaleStatus.WAITING_RECEIPT) yield null;
+                if (sale.getStatus() != AfterSaleStatus.WAITING_RECEIPT)
+                    yield null;
                 var shipment = tasks.shipmentForUpdate(sale.getId());
                 yield shipment == null ? null : shipment.getSentAt();
             }
             case "REFUND" -> {
-                if (sale.getStatus() != AfterSaleStatus.REFUNDING || tasks.latestRefundForUpdate(sale.getId()) != null) yield null;
-                if (sale.getType() == AfterSaleType.REFUND_ONLY) yield sale.getReviewedAt();
+                if (sale.getStatus() != AfterSaleStatus.REFUNDING || tasks.latestRefundForUpdate(sale.getId()) != null)
+                    yield null;
+                if (sale.getType() == AfterSaleType.REFUND_ONLY)
+                    yield sale.getReviewedAt();
                 var shipment = tasks.shipmentForUpdate(sale.getId());
                 yield shipment == null ? null : shipment.getReceivedAt();
             }
@@ -109,7 +117,8 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
     public AfterSaleTimeoutTask detail(Long adminId, Long id) {
         accounts.requireAdmin(adminId);
         AfterSaleTimeoutTask task = requireTask(id);
-        if (task.getOpenedAt() == null) throw new BusinessException(404, "待办不存在");
+        if (task.getOpenedAt() == null)
+            throw new BusinessException(404, "待办不存在");
         return task;
     }
 
@@ -123,10 +132,12 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
             LocalDateTime current = basis(sale, found.getStage());
             AfterSaleTimeoutTask task = tasks.selectForUpdate(id);
             if ("CLAIMED".equals(task.getStatus()) && adminId.equals(task.getAssigneeId())
-                    && task.getBasisAt().equals(current)) return task;
+                    && task.getBasisAt().equals(current))
+                return task;
             if (!"OPEN".equals(task.getStatus()) || !task.getBasisAt().equals(current))
                 throw new BusinessException(409, "待办不可领取");
-            if (tasks.claim(id, adminId, LocalDateTime.now(clock)) != 1) throw new BusinessException(409, "待办已被领取");
+            if (tasks.claim(id, adminId, LocalDateTime.now(clock)) != 1)
+                throw new BusinessException(409, "待办已被领取");
             BusinessEventLog.committed("aftersale", "timeout_claimed", "timeout_task", id);
             return tasks.selectById(id);
         });
@@ -144,9 +155,11 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
             LocalDateTime current = basis(sale, found.getStage());
             AfterSaleTimeoutTask task = tasks.selectForUpdate(id);
             if ("CLOSED".equals(task.getStatus()) && adminId.equals(task.getAssigneeId())
-                    && evidence.equals(task.getEvidence()) && conclusion.equals(task.getConclusion())) return task;
+                    && evidence.equals(task.getEvidence()) && conclusion.equals(task.getConclusion()))
+                return task;
             if (!"CLAIMED".equals(task.getStatus()) || !adminId.equals(task.getAssigneeId())
-                    || !task.getBasisAt().equals(current)) throw new BusinessException(409, "待办不可关闭");
+                    || !task.getBasisAt().equals(current))
+                throw new BusinessException(409, "待办不可关闭");
             if (tasks.close(id, adminId, evidence, conclusion, LocalDateTime.now(clock)) != 1)
                 throw new BusinessException(409, "待办状态冲突");
             BusinessEventLog.committed("aftersale", "timeout_closed", "timeout_task", id);
@@ -157,7 +170,8 @@ public class AfterSaleTimeoutServiceImpl implements AfterSaleTimeoutService {
     /** 以 404 隐藏不存在的待办。 */
     private AfterSaleTimeoutTask requireTask(Long id) {
         AfterSaleTimeoutTask task = tasks.selectById(id);
-        if (task == null) throw new BusinessException(404, "待办不存在");
+        if (task == null)
+            throw new BusinessException(404, "待办不存在");
         return task;
     }
 

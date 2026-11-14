@@ -19,7 +19,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 import java.util.Map;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -31,35 +33,52 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SessionDependencyFailureFilterSliceTest.Configuration.class,
         SessionDependencyFailureFilter.class, ControllerSliceSecurity.class})
 class SessionDependencyFailureFilterSliceTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean SessionRepository<MapSession> repository;
-    @BeforeEach void session() {when(repository.createSession()).thenAnswer(call -> new MapSession());}
+    @Autowired
+    MockMvc mvc;
+    @MockitoBean
+    SessionRepository<MapSession> repository;
 
-    @Test void readFailureBeforeControllerIs503() throws Exception {
+    @BeforeEach
+    void session() {
+        when(repository.createSession()).thenAnswer(call -> new MapSession());
+    }
+
+    @Test
+    void readFailureBeforeControllerIs503() throws Exception {
         when(repository.findById("existing")).thenThrow(new RedisConnectionFailureException("offline"));
         mvc.perform(get("/test/session-dependency").header("X-Test-Session", "existing"))
                 .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value(503));
     }
-    @Test void saveFailureAtResponseCompletionIs503RatherThanBufferedSuccess() throws Exception {
+
+    @Test
+    void saveFailureAtResponseCompletionIs503RatherThanBufferedSuccess() throws Exception {
         doThrow(new RedisConnectionFailureException("offline")).when(repository).save(any());
         mvc.perform(get("/test/session-dependency"))
                 .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value(503))
                 .andExpect(jsonPath("$.success").doesNotExist());
     }
-    @Test void healthyRepositoryKeepsNormalResponseAndSavesSession() throws Exception {
+
+    @Test
+    void healthyRepositoryKeepsNormalResponseAndSavesSession() throws Exception {
         mvc.perform(get("/test/session-dependency"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
         verify(repository, atLeastOnce()).save(any());
     }
-    @TestConfiguration static class Configuration {
-        @Bean SessionRepositoryFilter<MapSession> testSessionFilter(SessionRepository<MapSession> repository) {
+
+    @TestConfiguration
+    static class Configuration {
+        @Bean
+        SessionRepositoryFilter<MapSession> testSessionFilter(SessionRepository<MapSession> repository) {
             var filter = new SessionRepositoryFilter<>(repository);
             filter.setHttpSessionIdResolver(new HeaderHttpSessionIdResolver("X-Test-Session"));
             return filter;
         }
     }
-    @RestController static class Probe {
-        @GetMapping("/test/session-dependency") Map<String,Boolean> session(HttpServletRequest request) {
+
+    @RestController
+    static class Probe {
+        @GetMapping("/test/session-dependency")
+        Map<String, Boolean> session(HttpServletRequest request) {
             request.getSession(true).setAttribute("probe", "saved");
             return Map.of("success", true);
         }

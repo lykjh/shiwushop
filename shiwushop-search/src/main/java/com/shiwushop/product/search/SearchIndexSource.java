@@ -53,9 +53,15 @@ public class SearchIndexSource {
             case "SEARCH_BRAND_REFRESH" -> "brands";
             default -> throw new IllegalArgumentException("Not a lookup event: " + eventType);
         };
-        List<Map<String, Object>> rows = db.queryForList(
-                "SELECT id, name, enabled FROM " + table + " WHERE id = :id", Map.of("id", id));
-        if (rows.isEmpty()) return null;
+        String sql = "shops".equals(table)
+                ? "SELECT id, name, CASE WHEN enabled = 1 AND qualification_revoked = 0 " +
+                  "AND (qualification_valid_until IS NULL OR qualification_valid_until >= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR)) " +
+                  "THEN 1 ELSE 0 END AS enabled " +
+                  "FROM shops WHERE id = :id"
+                : "SELECT id, name, enabled FROM brands WHERE id = :id";
+        List<Map<String, Object>> rows = db.queryForList(sql, Map.of("id", id));
+        if (rows.isEmpty())
+            return null;
         Map<String, Object> row = new HashMap<>(rows.getFirst());
         row.put("enabled", ((Number) row.get("enabled")).intValue() != 0);
         return row;
@@ -66,7 +72,8 @@ public class SearchIndexSource {
      * 仅为在售、店铺启用且分类路径可见的商品生成搜索文档；其余 ID 由工作器从索引删除。
      */
     public Map<Long, Map<String, Object>> productDocuments(List<Long> ids) {
-        if (ids.isEmpty()) return Map.of();
+        if (ids.isEmpty())
+            return Map.of();
         Map<String, Object> args = Map.of("ids", ids);
         List<Map<String, Object>> products = db.queryForList("""
                 SELECT p.id, p.name, p.category_id AS categoryId, pb.brand_id AS brandId,
@@ -74,6 +81,8 @@ public class SearchIndexSource {
                        COALESCE(sales.sold_count, 0) AS soldCount, p.status,
                        DATE_FORMAT(p.updated_at, '%Y-%m-%dT%H:%i:%s') AS updatedAt
                 FROM products p JOIN shops s ON s.id = p.shop_id AND s.enabled = 1
+                    AND s.qualification_revoked = 0
+                    AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until >= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
                 LEFT JOIN product_brands pb ON pb.product_id = p.id
                 LEFT JOIN brands b ON b.id = pb.brand_id
                 LEFT JOIN product_sales_stats sales ON sales.product_id = p.id
@@ -83,12 +92,12 @@ public class SearchIndexSource {
                 SELECT product_id AS productId,
                        COALESCE(MIN(CASE WHEN stock > 0 THEN price END), MIN(price)) AS startingPrice,
                        SUM(stock > 0) = 0 AS soldOut
-                FROM skus WHERE product_id IN (:ids) GROUP BY product_id
+                FROM skus WHERE product_id IN (:ids) AND status = 'ACTIVE' GROUP BY product_id
                 """, args));
         Map<Long, List<BigDecimal>> available = new HashMap<>();
         for (Map<String, Object> row : db.queryForList("""
                 SELECT product_id AS productId, price FROM skus
-                WHERE product_id IN (:ids) AND stock > 0 ORDER BY price
+                WHERE product_id IN (:ids) AND status = 'ACTIVE' AND stock > 0 ORDER BY price
                 """, args)) {
             long id = ((Number) row.get("productId")).longValue();
             available.computeIfAbsent(id, ignored -> new ArrayList<>()).add((BigDecimal) row.get("price"));
@@ -114,7 +123,8 @@ public class SearchIndexSource {
             long id = ((Number) source.get("id")).longValue();
             List<Long> path = categoryPath(((Number) source.get("categoryId")).longValue(), categories);
             Map<String, Object> price = prices.get(id);
-            if (path == null || price == null) continue;
+            if (path == null || price == null)
+                continue;
             Map<String, Object> doc = new HashMap<>(source);
             doc.put("categoryPathIds", path);
             doc.put("startingPrice", price.get("startingPrice"));
@@ -142,7 +152,8 @@ public class SearchIndexSource {
         Long current = id;
         while (current != null) {
             Category category = categories.get(current);
-            if (category == null || !category.visible() || path.size() == 3) return null;
+            if (category == null || !category.visible() || path.size() == 3)
+                return null;
             path.addFirst(current);
             current = category.parentId();
         }
@@ -150,5 +161,6 @@ public class SearchIndexSource {
     }
 
     /** 搜索文档生成时使用的分类父级和可见状态快照。 */
-    record Category(Long parentId, boolean visible) {}
+    record Category(Long parentId, boolean visible) {
+    }
 }

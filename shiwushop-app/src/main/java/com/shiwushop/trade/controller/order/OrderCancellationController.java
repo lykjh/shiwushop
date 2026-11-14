@@ -18,11 +18,18 @@ public class OrderCancellationController {
 
     /** 请求本人订单取消，未决结果由后台继续核对。 */
     @PostMapping("/orders/{orderId}/cancel")
-    public ResponseEntity<Result<CancelResult>> cancel(@PathVariable @Positive Long orderId, HttpServletRequest request) {
+    public ResponseEntity<Result<CancelResult>> cancel(@PathVariable @Positive Long orderId,
+                                                       HttpServletRequest request) {
         String status = payments.cancelOrder(SessionUser.requireId(request), orderId);
         return ResponseEntity.status("CANCELLED".equals(status) ? 200 : 202)
                 .body(Result.success(new CancelResult(orderId, status)));
     }
 
-    public record CancelResult(Long orderId, String status) {}
+    public record CancelResult(
+        /** 关联订单 ID。 */
+        Long orderId,
+        /** 订单取消请求的处理结果。 */
+        String status
+    ) {
+    }
 }

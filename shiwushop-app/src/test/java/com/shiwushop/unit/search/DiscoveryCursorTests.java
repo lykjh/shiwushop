@@ -12,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DiscoveryCursorTests {
-    private final DiscoveryCursor codec = new DiscoveryCursor(new ObjectMapper(), "test-cursor-secret-with-32-characters");
+    private final DiscoveryCursor codec = new DiscoveryCursor(new ObjectMapper(),
+            "test-cursor-secret-with-32-characters");
 
     @Test
     void bindsQueryAndIdentityAndRejectsTampering() {

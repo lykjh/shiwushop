@@ -21,7 +21,8 @@ class SearchGatewayTests {
 
     @AfterEach
     void stop() {
-        if (server != null) server.stop(0);
+        if (server != null)
+            server.stop(0);
     }
 
     @Test
@@ -55,7 +56,8 @@ class SearchGatewayTests {
         server.createContext("/_search/point_in_time", exchange -> {
             method.set(exchange.getRequestMethod());
             payload.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            byte[] body = "{\"pits\":[{\"pit_id\":\"renewed-pit\",\"successful\":false}]}".getBytes(StandardCharsets.UTF_8);
+            byte[] body = "{\"pits\":[{\"pit_id\":\"renewed-pit\",\"successful\":false}]}".getBytes(
+                    StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();

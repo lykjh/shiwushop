@@ -3,13 +3,17 @@ package com.shiwushop.unit.account;
 import com.shiwushop.user.dto.user.UserProfileUpdateDTO;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class UserProfileUpdateDTOTest {
-    @Test void stripsUnicodeWhitespaceBeforeNicknameValidation() {
+    @Test
+    void stripsUnicodeWhitespaceBeforeNicknameValidation() {
         assertEquals("小明", new UserProfileUpdateDTO("\u3000 小明 \u3000", null).nickname());
     }
-    @Test void validatesCodePointsAndOptionalAvatar() {
+
+    @Test
+    void validatesCodePointsAndOptionalAvatar() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertTrue(validator.validate(new UserProfileUpdateDTO("😀".repeat(40), null)).isEmpty());

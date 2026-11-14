@@ -23,8 +23,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = {AdminAfterSaleTimeoutController.class, GlobalExceptionHandler.class})
 @Import(ControllerSliceSecurity.class)
 class AdminAfterSaleTimeoutControllerTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean AfterSaleTimeoutService service;
+    @Autowired
+    MockMvc mvc;
+    @MockitoBean
+    AfterSaleTimeoutService service;
 
     @ParameterizedTest
     @ValueSource(strings = {"0", "-1", "abc", "9223372036854775808"})
@@ -33,7 +35,7 @@ class AdminAfterSaleTimeoutControllerTest {
         mvc.perform(get(path)).andExpect(status().isBadRequest());
         mvc.perform(post(path + "/claim").with(csrf())).andExpect(status().isBadRequest());
         mvc.perform(post(path + "/close").with(csrf()).contentType("application/json")
-                .content("{\"evidence\":\"记录\",\"conclusion\":\"完成\"}"))
+                        .content("{\"evidence\":\"记录\",\"conclusion\":\"完成\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

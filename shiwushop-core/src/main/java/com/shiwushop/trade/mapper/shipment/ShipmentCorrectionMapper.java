@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import com.shiwushop.trade.dto.shipment.correction.ShipmentCorrectionStatus;
 import com.shiwushop.trade.vo.shipment.correction.ShipmentCorrectionHistoryVO;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,6 +27,7 @@ public interface ShipmentCorrectionMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(ShipmentCorrection correction);
+
     @Select("SELECT * FROM shipment_corrections WHERE id=#{id}")
     ShipmentCorrection find(@Param("id") Long id);
 
@@ -48,6 +50,13 @@ public interface ShipmentCorrectionMapper {
     List<ShipmentCorrectionHistoryVO> history(@Param("orderId") Long orderId);
 
     @Select("""
+            SELECT id, original_version, old_carrier_name, old_tracking_no, new_carrier_name,
+                   new_tracking_no, reason, requested_by, requested_at, decided_by, decided_at
+            FROM shipment_corrections WHERE shipment_id=#{shipmentId} AND status='APPROVED' ORDER BY id
+            """)
+    List<ShipmentCorrectionHistoryVO> historyForShipment(@Param("shipmentId") Long shipmentId);
+
+    @Select("""
             <script>
             SELECT * FROM shipment_corrections WHERE status=#{status}
             <if test="afterId != null">AND id &lt; #{afterId}</if>
@@ -55,4 +64,5 @@ public interface ShipmentCorrectionMapper {
             </script>
             """)
     List<ShipmentCorrection> list(@Param("status") ShipmentCorrectionStatus status,
-                                  @Param("afterId") Long afterId, @Param("limit") int limit);}
+                                  @Param("afterId") Long afterId, @Param("limit") int limit);
+}

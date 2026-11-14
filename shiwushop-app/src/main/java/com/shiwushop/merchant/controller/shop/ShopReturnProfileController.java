@@ -30,7 +30,9 @@ public class ShopReturnProfileController {
 
     /** 校验并整体保存当前店主的私密退货资料。 */
     @PutMapping
-    public Result<ShopReturnProfileVO> save(@PathVariable @Positive Long shopId, @Valid @RequestBody ShopReturnProfileSaveDTO dto, HttpServletRequest request) {
+    public Result<ShopReturnProfileVO> save(@PathVariable @Positive Long shopId,
+                                            @Valid @RequestBody ShopReturnProfileSaveDTO dto,
+                                            HttpServletRequest request) {
         return Result.success(service.save(shopId, SessionUser.requireId(request), dto));
     }
 }

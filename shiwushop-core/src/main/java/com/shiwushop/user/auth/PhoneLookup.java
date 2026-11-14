@@ -32,7 +32,8 @@ public class PhoneLookup {
     private String mac(String value) {
         try {
             byte[] key = Base64.getDecoder().decode(keyBase64);
-            if (key.length != 32) throw new BusinessException(503, "短信登录配置不可用");
+            if (key.length != 32)
+                throw new BusinessException(503, "短信登录配置不可用");
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
             return HexFormat.of().formatHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));

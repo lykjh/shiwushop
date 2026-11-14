@@ -5,10 +5,16 @@ import com.shiwushop.trade.entity.payment.PaymentAttempt;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Insert;
 
 import java.time.LocalDateTime;
 
 public interface PaymentAttemptMapper extends BaseMapper<PaymentAttempt> {
+    @Insert("INSERT INTO audit_events(actor_user_id,action,target_type,target_id,summary,occurred_at) "
+            + "VALUES(#{userId},'LOCAL_PAYMENT_SIMULATED','ORDER',#{orderId},"
+            + "CONCAT('本地模拟付款，无真实扣款；paymentAttemptId=',#{paymentId}),#{now})")
+    void auditSimulation(@Param("userId") Long userId, @Param("orderId") Long orderId,
+                         @Param("paymentId") Long paymentId, @Param("now") LocalDateTime now);
     @Select("SELECT * FROM payment_attempts WHERE order_id = #{orderId} ORDER BY id DESC LIMIT 1")
     PaymentAttempt selectLatest(@Param("orderId") Long orderId);
 

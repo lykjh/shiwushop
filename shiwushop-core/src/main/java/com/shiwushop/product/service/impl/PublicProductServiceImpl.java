@@ -11,6 +11,7 @@ import com.shiwushop.product.entity.status.ProductStatus;
 import com.shiwushop.product.mapper.brand.BrandMapper;
 import com.shiwushop.product.mapper.product.ProductImageMapper;
 import com.shiwushop.product.mapper.product.ProductMapper;
+import com.shiwushop.product.mapper.product.ProductDisplayAttributeMapper;
 import com.shiwushop.product.mapper.product.SkuMapper;
 import com.shiwushop.merchant.service.ShopService;
 import com.shiwushop.product.service.CategoryService;
@@ -20,6 +21,7 @@ import com.shiwushop.product.vo.category.CategoryDetailVO;
 import com.shiwushop.product.vo.product.PublicProductDetailVO;
 import com.shiwushop.product.vo.product.PublicProductPageVO;
 import com.shiwushop.product.vo.product.PublicProductVO;
+import com.shiwushop.product.vo.product.DisplayAttributeVO;
 import com.shiwushop.product.vo.query.product.PublicProductRow;
 import com.shiwushop.product.vo.sku.PublicSkuVO;
 import com.shiwushop.common.BusinessException;
@@ -42,6 +44,7 @@ public class PublicProductServiceImpl implements PublicProductService {
     private final ProductImageMapper productImageMapper;
     private final CategoryService categoryService;
     private final ProductOptionReader optionReader;
+    private final ProductDisplayAttributeMapper displayAttributes;
 
     /**
      * 校验公开筛选条件，多读一行判断是否还有下一页，再按商品 ID 返回游标。
@@ -148,7 +151,7 @@ public class PublicProductServiceImpl implements PublicProductService {
     @Transactional(readOnly = true)
     public PublicProductDetailVO publicDetail(Long id) {
         Product product = productMapper.selectById(id);
-        if(product==null){
+        if (product == null) {
             throw new BusinessException(404, "商品不存在");
         }
 
@@ -156,19 +159,19 @@ public class PublicProductServiceImpl implements PublicProductService {
             throw new BusinessException(404, "商品不存在");
         }
 
-        Shop shop=shopService.findById(product.getShopId());
-        if(shop==null||!Integer.valueOf(1).equals(shop.getEnabled())){
+        Shop shop = shopService.findById(product.getShopId());
+        if (shop == null || !shop.isTradingEnabled()) {
             throw new BusinessException(404, "店铺不存在");
         }
 
         PublicProductDetailVO vo = new PublicProductDetailVO();
-        CategoryDetailVO categoryDetail=categoryService.detail(product.getCategoryId());
+        CategoryDetailVO categoryDetail = categoryService.detail(product.getCategoryId());
         vo.setId(product.getId());
         vo.setName(product.getName());
         vo.setDescription(product.getDescription());
         List<ProductImage> images = productImageMapper.selectList(new LambdaQueryWrapper<ProductImage>()
                 .eq(ProductImage::getProductId, product.getId())
-                        .orderByAsc(ProductImage::getSortOrder));
+                .orderByAsc(ProductImage::getSortOrder));
         vo.setImageMediaIds(images.stream().map(ProductImage::getMediaId).toList());
         vo.setCoverMediaId(images.stream()
                 .filter(image -> Integer.valueOf(1).equals(image.getIsCover()))
@@ -182,16 +185,16 @@ public class PublicProductServiceImpl implements PublicProductService {
         }
         vo.setSoldCount(Objects.requireNonNullElse(productMapper.getSoldCount(id), 0L));
 
-
         vo.setOptions(optionReader.loadOptions(id));
 
-        List<Sku> skuRows=skuMapper.selectList(
+        List<Sku> skuRows = skuMapper.selectList(
                 new LambdaQueryWrapper<Sku>()
                         .eq(Sku::getProductId, id)
+                        .eq(Sku::getStatus, "ACTIVE")
                         .orderByAsc(Sku::getId)
         );
         Map<Long, List<Long>> skuValues = optionReader.loadSkuValueIds(skuRows);
-        List<PublicSkuVO> skus=skuRows.stream().map(sku -> {
+        List<PublicSkuVO> skus = skuRows.stream().map(sku -> {
             PublicSkuVO skuVO = new PublicSkuVO();
             skuVO.setId(sku.getId());
             skuVO.setOptionValueIds(skuValues.getOrDefault(sku.getId(), List.of()));
@@ -201,7 +204,9 @@ public class PublicProductServiceImpl implements PublicProductService {
         }).toList();
 
         vo.setSkus(skus);
+        vo.setDisplayAttributes(displayAttributes.list(id).stream()
+                .map(a -> new DisplayAttributeVO(a.getAttributeKey(), a.getAttributeValue(), a.getPosition()))
+                .toList());
         return vo;
     }
-
 }

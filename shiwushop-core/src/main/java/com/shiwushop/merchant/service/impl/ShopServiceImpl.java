@@ -16,6 +16,10 @@ import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.merchant.entity.shop.Shop;
 import com.shiwushop.merchant.mapper.shop.ShopMapper;
+import com.shiwushop.merchant.mapper.staff.ShopStaffGrantMapper;
+import org.springframework.scheduling.annotation.Scheduled;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.merchant.service.ShopCategoryAccess;
@@ -33,19 +37,24 @@ import java.util.Collection;
 @RequiredArgsConstructor
 public class ShopServiceImpl implements ShopService {
     @Override
-    public Shop findById(Long shopId) { return shopMapper.selectById(shopId); }
+    public Shop findById(Long shopId) {
+        return shopMapper.selectById(shopId);
+    }
 
     /** 由调用方事务持有店铺行锁，直到相关业务完成。 */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Shop lockById(Long shopId) {
         Shop shop = shopMapper.selectForUpdate(shopId);
-        if (shop == null) throw new BusinessException(404, "店铺不存在");
+        if (shop == null)
+            throw new BusinessException(404, "店铺不存在");
         return shop;
     }
 
     @Override
-    public List<Shop> findByIds(Collection<Long> shopIds) { return shopMapper.selectBatchIds(shopIds); }
+    public List<Shop> findByIds(Collection<Long> shopIds) {
+        return shopMapper.selectBatchIds(shopIds);
+    }
 
     private final ShopMapper shopMapper;
     private final AccountAccess accountAccess;
@@ -53,6 +62,22 @@ public class ShopServiceImpl implements ShopService {
     private final MediaAssetAccess mediaAssetAccess;
     private final ShopCategoryAccess categoryService;
     private final OutboxEventMapper outboxEventMapper;
+    private final ShopStaffGrantMapper staffGrants;
+
+    /** 到期后的请求会实时拒绝；定期落停业状态并刷新搜索索引。 */
+    @Scheduled(fixedDelay = 5000)
+    @Transactional
+    public void closeExpiredQualifications() {
+        for (Long id : shopMapper.selectExpiredQualificationIds(LocalDate.now(ZoneId.of("Asia/Shanghai")))) {
+            Shop shop = shopMapper.selectForUpdate(id);
+            if (shop != null && Integer.valueOf(1).equals(shop.getEnabled()) && !shop.isQualificationCurrent()) {
+                shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                        .eq(Shop::getId, id).set(Shop::getEnabled, 0));
+                queueSearchRefresh(id);
+                BusinessEventLog.committed("merchant", "qualification_expired", "shop", id);
+            }
+        }
+    }
 
     /** 将店铺变化写入事务发件箱，确保搜索索引随后刷新；写入失败时中断事务。 */
     private void queueSearchRefresh(Long shopId) {
@@ -73,7 +98,7 @@ public class ShopServiceImpl implements ShopService {
             mediaAssetAccess.requireReadyOwned(dto.getLogoMediaId(), adminId, "店铺标识媒体不存在或不可用");
         }
 
-        Shop shop=new Shop();
+        Shop shop = new Shop();
         shop.setOwnerUserId(owner.getUserId());
         shop.setName(dto.getName().strip());
         shop.setLogoMediaId(dto.getLogoMediaId());
@@ -82,7 +107,7 @@ public class ShopServiceImpl implements ShopService {
         try {
             shopMapper.insert(shop);
         } catch (DuplicateKeyException e) {
-            throw new BusinessException(409,"店铺已存在",e);
+            throw new BusinessException(409, "店铺已存在", e);
         }
 
         // 首次开店时提升为商家；账号角色与店铺创建同事务提交。
@@ -110,6 +135,9 @@ public class ShopServiceImpl implements ShopService {
         shop.setOwnerUserId(newOwnerId);
         shopMapper.updateById(shop);
 
+        // 转店与全部旧岗位撤权共用店铺行锁和事务，新店主重新授予员工。
+        staffGrants.revokeShop(shopId, null);
+
         accountAccess.promoteMerchant(newOwnerId);
         BusinessEventLog.committed("merchant", "shop_owner_changed", "shop", shopId);
         return toVO(shop);
@@ -120,9 +148,12 @@ public class ShopServiceImpl implements ShopService {
     @Transactional
     public ShopVO changeStatus(Long shopId, Integer enabled) {
 
-        if (shopMapper.selectById(shopId) == null) {
+        Shop shop = shopMapper.selectForUpdate(shopId);
+        if (shop == null) {
             throw new BusinessException(404, "店铺不存在");
         }
+        if (Integer.valueOf(1).equals(enabled) && !shop.isQualificationCurrent())
+            throw new BusinessException(409, "店铺资质已失效");
 
         shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                 .eq(Shop::getId, shopId)
@@ -147,8 +178,8 @@ public class ShopServiceImpl implements ShopService {
     public ShopPageVO publicList(Long categoryId, int page, int size) {
         PageSpec pageSpec = PageSpec.of(page, size);
 
-        if(categoryId!=null){
-            if(categoryId<1){
+        if (categoryId != null) {
+            if (categoryId < 1) {
                 throw new BusinessException(400, "分类参数错误");
             }
             categoryService.requireVisible(categoryId);
@@ -156,12 +187,12 @@ public class ShopServiceImpl implements ShopService {
 
         long offset = pageSpec.offset();
         return new ShopPageVO(
-                shopMapper.selectPublicPage(categoryId,size,offset),
-                page,size,shopMapper.countPublic(categoryId)
+                shopMapper.selectPublicPage(categoryId, size, offset),
+                page, size, shopMapper.countPublic(categoryId)
         );
     }
 
-    /** 按 ID 读取店铺资料及公开分类；当前方法只校验店铺存在，不过滤停用状态。 */
+    /** 停业店铺详情仍可查询，但返回实际不可经营状态。 */
     @Override
     public ShopDetailVO publicDetail(Long id) {
         if (id <= 0) {
@@ -176,7 +207,7 @@ public class ShopServiceImpl implements ShopService {
                 shop.getName(),
                 shop.getLogoMediaId(),
                 shop.getDescription(),
-                shop.getEnabled(),
+                shop.isTradingEnabled() ? 1 : 0,
                 shopMapper.selectPublicCategories(id));
     }
 
@@ -193,7 +224,7 @@ public class ShopServiceImpl implements ShopService {
         }
 
         try {
-            int changed=shopMapper.update(null,new LambdaUpdateWrapper<Shop>()
+            int changed = shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                     .eq(Shop::getId, shopId)
                     .eq(Shop::getOwnerUserId, userId)
                     .set(Shop::getName, dto.getName().strip())
@@ -211,7 +242,6 @@ public class ShopServiceImpl implements ShopService {
         queueSearchRefresh(shopId);
         BusinessEventLog.committed("merchant", "shop_profile_updated", "shop", shopId);
         return toVO(updated);
-
     }
 
     /** 验证商家角色后列出其名下店铺，包括停用店铺。 */
@@ -230,7 +260,6 @@ public class ShopServiceImpl implements ShopService {
     /** 将店铺实体转换为管理接口使用的店铺视图。 */
     private ShopVO toVO(Shop shop) {
         return new ShopVO(shop.getId(), shop.getOwnerUserId(), shop.getName(),
-                shop.getLogoMediaId(), shop.getDescription(), shop.getEnabled());
+                shop.getLogoMediaId(), shop.getDescription(), shop.isTradingEnabled() ? 1 : 0);
     }
-
 }

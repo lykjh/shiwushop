@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
 import tools.jackson.databind.ObjectMapper;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -41,15 +42,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @AutoConfigureMockMvc
 @Transactional
 class OrderListTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private UserAccountMapper accountMapper;
-    @Autowired private StringRedisTemplate redis;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private UserAccountMapper accountMapper;
+    @Autowired
+    private StringRedisTemplate redis;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -61,7 +71,8 @@ class OrderListTests {
         shop.setEnabled(1);
         shopMapper.insert(shop);
         List<Long> ids = new ArrayList<>();
-        for (int n = 0; n < 23; n++) ids.add(order(buyer, shop.getId()).getId());
+        for (int n = 0; n < 23; n++)
+            ids.add(order(buyer, shop.getId()).getId());
         jdbc.update("UPDATE orders SET created_at='2026-10-26 10:00:00' WHERE user_id=?", buyer);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", buyer);
@@ -70,11 +81,14 @@ class OrderListTests {
         ArrayList<Long> seen = new ArrayList<>();
         while (true) {
             var request = get("/orders").param("size", "5").session(session);
-            if (cursor != null) request.param("afterId", cursor.toString());
+            if (cursor != null)
+                request.param("afterId", cursor.toString());
             var response = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
             var data = json.readTree(response.getResponse().getContentAsString()).path("data");
-            for (var item : data.path("items")) seen.add(item.path("id").asLong());
-            if (!data.path("hasMore").asBoolean()) break;
+            for (var item : data.path("items"))
+                seen.add(item.path("id").asLong());
+            if (!data.path("hasMore").asBoolean())
+                break;
             cursor = data.path("nextCursor").asLong();
         }
         ids.sort(java.util.Comparator.reverseOrder());

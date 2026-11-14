@@ -39,6 +39,12 @@ public class MediaController {
         return Result.success(new Uploaded(uploadService.upload(SessionUser.requireId(request), file)));
     }
 
+    /** 证照上传使用独立用途，后续只能关联入驻资质。 */
+    @PostMapping(value = "/credentials", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<Uploaded> uploadCredential(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        return Result.success(new Uploaded(uploadService.uploadCredential(SessionUser.requireId(request), file)));
+    }
+
     /**
      * 按 ID 读取图片。读取服务根据当前用户和图片归属决定是否允许访问。
      * 自有图片禁止缓存；公开图片允许客户端使用 ETag 做条件请求。
@@ -57,5 +63,9 @@ public class MediaController {
                 .body(image.resource());
     }
 
-    public record Uploaded(Long id) {}
+    public record Uploaded(
+        /** 新上传的媒体资源 ID。 */
+        Long id
+    ) {
+    }
 }

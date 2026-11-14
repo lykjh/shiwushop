@@ -3,7 +3,7 @@ package com.shiwushop.integration.component.payment;
 import com.shiwushop.support.TestRegistration;
 
 import com.shiwushop.payment.service.AlipayGateway;
-import com.shiwushop.payment.service.impl.SdkAlipayGateway;
+import com.shiwushop.trade.payment.LocalSimulationGateway;
 import com.shiwushop.trade.entity.status.OrderStatus;
 import com.shiwushop.trade.entity.status.PaymentAttemptStatus;
 
@@ -75,20 +75,34 @@ import static org.hamcrest.Matchers.startsWith;
 @AutoConfigureMockMvc
 @Transactional
 class PaymentFlowTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private OrderPaymentService paymentService;
-    @Autowired private PaymentAttemptMapper paymentMapper;
-    @Autowired private RegisterService userService;
-    @Autowired private PrivacyCipher cipher;
-    @Autowired private JdbcTemplate jdbc;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private ProductMapper productMapper;
-    @Autowired private SkuMapper skuMapper;
-    @Autowired private OrderMapper orderMapper;
-    @Autowired private Clock businessClock;
-    @MockitoBean private SdkAlipayGateway gateway;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private OrderPaymentService paymentService;
+    @Autowired
+    private PaymentAttemptMapper paymentMapper;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private PrivacyCipher cipher;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private ProductMapper productMapper;
+    @Autowired
+    private SkuMapper skuMapper;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private Clock businessClock;
+    @MockitoBean(name = "localSimulationGateway")
+    private LocalSimulationGateway gateway;
 
     @BeforeEach
     void gatewayReady() {
@@ -110,14 +124,17 @@ class PaymentFlowTests {
                     .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("CANCELLED"));
         }
         assertEquals(3, skuMapper.selectById(f.sku().getId()).getStock());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+                Integer.class, f.order().getId()));
     }
 
     @Test
     void cancellationNotFoundBeforeDeadlineRemainsPendingAndBlocksPayment() throws Exception {
         Fixture f = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         var attempt = pendingAttempt(f, true);
-        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(
+                new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
         mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).session(session(f.buyer())))
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.status").value("CANCEL_PENDING"));
         assertNotNull(orderMapper.selectById(f.order().getId()).getCancelRequestedAt());
@@ -129,8 +146,10 @@ class PaymentFlowTests {
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/payments/checkout/{outTradeNo}", attempt.getOutTradeNo()))
                 .andExpect(status().isConflict());
-        when(gateway.query(any())).thenAnswer(call -> new AlipayGateway.TradeResult("NOT_FOUND", call.getArgument(0), null, null));
-        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("TRADE_CLOSED", attempt.getOutTradeNo(), null, new BigDecimal("20.00")));
+        when(gateway.query(any())).thenAnswer(
+                call -> new AlipayGateway.TradeResult("NOT_FOUND", call.getArgument(0), null, null));
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(
+                new AlipayGateway.TradeResult("TRADE_CLOSED", attempt.getOutTradeNo(), null, new BigDecimal("20.00")));
         paymentService.expireDueOrders();
         assertEquals(OrderStatus.CANCELLED, orderMapper.selectById(f.order().getId()).getStatus());
     }
@@ -145,19 +164,28 @@ class PaymentFlowTests {
         when(gateway.qrCode(any(), any(), any())).thenAnswer(call -> {
             entered.countDown();
             assertTrue(release.await(5, TimeUnit.SECONDS));
-            return new AlipayGateway.QrCode("https://qr.alipay.com/late", LocalDateTime.now(businessClock).plusMinutes(14));
+            return new AlipayGateway.QrCode("https://qr.alipay.com/late",
+                    LocalDateTime.now(businessClock).plusMinutes(14));
         });
         when(gateway.query(trade)).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", trade, null, null));
         var qr = CompletableFuture.supplyAsync(() -> {
-            try { paymentService.checkoutPage(trade); return 200; }
-            catch (BusinessException e) { return e.getCode(); }
+            try {
+                paymentService.checkoutPage(trade);
+                return 200;
+            } catch (BusinessException e) {
+                return e.getCode();
+            }
         });
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
             assertEquals("CANCEL_PENDING", paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
             assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
-            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
-        } finally { release.countDown(); }
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+                    Integer.class, f.order().getId()));
+        } finally {
+            release.countDown();
+        }
         assertEquals(409, qr.get(5, TimeUnit.SECONDS));
         assertNull(paymentMapper.selectByOutTradeNo(trade).getQrCode());
     }
@@ -176,15 +204,20 @@ class PaymentFlowTests {
             return new AlipayGateway.TradeResult("WAIT_BUYER_PAY", trade, null, new BigDecimal("20.00"));
         });
         when(gateway.close(trade)).thenReturn(true);
-        var first = CompletableFuture.supplyAsync(() -> paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
+        var first = CompletableFuture.supplyAsync(
+                () -> paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
             assertEquals("CANCEL_PENDING", paymentService.cancelOrder(f.buyer().getId(), f.order().getId()));
             paymentService.expireOrder(f.order().getId());
-        } finally { release.countDown(); }
+        } finally {
+            release.countDown();
+        }
         assertEquals("CANCELLED", first.get(5, TimeUnit.SECONDS));
         verify(gateway, times(1)).query(trade);
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+                Integer.class, f.order().getId()));
     }
 
     @Test
@@ -202,25 +235,37 @@ class PaymentFlowTests {
         when(gateway.close(trade)).thenReturn(true);
         when(gateway.verify(anyMap())).thenReturn(true);
         var cancellation = CompletableFuture.supplyAsync(() -> {
-            try { paymentService.cancelOrder(f.buyer().getId(), f.order().getId()); return 200; }
-            catch (BusinessException e) { return e.getCode(); }
+            try {
+                paymentService.cancelOrder(f.buyer().getId(), f.order().getId());
+                return 200;
+            } catch (BusinessException e) {
+                return e.getCode();
+            }
         });
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
             paymentService.notifyPaid(Map.of("out_trade_no", trade, "trade_no", "paid-" + f.order().getId(),
-                    "trade_status", "TRADE_SUCCESS", "total_amount", "20.00", "app_id", "sandbox-app", "seller_id", "sandbox-seller"));
-        } finally { release.countDown(); }
+                    "trade_status", "TRADE_SUCCESS", "total_amount", "20.00", "app_id", "sandbox-app", "seller_id",
+                    "sandbox-seller"));
+        } finally {
+            release.countDown();
+        }
         assertEquals(409, cancellation.get(5, TimeUnit.SECONDS));
         assertEquals(OrderStatus.PAID, orderMapper.selectById(f.order().getId()).getStatus());
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'", Integer.class, f.order().getId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+                Integer.class, f.order().getId()));
     }
 
     @Test
     void cancellationQueryPaidAndGatewayTimeoutKeepCorrectState() {
         Fixture paid = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         var attempt = pendingAttempt(paid, true);
-        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("TRADE_SUCCESS", attempt.getOutTradeNo(), "paid-" + paid.order().getId(), new BigDecimal("20.00")));
-        assertEquals(409, assertThrows(BusinessException.class, () -> paymentService.cancelOrder(paid.buyer().getId(), paid.order().getId())).getCode());
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(
+                new AlipayGateway.TradeResult("TRADE_SUCCESS", attempt.getOutTradeNo(), "paid-" + paid.order().getId(),
+                        new BigDecimal("20.00")));
+        assertEquals(409, assertThrows(BusinessException.class,
+                () -> paymentService.cancelOrder(paid.buyer().getId(), paid.order().getId())).getCode());
         assertEquals(OrderStatus.PAID, orderMapper.selectById(paid.order().getId()).getStatus());
         Fixture pending = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         var timedOut = pendingAttempt(pending, true);
@@ -237,7 +282,8 @@ class PaymentFlowTests {
         attempt.setQrClaimToken("unfinished-qr");
         attempt.setQrClaimExpiresAt(LocalDateTime.now(businessClock).minusMinutes(5));
         paymentMapper.updateById(attempt);
-        when(gateway.query(attempt.getOutTradeNo())).thenReturn(new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
+        when(gateway.query(attempt.getOutTradeNo())).thenReturn(
+                new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
         paymentService.expireOrder(f.order().getId());
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(attempt.getId()).getStatus());
@@ -248,21 +294,37 @@ class PaymentFlowTests {
         Fixture f = fixture(LocalDateTime.now(businessClock).plusDays(1));
         String digits = "(SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
         String columns = "user_id,shop_id,total_amount,status,pay_expires_at,consignee_ciphertext,phone_ciphertext,province,city,district,detail_ciphertext,shipping_key_version";
-        jdbc.update("INSERT INTO orders (" + columns + ") SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version FROM orders o CROSS JOIN " + digits + " a CROSS JOIN " + digits + " b CROSS JOIN " + digits + " c CROSS JOIN " + digits + " d WHERE o.id=?", f.order().getId());
-        jdbc.update("INSERT INTO orders (" + columns + ",cancel_requested_at,cancel_queue_at) SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version,'2001-01-01','2001-01-01' FROM orders o CROSS JOIN " + digits + " a CROSS JOIN " + digits + " b CROSS JOIN (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2) c WHERE o.id=? AND (c.n * 100 + b.n * 10 + a.n) < 210", f.order().getId());
-        jdbc.update("INSERT INTO payment_attempts (order_id,channel,out_trade_no,app_id,seller_id,amount,status) SELECT id,'ALIPAY_SANDBOX',CONCAT('fair-',id),'sandbox-app','sandbox-seller',20,'PENDING' FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'", f.buyer().getId());
+        jdbc.update("INSERT INTO orders (" + columns +
+                ") SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version FROM orders o CROSS JOIN " +
+                digits + " a CROSS JOIN " + digits + " b CROSS JOIN " + digits + " c CROSS JOIN " + digits +
+                " d WHERE o.id=?", f.order().getId());
+        jdbc.update("INSERT INTO orders (" + columns +
+                        ",cancel_requested_at,cancel_queue_at) SELECT o.user_id,o.shop_id,o.total_amount,'UNPAID',o.pay_expires_at,o.consignee_ciphertext,o.phone_ciphertext,o.province,o.city,o.district,o.detail_ciphertext,o.shipping_key_version,'2001-01-01','2001-01-01' FROM orders o CROSS JOIN " +
+                        digits + " a CROSS JOIN " + digits +
+                        " b CROSS JOIN (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2) c WHERE o.id=? AND (c.n * 100 + b.n * 10 + a.n) < 210",
+                f.order().getId());
+        jdbc.update(
+                "INSERT INTO payment_attempts (order_id,channel,out_trade_no,app_id,seller_id,amount,status) SELECT id,'ALIPAY_SANDBOX',CONCAT('fair-',id),'sandbox-app','sandbox-seller',20,'PENDING' FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'",
+                f.buyer().getId());
         when(gateway.configured()).thenReturn(false);
-        var expiryPlan = jdbc.queryForList("EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND pay_expires_at <= NOW() AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY pay_expires_at,id LIMIT 25");
-        var queuePlan = jdbc.queryForList("EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND cancel_queue_at IS NOT NULL AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY cancel_queue_at,id LIMIT 25");
+        var expiryPlan = jdbc.queryForList(
+                "EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND pay_expires_at <= NOW() AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY pay_expires_at,id LIMIT 25");
+        var queuePlan = jdbc.queryForList(
+                "EXPLAIN SELECT id FROM orders WHERE status='UNPAID' AND cancel_queue_at IS NOT NULL AND (expiry_claim_until IS NULL OR expiry_claim_until <= NOW(3)) ORDER BY cancel_queue_at,id LIMIT 25");
         System.out.println("W04 expiry EXPLAIN " + expiryPlan);
         System.out.println("W04 cancel EXPLAIN " + queuePlan);
         assertEquals("idx_orders_expiry_scan", expiryPlan.getFirst().get("key"));
         assertEquals("idx_orders_cancel_queue", queuePlan.getFirst().get("key"));
         assertEquals("range", expiryPlan.getFirst().get("type"));
         assertEquals("range", queuePlan.getFirst().get("type"));
-        for (int i = 0; i < 9; i++) paymentService.expireDueOrders();
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'", Integer.class, f.buyer().getId()));
-        assertEquals(210, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_requested_at='2001-01-01'", Integer.class, f.buyer().getId()));
+        for (int i = 0; i < 9; i++)
+            paymentService.expireDueOrders();
+        assertEquals(0,
+                jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_queue_at='2001-01-01'",
+                        Integer.class, f.buyer().getId()));
+        assertEquals(210,
+                jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=? AND cancel_requested_at='2001-01-01'",
+                        Integer.class, f.buyer().getId()));
     }
 
     @Test
@@ -338,12 +400,14 @@ class PaymentFlowTests {
         when(gateway.verify(anyMap())).thenReturn(true);
         for (int i = 0; i < 20; i++) {
             notifyForm(outTradeNo, "20.00", "alipay-trade-1")
-                    .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("success"));
+                    .andExpect(status().isOk()).andExpect(
+                            org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("success"));
         }
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
         assertEquals(1, searchEvents(fixture.product()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM payment_attempts WHERE order_id=? AND status='SUCCESS'",
-                Integer.class, fixture.order().getId()));
+        assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM payment_attempts WHERE order_id=? AND status='SUCCESS'",
+                        Integer.class, fixture.order().getId()));
         mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).session(session(fixture.buyer())))
                 .andExpect(status().isConflict());
         mockMvc.perform(post("/orders/{id}/pay", fixture.order().getId()).session(session(fixture.buyer())))
@@ -356,10 +420,12 @@ class PaymentFlowTests {
         paymentService.start(fixture.buyer().getId(), fixture.order().getId());
         String outTradeNo = paymentMapper.selectLatest(fixture.order().getId()).getOutTradeNo();
         notifyForm(outTradeNo, "20.00", "trade-2").andExpect(status().isBadRequest())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("failure"));
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("failure"));
         when(gateway.verify(anyMap())).thenReturn(true);
         notifyForm(outTradeNo, "19.00", "trade-2").andExpect(status().isBadRequest())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("failure"));
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("failure"));
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertEquals(0L, productMapper.getSoldCount(fixture.product().getId()));
     }
@@ -573,12 +639,14 @@ class PaymentFlowTests {
         assertEquals(OrderStatus.CANCELLED, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.CLOSED, paymentMapper.selectById(attempt.getId()).getStatus());
         assertEquals(3, skuMapper.selectById(sku.getId()).getStock());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
         paymentService.expireOrder(fixture.order().getId());
         assertEquals(3, skuMapper.selectById(sku.getId()).getStock());
         assertEquals(1, searchEvents(fixture.product()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
     }
 
@@ -626,7 +694,8 @@ class PaymentFlowTests {
         assertEquals(PaymentAttemptStatus.CLOSED, paymentMapper.selectById(safe.getId()).getStatus());
         assertEquals(3, skuMapper.selectById(guarded.sku().getId()).getStock());
         assertEquals(1, searchEvents(guarded.product()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, guarded.order().getId()));
 
         Fixture legacy = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
@@ -690,15 +759,18 @@ class PaymentFlowTests {
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
         assertEquals(1, searchEvents(fixture.product()));
         assertEquals(1, skuMapper.selectById(fixture.sku().getId()).getStock());
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
     }
 
-    private void assertPendingWithoutReturn(Fixture fixture, com.shiwushop.trade.entity.payment.PaymentAttempt attempt) {
+    private void assertPendingWithoutReturn(Fixture fixture,
+                                            com.shiwushop.trade.entity.payment.PaymentAttempt attempt) {
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(attempt.getId()).getStatus());
         assertEquals(1, skuMapper.selectById(fixture.sku().getId()).getStock());
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
         assertEquals(0, searchEvents(fixture.product()));
     }
@@ -730,7 +802,8 @@ class PaymentFlowTests {
         assertNull(paymentMapper.selectLatest(fixture.order().getId()));
         assertEquals(3, skuMapper.selectById(fixture.sku().getId()).getStock());
         assertEquals(1, searchEvents(fixture.product()));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
     }
 
@@ -741,7 +814,8 @@ class PaymentFlowTests {
     }
 
     private org.springframework.test.web.servlet.ResultActions notifyForm(String outTradeNo,
-                                                                            String amount, String tradeNo) throws Exception {
+                                                                          String amount,
+                                                                          String tradeNo) throws Exception {
         return mockMvc.perform(post("/payments/alipay/notify")
                 .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
                 .param("out_trade_no", outTradeNo).param("trade_no", tradeNo)
@@ -812,5 +886,6 @@ class PaymentFlowTests {
         return session;
     }
 
-    private record Fixture(UserProfile buyer, Order order, Product product, Sku sku) {}
+    private record Fixture(UserProfile buyer, Order order, Product product, Sku sku) {
+    }
 }

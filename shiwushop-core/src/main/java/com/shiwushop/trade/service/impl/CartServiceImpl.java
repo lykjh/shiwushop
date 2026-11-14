@@ -55,7 +55,8 @@ public class CartServiceImpl implements CartService {
         accountAccess.checkActive(userId);
         List<CartItem> items = cartItemMapper.selectList(new LambdaQueryWrapper<CartItem>()
                 .eq(CartItem::getUserId, userId).orderByAsc(CartItem::getId));
-        if (items.isEmpty()) return List.of();
+        if (items.isEmpty())
+            return List.of();
 
         Map<Long, Integer> quantities = new LinkedHashMap<>();
         items.forEach(item -> quantities.put(item.getSkuId(), item.getQuantity()));
@@ -67,7 +68,8 @@ public class CartServiceImpl implements CartService {
             String reason = snapshot.unavailableReason();
             return new CartItemVO(item.getId(), item.getSkuId(),
                     product == null ? null : product.getId(), product == null ? null : product.getName(),
-                    snapshot.optionNames(), sku == null ? null : sku.getPrice(), item.getQuantity(), reason == null, reason);
+                    snapshot.optionNames(), sku == null ? null : sku.getPrice(), item.getQuantity(), reason == null,
+                    reason);
         }).toList();
     }
 
@@ -114,6 +116,4 @@ public class CartServiceImpl implements CartService {
                 product == null ? null : product.getName(), values,
                 sku == null ? null : sku.getPrice(), item.getQuantity(), reason == null, reason);
     }
-
-
 }

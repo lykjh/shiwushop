@@ -24,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhoneBindingServiceImpl implements PhoneBindingService {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(PhoneBindingServiceImpl.class);
+    /** 手机号绑定短信的用途标识，与登录和重置密码验证码隔离。 */
     private static final String BIND = "bind";
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder();
     private final PhoneLookup phones;
@@ -62,8 +64,10 @@ public class PhoneBindingServiceImpl implements PhoneBindingService {
         authCache.blockUntilTransactionEnds(userId,
                 new AccountAuthCache.State(AccountStatus.ACTIVE, account.getAuthVersion() + 1));
         try {
-            if (bindings.lockByUserId(userId) == null) bindings.insert(userId, ciphertext, digest);
-            else bindings.update(userId, ciphertext, digest);
+            if (bindings.lockByUserId(userId) == null)
+                bindings.insert(userId, ciphertext, digest);
+            else
+                bindings.update(userId, ciphertext, digest);
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "手机号已绑定其他账号");
         }

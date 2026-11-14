@@ -4,10 +4,12 @@ import com.shiwushop.support.CommerceFixture;
 import com.shiwushop.support.SystemEnvironment;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class InventoryMovementSystemIT {
-    @Test void checkoutMovementsArePaginatedForOwnerAndHiddenFromBuyer() throws Exception {
+    @Test
+    void checkoutMovementsArePaginatedForOwnerAndHiddenFromBuyer() throws Exception {
         String base = SystemEnvironment.base();
         var jdbc = SystemEnvironment.database();
         var json = new ObjectMapper();
@@ -23,7 +25,8 @@ class InventoryMovementSystemIT {
             assertFalse(first.path("items").get(0).has("operationKey"));
             assertTrue(first.path("hasMore").asBoolean());
             long firstId = first.path("items").get(0).path("id").asLong();
-            var secondResponse = fixture.merchantClient.get(path + "?size=1&reason=ORDER_DEDUCT&afterId=" + first.path("nextCursor").asLong());
+            var secondResponse = fixture.merchantClient.get(
+                    path + "?size=1&reason=ORDER_DEDUCT&afterId=" + first.path("nextCursor").asLong());
             assertEquals(200, secondResponse.statusCode(), secondResponse.body());
             var second = json.readTree(secondResponse.body()).path("data");
             assertEquals(1, second.path("items").size());

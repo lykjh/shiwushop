@@ -1,5 +1,8 @@
 package com.shiwushop.trade.service.impl;
 
+import com.shiwushop.marketing.service.MarketingOrderSettlement;
+import com.shiwushop.marketing.vo.MarketingOrderSource;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.trade.vo.payment.PaymentStartVO;
 import com.shiwushop.trade.vo.payment.PaymentStatusVO;
@@ -17,8 +20,10 @@ import com.shiwushop.trade.mapper.payment.PaymentAttemptMapper;
 import com.shiwushop.payment.service.AlipayGateway;
 import com.shiwushop.trade.vo.payment.PaymentCheckoutVO;
 import com.shiwushop.trade.service.OrderPaymentService;
+import com.shiwushop.trade.service.OrderRefundOperations;
 import lombok.RequiredArgsConstructor;
 import com.shiwushop.product.service.ProductStockService;
+import com.shiwushop.member.service.MemberRewardService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,12 +48,17 @@ import java.util.concurrent.TimeUnit;
 @Service
 @RequiredArgsConstructor
 public class OrderPaymentServiceImpl implements OrderPaymentService {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(OrderPaymentServiceImpl.class);
+    /** 支付渠道查询结果中的交易已关闭状态。 */
     private static final String TRADE_CLOSED = "TRADE_CLOSED";
+    /** 支付网关查询结果中的交易不存在状态，需结合订单与支付尝试判断后续处理。 */
     private static final String TRADE_NOT_FOUND = "NOT_FOUND";
     // 租约只决定何时允许接管；迟到结果仍由令牌和订单状态拒绝写回。
+    /** 支付二维码创建任务的认领租期。 */
     private static final Duration QR_CLAIM_LEASE = Duration.ofMinutes(2);
     // Longer than a single query/close/cancel sequence with configured SDK timeouts.
+    /** 超时未付款订单关单任务的认领租期。 */
     private static final Duration EXPIRY_CLAIM_LEASE = Duration.ofMinutes(2);
     private final AtomicBoolean cancellationFirst = new AtomicBoolean();
     private final OrderMapper orderMapper;
@@ -59,31 +69,53 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     private final PlatformTransactionManager transactionManager;
     private final AccountAccess accountAccess;
     private final Clock businessClock;
+    private final MemberRewardService memberRewards;
+    private final MarketingOrderSettlement promotions;
+    private final OrderRefundOperations afterSales;
     @Value("${shop.payment.scan-budget-ms:20000}")
     private long scanBudgetMillis = 20000;
 
-    /** 保存取消意图后释放订单锁，再领取租约核对渠道。 */
+    /** 零现金订单同事务停止履约；现金订单保存取消意图后再核对渠道。 */
     @Override
     public String cancelOrder(Long userId, Long orderId) {
         accountAccess.checkActive(userId);
         String state = new TransactionTemplate(transactionManager).execute(ignored -> {
+            promotions.lockSource(orderId);
             Order order = orderMapper.selectForUpdate(orderId);
-            if (order == null || !userId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
-            if (order.getStatus() == OrderStatus.CANCELLED) return "CANCELLED";
-            if (order.getStatus() != OrderStatus.UNPAID) throw new BusinessException(409, "订单不可取消");
+            if (order == null || !userId.equals(order.getUserId()))
+                throw new BusinessException(404, "订单不存在");
+            if (order.getStatus() == OrderStatus.CANCELLED)
+                return "CANCELLED";
+            if (order.getStatus() == OrderStatus.PAID
+                    && ("ZERO_CASH".equals(order.getSettlementKind())
+                    || "POINTS".equals(order.getSettlementKind()))) {
+                if (!"STOPPED".equals(order.getFulfillmentState())) {
+                    afterSales.cancelUnshippedZeroCash(order, orderItemMapper.selectForOrder(orderId));
+                    if (orderMapper.stopZeroCashFulfillment(orderId) != 1)
+                        throw new BusinessException(409, "订单履约状态冲突");
+                    order.setFulfillmentState("STOPPED");
+                }
+                return "CANCELLED";
+            }
+            if (order.getStatus() != OrderStatus.UNPAID)
+                throw new BusinessException(409, "订单不可取消");
             orderMapper.requestCancellation(orderId, LocalDateTime.now(businessClock));
             return "CANCEL_PENDING";
         });
-        if ("CANCELLED".equals(state)) return state;
+        if ("CANCELLED".equals(state))
+            return state;
         try {
             expireOrder(orderId);
         } catch (BusinessException e) {
-            if (e.getCode() != 503) throw e;
+            if (e.getCode() != 503)
+                throw e;
             log.warn("订单 {} 取消核对暂不可用，将在下次扫描重试", orderId);
         }
         Order order = ownedOrder(userId, orderId);
-        if (order.getStatus() == OrderStatus.CANCELLED) return "CANCELLED";
-        if (order.getStatus() != OrderStatus.UNPAID) throw new BusinessException(409, "订单不可取消");
+        if (order.getStatus() == OrderStatus.CANCELLED)
+            return "CANCELLED";
+        if (order.getStatus() != OrderStatus.UNPAID)
+            throw new BusinessException(409, "订单不可取消");
         return "CANCEL_PENDING";
     }
 
@@ -92,18 +124,24 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     @Transactional
     public PaymentStartVO start(Long userId, Long orderId) {
         accountAccess.checkActive(userId);
+        promotions.lockSource(orderId);
         Order order = orderMapper.selectForUpdate(orderId);
-        if (order == null || !userId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !userId.equals(order.getUserId()))
+            throw new BusinessException(404, "订单不存在");
         if (!isPayable(order)) {
-            throw new BusinessException(409, "订单不可支付");
+            throw new BusinessException(409, "订单不可支付", Map.of("reason", "INVALID_STATE"), null);
         }
         requireGateway();
         PaymentAttempt attempt = paymentMapper.selectLatestForUpdate(orderId);
+        if ("LOCAL_SIMULATION".equals(gateway.channel()) && attempt != null
+                && !"LOCAL_SIMULATION".equals(attempt.getChannel()))
+            throw new BusinessException(409, "正式渠道订单不能改用模拟支付");
         if (attempt == null || attempt.getStatus() == PaymentAttemptStatus.CLOSED) {
             attempt = new PaymentAttempt();
             attempt.setOrderId(orderId);
             attempt.setChannel(gateway.channel());
-            attempt.setOutTradeNo("SHIWUSHOP" + UUID.randomUUID().toString().replace("-", ""));
+            attempt.setOutTradeNo(("LOCAL_SIMULATION".equals(gateway.channel()) ? "LOCAL_SIMULATION" : "SHIWUSHOP")
+                    + UUID.randomUUID().toString().replace("-", ""));
             attempt.setAppId(gateway.appId());
             attempt.setSellerId(gateway.sellerId());
             attempt.setAmount(order.getTotalAmount());
@@ -158,6 +196,7 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     /** 锁定订单与最新支付尝试，复用有效二维码或领取一次生成租约。 */
     private QrCheckout claimCheckout(PaymentAttempt attempt) {
+        promotions.lockSource(attempt.getOrderId());
         Order order = orderMapper.selectForUpdate(attempt.getOrderId());
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(attempt.getOrderId());
         if (!isPayable(order) || latest == null || !attempt.getId().equals(latest.getId())
@@ -183,11 +222,12 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     /** 核对租约、订单和二维码有效期后保存渠道结果，拒绝迟到写回。 */
     private QrCheckout saveCheckoutQr(PaymentAttempt attempt, String token, AlipayGateway.QrCode qrCode) {
+        promotions.lockSource(attempt.getOrderId());
         Order order = orderMapper.selectForUpdate(attempt.getOrderId());
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(attempt.getOrderId());
         LocalDateTime now = LocalDateTime.now(businessClock);
         if (!isPayable(order)) {
-            throw new BusinessException(409, "订单不可支付");
+            throw new BusinessException(409, "订单不可支付", Map.of("reason", "INVALID_STATE"), null);
         }
         if (latest == null || !attempt.getId().equals(latest.getId())
                 || latest.getStatus() != PaymentAttemptStatus.PENDING) {
@@ -212,7 +252,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     }
 
     private record QrCheckout(String qrCode, BigDecimal amount, LocalDateTime payExpiresAt,
-                              String token, boolean recover) {}
+                              String token, boolean recover) {
+    }
 
     /** 返回当前买家订单及最近一次支付尝试状态，不请求支付渠道。 */
     @Override
@@ -225,9 +266,11 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     @Override
     public PaymentStatusVO sync(Long userId, Long orderId) {
         Order order = ownedOrder(userId, orderId);
-        if (order.getPayExpiresAt() == null) throw new BusinessException(409, "历史订单不可同步支付");
+        if (order.getPayExpiresAt() == null)
+            throw new BusinessException(409, "历史订单不可同步支付");
         PaymentAttempt attempt = paymentMapper.selectLatest(orderId);
-        if (attempt == null) throw new BusinessException(409, "尚未发起支付");
+        if (attempt == null)
+            throw new BusinessException(409, "尚未发起支付");
         if (attempt.getStatus() == PaymentAttemptStatus.PENDING) {
             requireGateway();
             requireCurrentGateway(attempt);
@@ -236,12 +279,28 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         return statusOf(ownedOrder(userId, orderId));
     }
 
+    /** 仅本地模拟渠道允许显式确认；查询和创建支付尝试都不会调用此方法。 */
+    @Override
+    public PaymentStatusVO simulate(Long userId, Long orderId) {
+        ownedOrder(userId, orderId);
+        if (!"LOCAL_SIMULATION".equals(gateway.channel()))
+            throw new BusinessException(404, "本地模拟支付未启用");
+        PaymentAttempt attempt = paymentMapper.selectLatest(orderId);
+        if (attempt == null)
+            throw new BusinessException(409, "请先创建模拟支付单");
+        requireCurrentGateway(attempt);
+        confirmPaid(attempt, new AlipayGateway.TradeResult("TRADE_SUCCESS", attempt.getOutTradeNo(),
+                "LOCAL_SIMULATION_" + attempt.getId(), attempt.getAmount()));
+        return statusOf(ownedOrder(userId, orderId));
+    }
+
     /** 验签并核对商户、商户单号与金额，按支付或关闭通知更新订单。 */
     @Override
     public void notifyPaid(Map<String, String> form) {
         // 回调必须先验签，再核对商户身份、订单号和金额，不能仅凭“支付成功”字段入账。
         requireGateway();
-        if (!gateway.verify(form)) throw new BusinessException(400, "支付通知验签失败");
+        if (!gateway.verify(form))
+            throw new BusinessException(400, "支付通知验签失败");
         String outTradeNo = form.get("out_trade_no");
         PaymentAttempt attempt = outTradeNo == null ? null : paymentMapper.selectByOutTradeNo(outTradeNo);
         if (attempt == null || !currentGateway(attempt)
@@ -277,12 +336,15 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         for (int i = 0; i < Math.max(expired.size(), requested.size()); i++) {
             List<Long> left = first ? requested : expired;
             List<Long> right = first ? expired : requested;
-            if (i < left.size() && seen.add(left.get(i))) candidates.add(left.get(i));
-            if (i < right.size() && seen.add(right.get(i))) candidates.add(right.get(i));
+            if (i < left.size() && seen.add(left.get(i)))
+                candidates.add(left.get(i));
+            if (i < right.size() && seen.add(right.get(i)))
+                candidates.add(right.get(i));
         }
         for (Long orderId : candidates) {
             // Finish the current order, but leave new work for the next scan after the budget.
-            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis) break;
+            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis)
+                break;
             processed++;
             try {
                 expireOrder(orderId);
@@ -291,9 +353,35 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
                 log.warn("订单 {} 到期核对失败，将在下次扫描重试：{}", orderId, e.getMessage());
             }
         }
+        for (Long orderId : orderMapper.selectFailedGroupRefundIds(25)) {
+            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis)
+                break;
+            processed++;
+            try {
+                refundFailedGroup(orderId);
+            } catch (BusinessException e) {
+                failed++;
+                log.warn("失败团订单 {} 退款待下轮重试：{}", orderId, e.getMessage());
+            }
+        }
         log.info("支付到期扫描 processed={} failed={} durationMs={} oldestPendingSeconds={}", processed, failed,
                 TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started),
                 orderMapper.oldestExpiredSeconds(LocalDateTime.now(businessClock)));
+    }
+
+    /** 接管成团失败前已付款的订单，以及提交退款责任后中断的迟付回调。 */
+    private void refundFailedGroup(Long orderId) {
+        Long saleId = new TransactionTemplate(transactionManager).execute(ignored -> {
+            MarketingOrderSource source = promotions.lockSource(orderId);
+            Order order = orderMapper.selectForUpdate(orderId);
+            if (source == null || source.groupId() == null || order == null
+                    || order.getStatus() != OrderStatus.PAID
+                    || !"FAILED".equals(orderMapper.groupStatus(source.groupId())))
+                return null;
+            return afterSales.prepareFailedGroupRefund(order, orderItemMapper.selectForOrder(orderId));
+        });
+        if (saleId != null)
+            afterSales.refundFailedGroup(saleId);
     }
 
     /** 领取单笔订单的到期处理租约，完成后按令牌释放以防并发扫描。 */
@@ -301,7 +389,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     public void expireOrder(Long orderId) {
         String token = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now(businessClock);
-        if (orderMapper.claimExpiry(orderId, token, now, EXPIRY_CLAIM_LEASE.toSeconds()) != 1) return;
+        if (orderMapper.claimExpiry(orderId, token, now, EXPIRY_CLAIM_LEASE.toSeconds()) != 1)
+            return;
         try {
             expireClaimedOrder(orderId, token);
         } finally {
@@ -313,14 +402,17 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     private void expireClaimedOrder(Long orderId, String token) {
         // 到期不等于渠道已关闭；未知支付结果必须留待下次扫描，不能直接归还库存。
         Order order = orderMapper.selectById(orderId);
-        if (!isCancellationDue(order)) return;
+        if (!isCancellationDue(order))
+            return;
         PaymentAttempt attempt = paymentMapper.selectLatest(orderId);
         if (attempt == null || attempt.getStatus() == PaymentAttemptStatus.CLOSED) {
             cancel(orderId, attempt, false, token);
             return;
         }
-        if (attempt.getStatus() != PaymentAttemptStatus.PENDING) return;
-        if (!gateway.configured()) return;
+        if (attempt.getStatus() != PaymentAttemptStatus.PENDING)
+            return;
+        if (!gateway.configured())
+            return;
         if (!currentGateway(attempt)) {
             log.warn("订单 {} 的支付渠道与当前配置不一致，保留待核对状态", orderId);
             return;
@@ -330,7 +422,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
             confirmPaid(attempt, result, token);
             return;
         }
-        if (!TRADE_NOT_FOUND.equals(result.status())) checkedResult(attempt, result);
+        if (!TRADE_NOT_FOUND.equals(result.status()))
+            checkedResult(attempt, result);
         if (TRADE_CLOSED.equals(result.status())) {
             cancel(orderId, attempt, true, token);
         } else if ("WAIT_BUYER_PAY".equals(result.status())
@@ -339,7 +432,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         } else if (TRADE_NOT_FOUND.equals(result.status())
                 && isExpiredUnpaid(order) && Boolean.TRUE.equals(attempt.getQrTimeoutGuaranteed())
                 && (attempt.getQrClaimToken() == null || attempt.getQrExpiresAt() != null)
-                && (attempt.getQrExpiresAt() == null || !LocalDateTime.now(businessClock).isBefore(attempt.getQrExpiresAt()))) {
+                && (attempt.getQrExpiresAt() == null ||
+                !LocalDateTime.now(businessClock).isBefore(attempt.getQrExpiresAt()))) {
             cancel(orderId, attempt, true, token);
         }
     }
@@ -350,7 +444,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
             confirmPaid(attempt, result);
             return;
         }
-        if (!TRADE_NOT_FOUND.equals(result.status())) checkedResult(attempt, result);
+        if (!TRADE_NOT_FOUND.equals(result.status()))
+            checkedResult(attempt, result);
         if (TRADE_CLOSED.equals(result.status())) {
             markClosed(attempt);
         }
@@ -367,43 +462,66 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         if (!paid(result.status()) || result.tradeNo() == null || result.tradeNo().isBlank()) {
             throw new BusinessException(400, "支付结果无效");
         }
-        new TransactionTemplate(transactionManager).executeWithoutResult(
+        Long failedGroupSale = new TransactionTemplate(transactionManager).execute(
                 ignored -> confirmPaidInTransaction(attempt, result.tradeNo(), expiryToken));
+        if (failedGroupSale != null)
+            afterSales.refundFailedGroup(failedGroupSale);
     }
 
     /** 回调、主动同步和到期扫描在订单行锁下竞争，只允许一次最终状态迁移。 */
-    private void confirmPaidInTransaction(PaymentAttempt attempt, String tradeNo, String expiryToken) {
+    private Long confirmPaidInTransaction(PaymentAttempt attempt, String tradeNo, String expiryToken) {
+        MarketingOrderSource source = promotions.lockSource(attempt.getOrderId());
         Order order = orderMapper.selectForUpdate(attempt.getOrderId());
-        if (expiryToken != null && orderMapper.ownsExpiry(attempt.getOrderId(), expiryToken) != 1) return;
-        PaymentAttempt current = paymentMapper.selectById(attempt.getId());
-        if (order == null || current == null) throw new BusinessException(409, "支付记录不存在");
+        if (expiryToken != null && orderMapper.ownsExpiry(attempt.getOrderId(), expiryToken) != 1)
+            return null;
+        PaymentAttempt current = paymentMapper.selectLatestForUpdate(attempt.getOrderId());
+        if (order == null || current == null || !attempt.getId().equals(current.getId()))
+            throw new BusinessException(409, "支付记录不存在");
         if (current.getStatus() == PaymentAttemptStatus.SUCCESS && order.getStatus() == OrderStatus.PAID
-                && tradeNo.equals(current.getAlipayTradeNo())) return;
-        PaymentAttempt latest = paymentMapper.selectLatestForUpdate(order.getId());
-        if (order.getStatus() != OrderStatus.UNPAID || current.getStatus() != PaymentAttemptStatus.PENDING
-                || latest == null || !current.getId().equals(latest.getId())) {
+                && tradeNo.equals(current.getAlipayTradeNo()))
+            return source != null && source.groupId() != null
+                    && "FAILED".equals(orderMapper.groupStatus(source.groupId()))
+                    ? afterSales.prepareFailedGroupRefund(order, orderItemMapper.selectForOrder(order.getId())) : null;
+        if (order.getStatus() != OrderStatus.UNPAID || current.getStatus() != PaymentAttemptStatus.PENDING) {
             throw new BusinessException(409, "订单支付状态冲突");
         }
+        if ("LOCAL_SIMULATION".equals(current.getChannel()) && !isPayable(order))
+            throw new BusinessException(409, "订单已取消、正在取消或已过期，不能模拟付款");
         LocalDateTime paidAt = LocalDateTime.now(businessClock);
         if (paymentMapper.markSuccess(current.getId(), tradeNo, paidAt) != 1
                 || orderMapper.markPaid(order.getId(), paidAt) != 1) {
             throw new BusinessException(409, "订单支付状态冲突");
         }
+        if ("LOCAL_SIMULATION".equals(current.getChannel()))
+            paymentMapper.auditSimulation(order.getUserId(), order.getId(), current.getId(), paidAt);
         List<OrderItem> items = orderItemMapper.selectForOrder(order.getId());
+        memberRewards.paymentConfirmed(order.getUserId(), order.getId(), paidAt,
+                orderItemMapper.rewardLines(order.getId()));
         for (OrderItem item : items) {
             stock.recordSale(item.getProductId(), item.getQuantity());
         }
+        if (Integer.valueOf(1).equals(order.getPricingVersion()))
+            promotions.finish(order.getId(), order.getUserId(), true);
+        if (source != null && source.groupId() != null)
+            orderMapper.releaseSucceededGroup(source.groupId());
+        Long failedGroupSale = source != null && source.groupId() != null
+                && "FAILED".equals(orderMapper.groupStatus(source.groupId()))
+                ? afterSales.prepareFailedGroupRefund(order, items) : null;
         queueProductRefreshes(items);
         BusinessEventLog.committed("trade", "order_paid", "order", order.getId());
+        return failedGroupSale;
     }
 
     /** 锁定订单并把仍待支付的尝试标记关闭；已支付订单不受影响。 */
     private void markClosed(PaymentAttempt attempt) {
         new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> {
+            promotions.lockSource(attempt.getOrderId());
             Order order = orderMapper.selectForUpdate(attempt.getOrderId());
             PaymentAttempt current = paymentMapper.selectById(attempt.getId());
-            if (order == null || current == null || order.getStatus() == OrderStatus.PAID) return;
-            if (current.getStatus() == PaymentAttemptStatus.PENDING) paymentMapper.markClosed(current.getId());
+            if (order == null || current == null || order.getStatus() == OrderStatus.PAID)
+                return;
+            if (current.getStatus() == PaymentAttemptStatus.PENDING)
+                paymentMapper.markClosed(current.getId());
         });
     }
 
@@ -416,13 +534,20 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     /** 再次读取最新支付尝试，防止渠道查询期间出现新的支付或二维码。 */
     private void cancelInTransaction(Long orderId, PaymentAttempt expected, boolean confirmedClosed,
                                      String expiryToken) {
+        promotions.lockSource(orderId);
         Order order = orderMapper.selectForUpdate(orderId);
-        if (orderMapper.ownsExpiry(orderId, expiryToken) != 1) return;
-        if (!isCancellationDue(order)) return;
+        if (orderMapper.ownsExpiry(orderId, expiryToken) != 1)
+            return;
+        if (!isCancellationDue(order))
+            return;
         PaymentAttempt latest = paymentMapper.selectLatestForUpdate(orderId);
-        if (!matchesExpectedAttempt(latest, expected) || !closeForCancellation(latest, confirmedClosed)) return;
-        if (orderMapper.markCancelled(orderId) != 1) return;
-        restoreStock(orderId);
+        if (!matchesExpectedAttempt(latest, expected) || !closeForCancellation(latest, confirmedClosed))
+            return;
+        if (orderMapper.markCancelled(orderId) != 1)
+            return;
+        restoreStock(order);
+        if (Integer.valueOf(1).equals(order.getPricingVersion()))
+            promotions.finish(orderId, order.getUserId(), false);
         BusinessEventLog.committed("trade", "order_cancelled", "order", orderId);
     }
 
@@ -433,8 +558,10 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     /** 仅在渠道已确认关闭时关闭待支付尝试，供订单取消使用。 */
     private boolean closeForCancellation(PaymentAttempt latest, boolean confirmedClosed) {
-        if (latest == null || latest.getStatus() == PaymentAttemptStatus.CLOSED) return true;
-        if (latest.getStatus() != PaymentAttemptStatus.PENDING || !confirmedClosed) return false;
+        if (latest == null || latest.getStatus() == PaymentAttemptStatus.CLOSED)
+            return true;
+        if (latest.getStatus() != PaymentAttemptStatus.PENDING || !confirmedClosed)
+            return false;
         if (paymentMapper.markClosed(latest.getId()) != 1) {
             throw new BusinessException(409, "支付记录状态冲突");
         }
@@ -442,13 +569,14 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     }
 
     /** 逐项返还已取消订单的库存，写库存流水并触发搜索刷新。 */
-    private void restoreStock(Long orderId) {
-        List<OrderItem> items = orderItemMapper.selectForOrder(orderId);
-        if (items.isEmpty()) throw new BusinessException(409, "订单明细缺失");
-        for (OrderItem item : items) {
-            stock.returnCancelledOrder(item.getSkuId(), item.getId(), item.getQuantity(),
-                    "ORDER_CANCEL_RETURN:" + orderId + ":" + item.getId());
-        }
+    private void restoreStock(Order order) {
+        List<OrderItem> items = orderItemMapper.selectForOrder(order.getId());
+        if (items.isEmpty())
+            throw new BusinessException(409, "订单明细缺失");
+        if ("NORMAL".equals(order.getBusinessType()))
+            for (OrderItem item : items)
+                stock.returnCancelledOrder(item.getSkuId(), item.getId(), item.getQuantity(),
+                        "ORDER_CANCEL_RETURN:" + order.getId() + ":" + item.getId());
         queueProductRefreshes(items);
     }
 
@@ -460,7 +588,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
     /** 仅未支付且仍在支付截止时间内的订单允许发起支付。 */
     private boolean isPayable(Order order) {
         return order != null && order.getStatus() == OrderStatus.UNPAID && order.getCancelRequestedAt() == null
-                && order.getPayExpiresAt() != null && LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
+                && order.getPayExpiresAt() != null &&
+                LocalDateTime.now(businessClock).isBefore(order.getPayExpiresAt());
     }
 
     /** 取消请求和自然到期共享持久化租约。 */
@@ -485,7 +614,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     /** 按十进制金额比较通知金额，格式非法时视为不匹配。 */
     private boolean sameAmount(BigDecimal expected, String value) {
-        if (value == null) return false;
+        if (value == null)
+            return false;
         try {
             return expected.compareTo(new BigDecimal(value)) == 0;
         } catch (NumberFormatException e) {
@@ -511,18 +641,21 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         accountAccess.checkActive(userId);
         Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
                 .eq(Order::getId, orderId).eq(Order::getUserId, userId));
-        if (order == null) throw new BusinessException(404, "订单不存在");
+        if (order == null)
+            throw new BusinessException(404, "订单不存在");
         return order;
     }
 
     /** 渠道未配置时拒绝需要与支付平台交互的操作。 */
     private void requireGateway() {
-        if (!gateway.configured()) throw new BusinessException(503, "支付渠道未配置");
+        if (!gateway.configured())
+            throw new BusinessException(503, "支付渠道未配置");
     }
 
     /** 阻止旧商户配置下的支付尝试使用当前渠道配置继续处理。 */
     private void requireCurrentGateway(PaymentAttempt attempt) {
-        if (!currentGateway(attempt)) throw new BusinessException(409, "支付渠道配置已变化");
+        if (!currentGateway(attempt))
+            throw new BusinessException(409, "支付渠道配置已变化");
     }
 
     /** 对比支付尝试记录的渠道、应用和商户身份。 */

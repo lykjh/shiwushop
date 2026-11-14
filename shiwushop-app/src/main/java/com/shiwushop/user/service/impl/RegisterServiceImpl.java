@@ -50,7 +50,8 @@ public class RegisterServiceImpl implements RegisterService {
         try {
             captchaService.consumeLoginProof(proof, session.getId());
         } catch (BusinessException e) {
-            if (e.getCode() == 400) authRiskLimiter.recordRegisterFailure(request);
+            if (e.getCode() == 400)
+                authRiskLimiter.recordRegisterFailure(request);
             throw e;
         }
         // 密码格式和用户名冲突不属于滑块失败，不增加风控失败次数。

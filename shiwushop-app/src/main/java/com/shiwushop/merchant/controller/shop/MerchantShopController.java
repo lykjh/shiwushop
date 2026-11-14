@@ -34,8 +34,8 @@ public class MerchantShopController {
             @PathVariable Long id,
             @Valid @RequestBody ShopProfileUpdateDTO dto,
             HttpServletRequest request
-            ){
-        return Result.success(shopService.updateProfile(id,SessionUser.requireId(request),dto));
+    ) {
+        return Result.success(shopService.updateProfile(id, SessionUser.requireId(request), dto));
     }
 
     /**
@@ -48,5 +48,4 @@ public class MerchantShopController {
     public Result<List<ShopVO>> list(HttpServletRequest request) {
         return Result.success(shopService.listMine(SessionUser.requireId(request)));
     }
-
 }

@@ -19,11 +19,14 @@ public interface UserAccountMapper extends BaseMapper<UserAccount> {
             "AND auth_version=#{version} AND status='ACTIVE'")
     int bumpAuthVersion(@Param("userId") Long userId, @Param("version") int version);
 
-
-
     @Select("""
-        SELECT user_id, username, password_hash, role, status, auth_version
-        FROM user_accounts WHERE user_id = #{userId} FOR UPDATE
-        """)
+            SELECT user_id, username, password_hash, role, status, auth_version
+            FROM user_accounts WHERE user_id = #{userId} FOR UPDATE
+            """)
     UserAccount lockById(@Param("userId") Long userId);
+
+    @Update("UPDATE user_accounts SET status=#{status},auth_version=auth_version+1 " +
+            "WHERE user_id=#{userId} AND auth_version=#{version} AND status=#{oldStatus}")
+    int changeStatus(@Param("userId") Long userId, @Param("version") int version,
+                     @Param("oldStatus") String oldStatus, @Param("status") String status);
 }

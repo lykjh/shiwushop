@@ -31,10 +31,14 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "shop.public-cache.ttl-seconds=1")
 class PublicProductCacheTests {
-    @Autowired private PublicProductCache cache;
-    @Autowired private StringRedisTemplate redis;
-    @Autowired private ObjectMapper json;
-    @MockitoBean private PublicProductService products;
+    @Autowired
+    private PublicProductCache cache;
+    @Autowired
+    private StringRedisTemplate redis;
+    @Autowired
+    private ObjectMapper json;
+    @MockitoBean
+    private PublicProductService products;
 
     @Test
     void reusesPublicPageAndRequeriesAfterBoundedTtl() throws Exception {
@@ -111,7 +115,8 @@ class PublicProductCacheTests {
                 return isolated.list(query);
             })).toList();
             start.countDown();
-            for (var call : calls) assertEquals(page(3L), call.get(3, TimeUnit.SECONDS));
+            for (var call : calls)
+                assertEquals(page(3L), call.get(3, TimeUnit.SECONDS));
         }
         assertEquals(1, peak.get());
     }

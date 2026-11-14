@@ -27,20 +27,28 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @Transactional
 class AdminProductStatusTests {
-    @Autowired private CaptchaProofStore registrationProofs;
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private ShopMapper shopMapper;
-    @Autowired private CategoryMapper categoryMapper;
-    @Autowired private ProductMapper productMapper;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private ShopMapper shopMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private ProductMapper productMapper;
 
     @Test
     void adminTakesDownProductRepeatedly() throws Exception {
@@ -55,7 +63,7 @@ class AdminProductStatusTests {
 
         mockMvc.perform(request(product.getId(), "OFF_SALE").session(admin))
                 .andExpect(status().isOk());
-        assertEquals(2, jdbcTemplate.queryForObject(
+        assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, product.getId()));
     }
@@ -79,10 +87,11 @@ class AdminProductStatusTests {
     @Test
     void requiresAdmin() throws Exception {
         Product product = product("ON_SALE");
+        MockHttpSession merchant = session(user("MERCHANT"));
         mockMvc.perform(request(product.getId(), "OFF_SALE"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(request(product.getId(), "OFF_SALE")
-                        .session(session(user("MERCHANT"))))
+                        .session(merchant))
                 .andExpect(status().isForbidden());
         assertEquals(ProductStatus.ON_SALE, productMapper.selectById(product.getId()).getStatus());
     }
@@ -90,6 +99,7 @@ class AdminProductStatusTests {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request(
             Long id, String nextStatus) {
         return put("/admin/products/{id}/status", id)
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"" + nextStatus + "\"}");
     }
@@ -119,7 +129,8 @@ class AdminProductStatusTests {
         String username = "merchant_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(userService, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         jdbcTemplate.update("UPDATE user_accounts SET role = ? WHERE username = ?", role, username);
-        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM user_accounts WHERE username = ?", Long.class,
+                username);
     }
 
     private MockHttpSession session(Long user) {

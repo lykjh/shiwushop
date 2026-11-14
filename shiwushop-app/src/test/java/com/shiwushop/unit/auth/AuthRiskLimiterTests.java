@@ -41,15 +41,8 @@ class AuthRiskLimiterTests {
     @BeforeEach
     void setUp() {
         // 用内存计数验证规则，不依赖运行中的 Redis。
-        when(limiter.digest(anyString())).thenAnswer(call -> Integer.toHexString(call.<String>getArgument(0).hashCode()));
-        when(limiter.increment(anyString(), anyLong())).thenAnswer(call ->
-                counts.merge(call.getArgument(0), 1L, Long::sum));
-        when(limiter.recordFailure(anyString(), anyLong(), anyLong())).thenAnswer(call ->
-                counts.merge(call.getArgument(0), 1L, Long::sum));
-        when(limiter.failureCount(anyString(), anyLong())).thenAnswer(call ->
-                counts.getOrDefault(call.getArgument(0), 0L));
-        when(limiter.failureRetrySeconds(anyString(), anyLong())).thenReturn(60L);
-        when(limiter.count(anyString())).thenAnswer(call -> counts.getOrDefault(call.getArgument(0), 0L));
+        when(limiter.digest(anyString())).thenAnswer(
+                call -> Integer.toHexString(call.<String>getArgument(0).hashCode()));
         when(limiter.checkAuthRisk(anyList(), anyBoolean(), anyLong(), anyLong(), anyString())).thenAnswer(call -> {
             List<String> keys = call.getArgument(0);
             boolean register = call.getArgument(1);
@@ -68,7 +61,8 @@ class AuthRiskLimiterTests {
         doAnswer(call -> {
             List<String> keys = call.getArgument(0);
             volumes.computeIfAbsent(keys.get(0), ignored -> new long[2])[1]++;
-            for (int i = 1; i < keys.size(); i++) counts.merge(keys.get(i), 1L, Long::sum);
+            for (int i = 1; i < keys.size(); i++)
+                counts.merge(keys.get(i), 1L, Long::sum);
             return null;
         }).when(limiter).recordAuthFailure(anyList(), anyLong(), any(long[].class), any(long[].class));
         doAnswer(call -> {
@@ -81,10 +75,6 @@ class AuthRiskLimiterTests {
             keys.forEach(counts::remove);
             return null;
         }).when(limiter).clearAuthRisk(anyList());
-        doAnswer(call -> {
-            counts.remove(call.<String>getArgument(0));
-            return null;
-        }).when(limiter).clear(anyString());
         risk = new AuthRiskLimiter(limiter, metrics, 5, 5, 30, 5, 256, 5, 30, 12, 60, 120, 0.5);
     }
 
@@ -161,7 +151,9 @@ class AuthRiskLimiterTests {
 
     @Test
     void outcomeRecordingFailureDoesNotTurnCommittedRegistrationIntoError() {
-        doAnswer(call -> { throw new BusinessException(503, "Redis 暂时不可用"); })
+        doAnswer(call -> {
+            throw new BusinessException(503, "Redis 暂时不可用");
+        })
                 .when(limiter).recordAuthSuccess(anyList(), anyLong());
         assertDoesNotThrow(() -> risk.recordRegisterSuccess(request("device-1234567890")));
         assertEquals(1.0, metrics.get("shiwushop.auth.register.outcome_record_error").counter().count());
@@ -234,7 +226,8 @@ class AuthRiskLimiterTests {
             }
         }
         assertFalse(risk.loginRequiresCaptcha("new-buyer", request()));
-        for (int i = 0; i < 2; i++) risk.recordLoginFailure("new-buyer", request());
+        for (int i = 0; i < 2; i++)
+            risk.recordLoginFailure("new-buyer", request());
         assertTrue(risk.loginRequiresCaptcha("new-buyer", request()));
     }
 
@@ -282,12 +275,15 @@ class AuthRiskLimiterTests {
     void redisFailureReturns503InsteadOfAllowingAuthentication() {
         StringRedisTemplate unavailable = mock(StringRedisTemplate.class);
         RedisConnectionFailureException offline = new RedisConnectionFailureException("offline");
-        when(unavailable.opsForValue()).thenThrow(offline);
+        when(unavailable.execute(any(org.springframework.data.redis.core.script.RedisScript.class), anyList(),
+                any(Object[].class))).thenThrow(offline);
 
         BusinessException error = assertThrows(BusinessException.class,
-                () -> new RateLimiter(unavailable).count("shiwushop:auth-risk:test"));
+                () -> new RateLimiter(unavailable).checkAuthRisk(List.of("shiwushop:auth-risk:test"), false, 300_000,
+                        16, "session"));
         assertEquals(503, error.getCode());
-        assertEquals(503, new GlobalExceptionHandler().handleDataAccess(offline, new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
+        assertEquals(503, new GlobalExceptionHandler().handleDataAccess(offline,
+                new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
     }
 
     @Test

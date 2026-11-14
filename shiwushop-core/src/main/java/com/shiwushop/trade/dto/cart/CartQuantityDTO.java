@@ -7,6 +7,7 @@ import lombok.Data;
 
 @Data
 public class CartQuantityDTO {
+    /** 商品件数。 */
     @NotNull
     @Min(1)
     @Max(10000)

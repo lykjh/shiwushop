@@ -4,7 +4,7 @@
     <select id="selectForOrder" resultType="com.shiwushop.trade.entity.order.OrderItem">
         SELECT item.id, item.order_id AS orderId, item.sku_id AS skuId,
                sku.product_id AS productId, item.product_name AS productName,
-               item.sku_spec AS skuSpec, item.quantity, item.unit_price AS unitPrice
+               item.sku_spec AS skuSpec, item.quantity, item.unit_price AS unitPrice,item.original_unit_price,item.discount_amount,item.payable_amount,item.item_kind,item.source_activity_id
         FROM order_items item JOIN skus sku ON sku.id = item.sku_id
         WHERE item.order_id = #{orderId} ORDER BY item.id
     </select>

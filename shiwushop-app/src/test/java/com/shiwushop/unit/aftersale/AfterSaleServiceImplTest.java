@@ -19,6 +19,7 @@ import com.shiwushop.product.service.ReviewService;
 import com.shiwushop.product.service.TradingProductService;
 import com.shiwushop.trade.entity.order.Order;
 import com.shiwushop.trade.service.AfterSaleOrderService;
+import com.shiwushop.trade.service.ShipmentService;
 import com.shiwushop.user.service.AccountAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,24 +41,48 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AfterSaleServiceImplTest {
-    @Mock AfterSaleCaseMapper cases;
-    @Mock AfterSaleTimeoutService timeouts;
-    @Mock AfterSaleItemMapper items;
-    @Mock ReturnDestinationMapper destinations;
-    @Mock ShopReturnProfileService returnProfiles;
-    @Mock ReturnShipmentMapper returns;
-    @Mock RefundAttemptMapper refunds;
-    @Mock AfterSaleAuditMapper audit;
-    @Mock MerchantShopAccess merchantAccess;
-    @Mock AccountAccess accountAccess;
-    @Mock RefundGateway gateway;
-    @Mock PlatformTransactionManager transactions;
-    @Mock Clock clock;
-    @Mock AfterSaleOrderService orders;
-    @Mock TradingProductService products;
-    @Mock ProductStockService stock;
-    @Mock ReviewService reviews;
-    @InjectMocks AfterSaleServiceImpl service;
+    @Mock
+    AfterSaleCaseMapper cases;
+    @Mock
+    AfterSaleTimeoutService timeouts;
+    @Mock
+    AfterSaleItemMapper items;
+    @Mock
+    ReturnDestinationMapper destinations;
+    @Mock
+    ShopReturnProfileService returnProfiles;
+    @Mock
+    ReturnShipmentMapper returns;
+    @Mock
+    RefundAttemptMapper refunds;
+    @Mock
+    AfterSaleAuditMapper audit;
+    @Mock
+    MerchantShopAccess merchantAccess;
+    @Mock
+    AccountAccess accountAccess;
+    @Mock
+    RefundGateway gateway;
+    @Mock
+    PlatformTransactionManager transactions;
+    @Mock
+    Clock clock;
+    @Mock
+    AfterSaleOrderService orders;
+    @Mock
+    ShipmentService shipments;
+    @Mock
+    TradingProductService products;
+    @Mock
+    ProductStockService stock;
+    @Mock
+    ReviewService reviews;
+    @Mock
+    com.shiwushop.member.service.MemberRewardService memberRewards;
+    @Mock
+    com.shiwushop.marketing.service.MarketingOrderSettlement promotions;
+    @InjectMocks
+    AfterSaleServiceImpl service;
 
     @Test
     void withdrawalLocksOrderBeforeCaseAndRejectsRefunding() {

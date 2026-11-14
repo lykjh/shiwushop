@@ -35,7 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
         "spring.session.data.redis.namespace=shiwushop:session:live-test"
 })
 class RedisSessionLiveIT {
-    @Autowired private CaptchaProofStore registrationProofs;
+    @Autowired
+    private CaptchaProofStore registrationProofs;
     private static final String RATE_PREFIX = "shiwushop:rate:login:test:" + UUID.randomUUID();
 
     @DynamicPropertySource
@@ -43,10 +44,14 @@ class RedisSessionLiveIT {
         registry.add("shop.security.login.key-prefix", () -> RATE_PREFIX);
     }
 
-    @Autowired private SessionRepository<? extends Session> repository;
-    @Autowired private RegisterService users;
-    @Autowired private JdbcTemplate jdbc;
-    @LocalServerPort private int port;
+    @Autowired
+    private SessionRepository<? extends Session> repository;
+    @Autowired
+    private RegisterService users;
+    @Autowired
+    private JdbcTemplate jdbc;
+    @LocalServerPort
+    private int port;
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
@@ -68,11 +73,11 @@ class RedisSessionLiveIT {
             String token = json.readTree(csrfResponse.body()).path("data").asString();
             URI loginUri = URI.create("http://127.0.0.1:" + port + "/users/login");
             HttpResponse<String> login = client.send(HttpRequest.newBuilder(loginUri)
-                            .header("Content-Type", "application/json")
-                            .header("X-CSRF-TOKEN", token)
-                            .POST(HttpRequest.BodyPublishers.ofString(
-                                    "{\"username\":\"" + username + "\",\"password\":\"Shop123!\"}"))
-                            .build(), HttpResponse.BodyHandlers.ofString());
+                    .header("Content-Type", "application/json")
+                    .header("X-CSRF-TOKEN", token)
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            "{\"username\":\"" + username + "\",\"password\":\"Shop123!\"}"))
+                    .build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(200, login.statusCode());
             String cookieValue = HttpCookie.parse(login.headers().firstValue("Set-Cookie").orElseThrow()).stream()
                     .filter(cookie -> "MALLSESSION".equals(cookie.getName()))
@@ -86,8 +91,8 @@ class RedisSessionLiveIT {
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, me.statusCode());
             HttpResponse<String> logout = client.send(HttpRequest.newBuilder(
-                            URI.create("http://127.0.0.1:" + port + "/users/logout"))
-                    .header("X-CSRF-TOKEN", token).POST(HttpRequest.BodyPublishers.noBody()).build(),
+                                    URI.create("http://127.0.0.1:" + port + "/users/logout"))
+                            .header("X-CSRF-TOKEN", token).POST(HttpRequest.BodyPublishers.noBody()).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, logout.statusCode());
             assertNull(repository.findById(sessionId));
@@ -110,14 +115,15 @@ class RedisSessionLiveIT {
             URI loginUri = URI.create("http://127.0.0.1:" + port + "/users/login");
             for (int attempt = 1; attempt <= 6; attempt++) {
                 HttpResponse<String> response = client.send(HttpRequest.newBuilder(loginUri)
-                                .header("Content-Type", "application/json")
-                                .header("X-CSRF-TOKEN", token)
-                                .POST(HttpRequest.BodyPublishers.ofString(
-                                        "{\"username\":\"" + username + "\",\"password\":\"wrong\"}"))
-                                .build(), HttpResponse.BodyHandlers.ofString());
+                        .header("Content-Type", "application/json")
+                        .header("X-CSRF-TOKEN", token)
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"username\":\"" + username + "\",\"password\":\"wrong\"}"))
+                        .build(), HttpResponse.BodyHandlers.ofString());
                 assertEquals(attempt <= 5 ? 401 : 403, response.statusCode());
                 if (attempt == 6) {
-                    assertEquals("CAPTCHA_REQUIRED", json.readTree(response.body()).path("data").path("state").asString());
+                    assertEquals("CAPTCHA_REQUIRED",
+                            json.readTree(response.body()).path("data").path("state").asString());
                 }
             }
         }

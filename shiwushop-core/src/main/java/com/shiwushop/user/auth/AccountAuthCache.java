@@ -2,7 +2,6 @@ package com.shiwushop.user.auth;
 
 import com.shiwushop.common.BusinessException;
 
-
 import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
@@ -23,8 +22,11 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class AccountAuthCache {
+    /** 本类日志记录器，供业务事件或故障诊断使用。 */
     private static final Logger log = LoggerFactory.getLogger(AccountAuthCache.class);
+    /** 账号状态与鉴权版本缓存的有效期。 */
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
+    /** 账号变更事务阻断标记的有效期；调用方事务超时必须短于此值。 */
     private static final Duration BLOCK_TTL = Duration.ofMinutes(2);
 
     // 只允许创建阻断标记的事务收尾，避免旧事务覆盖较新的账号状态。
@@ -38,7 +40,8 @@ public class AccountAuthCache {
     private final UserAccountMapper accounts;
 
     /** 缓存中的账号状态和鉴权版本；版本变化用于识别应失效的旧 Session。 */
-    public record State(AccountStatus status, int version) {}
+    public record State(AccountStatus status, int version) {
+    }
 
     /**
      * 读取账号状态缓存；未命中时从数据库加载并尝试回填。
@@ -49,7 +52,8 @@ public class AccountAuthCache {
         try {
             for (int i = 0; i < 3; i++) {
                 String cached = redis.opsForValue().get(key);
-                if (cached != null) return decode(cached);
+                if (cached != null)
+                    return decode(cached);
 
                 UserAccount account = accounts.selectById(userId);
                 String loaded = account == null ? "MISSING"
@@ -108,12 +112,14 @@ public class AccountAuthCache {
 
     /** 解析缓存状态；缺失标记返回空，变更中的阻断标记和损坏数据均拒绝放行。 */
     private static State decode(String value) {
-        if ("MISSING".equals(value)) return null;
+        if ("MISSING".equals(value))
+            return null;
         if (value.startsWith("BLOCKED:")) {
             throw new BusinessException(503, "账号状态更新中，请稍后重试");
         }
         String[] parts = value.split(":", 2);
-        if (parts.length != 2) throw new BusinessException(503, "账号缓存格式错误");
+        if (parts.length != 2)
+            throw new BusinessException(503, "账号缓存格式错误");
         try {
             return new State(AccountStatus.valueOf(parts[0]), Integer.parseInt(parts[1]));
         } catch (IllegalArgumentException e) {

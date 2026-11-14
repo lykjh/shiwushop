@@ -21,8 +21,18 @@ public interface ProductMapper extends BaseMapper<Product> {
     @Select("SELECT brand_id FROM product_brands WHERE product_id = #{productId}")
     Long selectBrandId(@Param("productId") Long productId);
 
-    @Select("SELECT id, shop_id, category_id, name, description, status, created_at, updated_at FROM products WHERE id = #{id} FOR UPDATE")
+    @Select("SELECT id, shop_id, category_id, name, description, status, revision, created_at, updated_at FROM products WHERE id = #{id} FOR UPDATE")
     Product selectForUpdate(@Param("id") Long id);
+
+    @Select("""
+            SELECT item.id FROM order_items item
+            JOIN skus sku ON sku.id = item.sku_id
+            JOIN orders ord ON ord.id = item.order_id
+            WHERE sku.product_id = #{productId} AND ord.status = 'UNPAID'
+            LIMIT 1
+            """)
+    Long selectUnpaidOrderItem(@Param("productId") Long productId);
+
     List<PublicProductRow> selectPublicPage(
             @Param("categoryId") Long categoryId,
             @Param("brandId") Long brandId,
@@ -66,8 +76,6 @@ public interface ProductMapper extends BaseMapper<Product> {
             @Param("shopId") Long shopId,
             @Param("minPrice") BigDecimal minPrice,
             @Param("maxPrice") BigDecimal maxPrice);
-
-
 
     @Select("SELECT COALESCE(sold_count, 0) FROM product_sales_stats WHERE product_id = #{productId}")
     Long getSoldCount(@Param("productId") Long productId);

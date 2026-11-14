@@ -32,7 +32,8 @@ public class AdminShopController {
 
     /** 将指定店铺转交给另一位用户；服务层处理店主资格和并发归属变更。 */
     @PutMapping("/{id}/owner")
-    public Result<ShopVO> changeOwner(@PathVariable Long id, @RequestBody @Valid ShopOwnerUpdateDTO dto, HttpServletRequest request) {
+    public Result<ShopVO> changeOwner(@PathVariable Long id, @RequestBody @Valid ShopOwnerUpdateDTO dto,
+                                      HttpServletRequest request) {
         adminAuth.requireAdmin(request);
         return Result.success(shopService.changeOwner(id, dto.getOwnerUserId()));
     }

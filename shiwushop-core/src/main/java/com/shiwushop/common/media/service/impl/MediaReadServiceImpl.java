@@ -19,6 +19,7 @@ import java.nio.file.Path;
 @Service
 @RequiredArgsConstructor
 public class MediaReadServiceImpl implements MediaReadService {
+    /** 可读取图片的大小上限，单位为字节（10 MiB）。 */
     private static final long MAX_BYTES = 10L * 1024 * 1024;
     private final MediaAssetMapper assets;
     private final PublicMediaReference publicReferences;
@@ -33,25 +34,43 @@ public class MediaReadServiceImpl implements MediaReadService {
      */
     @Override
     public ImageFile read(Long mediaId, Long currentUserId) {
-        if (mediaId == null || mediaId <= 0) throw new BusinessException(404, "图片不存在");
+        return read(mediaId, currentUserId, false);
+    }
+
+    /** 管理端仅能读取私有资质；管理员身份在本层再次核验。 */
+    @Override
+    public ImageFile readCredentialForReview(Long mediaId, Long reviewerId) {
+        accounts.requireAdmin(reviewerId);
+        return read(mediaId, reviewerId, true);
+    }
+
+    private ImageFile read(Long mediaId, Long currentUserId, boolean review) {
+        if (mediaId == null || mediaId <= 0)
+            throw new BusinessException(404, "图片不存在");
         MediaAsset asset = assets.selectReady(mediaId);
-        if (asset == null) throw new BusinessException(404, "图片不存在");
+        if (asset == null)
+            throw new BusinessException(404, "图片不存在");
+        if (review && !"CREDENTIAL".equals(asset.getPurpose()))
+            throw new BusinessException(404, "图片不存在");
         boolean owner = currentUserId != null && currentUserId.equals(asset.getUploadedByUserId());
-        if (owner) accounts.checkActive(currentUserId);
+        if (owner)
+            accounts.checkActive(currentUserId);
         // 非上传者只能读取已被公开商品、店铺、品牌或评价引用的图片。
-        if (!owner && !publicReferences.isPubliclyReferenced(mediaId)) throw new BusinessException(404, "图片不存在");
+        if (!owner && !review && ("CREDENTIAL".equals(asset.getPurpose()) || !publicReferences.isPubliclyReferenced(mediaId)))
+            throw new BusinessException(404, "图片不存在");
         if (!asset.getStorageKey().matches("[0-9a-fA-F-]{36}\\.(png|jpg)"))
             throw new BusinessException(503, "图片暂时无法读取");
         Path root = Path.of(storageRoot).toAbsolutePath().normalize();
         Path path = root.resolve(asset.getStorageKey()).normalize();
-        if (!path.getParent().equals(root)) throw new BusinessException(503, "图片暂时无法读取");
+        if (!path.getParent().equals(root))
+            throw new BusinessException(503, "图片暂时无法读取");
         try {
             long size = Files.size(path);
             if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)
                     || size == 0 || size > MAX_BYTES)
                 throw new BusinessException(503, "图片暂时无法读取");
             // 文件名由上传时生成且不再修改，可作为条件请求的版本标识。
-            return new ImageFile(new FileSystemResource(path), asset.getMimeType(), owner, asset.getStorageKey());
+            return new ImageFile(new FileSystemResource(path), asset.getMimeType(), owner || review, asset.getStorageKey());
         } catch (IOException e) {
             throw new BusinessException(503, "图片暂时无法读取", e);
         }

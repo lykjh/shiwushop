@@ -1,4 +1,5 @@
 package com.shiwushop.integration.component.user;
+
 import com.shiwushop.support.LoginTestRequest;
 
 import com.shiwushop.support.TestRegistration;
@@ -31,12 +32,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class UserMeTests {
-    @Autowired private MockMvc mockMvc;
-    @Autowired private RegisterService userService;
-    @Autowired private UserAccountMapper userAccountMapper;
-    @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private CaptchaProofStore proofs;
-    @Autowired private StringRedisTemplate redis;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private RegisterService userService;
+    @Autowired
+    private UserAccountMapper userAccountMapper;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private CaptchaProofStore proofs;
+    @Autowired
+    private StringRedisTemplate redis;
 
     @Test
     void loginRestoresCurrentUserAndLogoutEndsAccess() throws Exception {

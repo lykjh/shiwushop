@@ -15,7 +15,9 @@
 
     <sql id="publicShops">
         FROM shops s
-        WHERE s.enabled = 1 AND EXISTS (
+        WHERE s.enabled = 1 AND s.qualification_revoked = 0
+          AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
+          AND EXISTS (
             SELECT 1 FROM visible_categories c
             STRAIGHT_JOIN products p FORCE INDEX (idx_products_shop_status_category)
                 ON p.shop_id = s.id AND p.status = 'ON_SALE' AND p.category_id = c.id

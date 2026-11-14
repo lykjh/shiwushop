@@ -11,21 +11,26 @@ import lombok.Data;
 @Data
 public class ShopCreateDTO {
 
+    /** 店主用户 ID。 */
     @NotNull(message = "经营者ID不能为空")
     @Positive(message = "经营者ID必须为正数")
     private Long ownerUserId;
 
+    /** 名称。 */
     @NotBlank(message = "店铺名称不能为空")
     @Size(max = 100, message = "店铺名称不能超过100个字符")
     private String name;
 
+    /** 标识图片的媒体 ID。 */
     @Positive(message = "店铺标识媒体ID必须大于0")
     private Long logoMediaId;
 
+    /** 旧版标识图片 URL 请求字段；仅用于拒绝旧契约输入，必须为空。 */
     @JsonProperty("logoUrl")
     @Null(message = "请使用logoMediaId设置店铺标识")
     private String legacyLogoUrl;
 
+    /** 展示说明。 */
     @Size(max = 1000, message = "店铺简介不能超过1000个字符")
     private String description;
 }

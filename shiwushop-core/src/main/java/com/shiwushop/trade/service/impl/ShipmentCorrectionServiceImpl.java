@@ -11,7 +11,9 @@ import com.shiwushop.trade.dto.shipment.correction.ShipmentCorrectionStatus;
 import com.shiwushop.trade.vo.shipment.correction.ShipmentCorrectionHistoryPageVO;
 import com.shiwushop.trade.vo.shipment.correction.ShipmentCorrectionAdminPageVO;
 import com.shiwushop.user.service.AccountAccess;
+
 import java.util.List;
+
 import com.shiwushop.trade.entity.order.Order;
 import com.shiwushop.trade.entity.shipment.Shipment;
 import com.shiwushop.trade.entity.shipment.ShipmentCorrection;
@@ -25,6 +27,7 @@ import com.shiwushop.trade.vo.shipment.correction.ShipmentCorrectionRequestVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Clock;
 import java.time.LocalDateTime;
 
@@ -42,11 +45,34 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
     /** 按店铺、订单、运单、申请锁序提交，重复相同申请返回原申请。 */
     @Override
     @Transactional
-    public ShipmentCorrectionRequestVO request(Long userId, Long shopId, Long orderId, ShipmentCorrectionRequestDTO body) {
+    public ShipmentCorrectionRequestVO request(Long userId, Long shopId, Long orderId,
+                                               ShipmentCorrectionRequestDTO body) {
+        return requestLocked(userId, shopId, orderId, null, body);
+    }
+
+    @Override
+    @Transactional
+    public ShipmentCorrectionRequestVO requestPackage(Long userId, Long shopId, Long orderId, Long shipmentId,
+                                                      ShipmentCorrectionRequestDTO body) {
+        return requestLocked(userId, shopId, orderId, shipmentId, body);
+    }
+
+    private ShipmentCorrectionRequestVO requestLocked(Long userId, Long shopId, Long orderId, Long shipmentId,
+                                                      ShipmentCorrectionRequestDTO body) {
         shops.requireOwnedForUpdate(userId, shopId, "店铺不存在");
         Order order = orders.selectForUpdate(orderId);
-        if (order == null || !shopId.equals(order.getShopId())) throw new BusinessException(404, "订单不存在");
-        Shipment shipment = shipments.selectByOrderIdForUpdate(orderId);
+        if (order == null || !shopId.equals(order.getShopId()))
+            throw new BusinessException(404, "订单不存在");
+        Shipment shipment;
+        if (shipmentId == null) {
+            if (shipments.countByOrderId(orderId) > 1)
+                throw new BusinessException(409, "订单有多个包裹，请指定包裹更正");
+            shipment = shipments.selectByOrderIdForUpdate(orderId);
+        } else {
+            shipment = shipments.selectByIdForUpdate(shipmentId);
+            if (shipment == null || !orderId.equals(shipment.getOrderId()))
+                throw new BusinessException(404, "包裹不存在");
+        }
         if (shipment == null || shipment.getStatus() != ShipmentStatus.SHIPPED)
             throw new BusinessException(409, "运单不可更正");
         int version = corrections.version(shipment.getId());
@@ -59,15 +85,22 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
                 return new ShipmentCorrectionRequestVO(pending.getId(), pending.getStatus());
             throw new BusinessException(409, "已有待审核的更正申请");
         }
-        if (version != body.originalVersion()) throw new BusinessException(409, "运单版本已变化");
+        if (version != body.originalVersion())
+            throw new BusinessException(409, "运单版本已变化");
         if (shipment.getCarrierName().equals(body.carrierName()) && shipment.getTrackingNo().equals(body.trackingNo()))
             throw new BusinessException(409, "运单信息未变化");
         ShipmentCorrection correction = new ShipmentCorrection();
-        correction.setShipmentId(shipment.getId()); correction.setOrderId(orderId); correction.setShopId(shopId);
-        correction.setOriginalVersion(version); correction.setOldCarrierName(shipment.getCarrierName());
-        correction.setOldTrackingNo(shipment.getTrackingNo()); correction.setNewCarrierName(body.carrierName());
-        correction.setNewTrackingNo(body.trackingNo()); correction.setReason(body.reason());
-        correction.setRequestedBy(userId); correction.setRequestedAt(LocalDateTime.now(businessClock));
+        correction.setShipmentId(shipment.getId());
+        correction.setOrderId(orderId);
+        correction.setShopId(shopId);
+        correction.setOriginalVersion(version);
+        correction.setOldCarrierName(shipment.getCarrierName());
+        correction.setOldTrackingNo(shipment.getTrackingNo());
+        correction.setNewCarrierName(body.carrierName());
+        correction.setNewTrackingNo(body.trackingNo());
+        correction.setReason(body.reason());
+        correction.setRequestedBy(userId);
+        correction.setRequestedAt(LocalDateTime.now(businessClock));
         corrections.insert(correction);
         BusinessEventLog.committed("trade", "shipment_correction_requested", "shipment_correction", correction.getId());
         return new ShipmentCorrectionRequestVO(correction.getId(), "PENDING");
@@ -78,24 +111,28 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
     @Transactional
     public ShipmentCorrectionRequestVO decide(Long userId, Long id, ShipmentCorrectionDecisionDTO body) {
         ShipmentCorrection found = corrections.find(id);
-        if (found == null) throw new BusinessException(404, "更正申请不存在");
+        if (found == null)
+            throw new BusinessException(404, "更正申请不存在");
         String decision = body.approved() ? "APPROVED" : "REJECTED";
         if (!found.getStatus().equals("PENDING")) {
-            if (found.getStatus().equals(decision)) return new ShipmentCorrectionRequestVO(id, decision);
+            if (found.getStatus().equals(decision))
+                return new ShipmentCorrectionRequestVO(id, decision);
             throw new BusinessException(409, "申请已审核");
         }
         Shop shop = shopService.lockById(found.getShopId());
         Order order = orders.selectForUpdate(found.getOrderId());
         if (order == null || !found.getShopId().equals(order.getShopId()))
             throw new BusinessException(404, "订单不存在");
-        Shipment shipment = shipments.selectByOrderIdForUpdate(order.getId());
+        Shipment shipment = shipments.selectByIdForUpdate(found.getShipmentId());
         ShipmentCorrection current = corrections.findForUpdate(id);
         if (!current.getStatus().equals("PENDING")) {
-            if (current.getStatus().equals(decision)) return new ShipmentCorrectionRequestVO(id, decision);
+            if (current.getStatus().equals(decision))
+                return new ShipmentCorrectionRequestVO(id, decision);
             throw new BusinessException(409, "申请已审核");
         }
         if (body.approved() && (!current.getRequestedBy().equals(shop.getOwnerUserId())
-                || order.getStatus() != OrderStatus.PAID || shipment == null || !shipment.getId().equals(current.getShipmentId())
+                || order.getStatus() != OrderStatus.PAID || shipment == null ||
+                !shipment.getId().equals(current.getShipmentId())
                 || shipment.getStatus() != ShipmentStatus.SHIPPED
                 || corrections.version(shipment.getId()) != current.getOriginalVersion()))
             throw new BusinessException(409, "运单状态或版本已变化");
@@ -113,8 +150,19 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
     public ShipmentCorrectionHistoryPageVO buyerHistory(Long userId, Long orderId) {
         accounts.checkActive(userId);
         Order order = orders.selectById(orderId);
-        if (order == null || !userId.equals(order.getUserId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !userId.equals(order.getUserId()))
+            throw new BusinessException(404, "订单不存在");
         return history(orderId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ShipmentCorrectionHistoryPageVO buyerPackageHistory(Long userId, Long orderId, Long shipmentId) {
+        accounts.checkActive(userId);
+        Order order = orders.selectById(orderId);
+        if (order == null || !userId.equals(order.getUserId()))
+            throw new BusinessException(404, "订单不存在");
+        return packageHistory(orderId, shipmentId);
     }
 
     /** 店主只能读取当前店铺订单的已生效历史。 */
@@ -123,8 +171,20 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
     public ShipmentCorrectionHistoryPageVO merchantHistory(Long userId, Long shopId, Long orderId) {
         shops.requireOwned(userId, shopId, "店铺不存在");
         Order order = orders.selectById(orderId);
-        if (order == null || !shopId.equals(order.getShopId())) throw new BusinessException(404, "订单不存在");
+        if (order == null || !shopId.equals(order.getShopId()))
+            throw new BusinessException(404, "订单不存在");
         return history(orderId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ShipmentCorrectionHistoryPageVO merchantPackageHistory(Long userId, Long shopId, Long orderId,
+                                                                  Long shipmentId) {
+        shops.requireOwned(userId, shopId, "店铺不存在");
+        Order order = orders.selectById(orderId);
+        if (order == null || !shopId.equals(order.getShopId()))
+            throw new BusinessException(404, "订单不存在");
+        return packageHistory(orderId, shipmentId);
     }
 
     /** 当前店主仅可查看本店本订单申请的状态。 */
@@ -139,9 +199,20 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
 
     /** 一致快照内返回版本与已批准历史，不包含内部审批备注。 */
     private ShipmentCorrectionHistoryPageVO history(Long orderId) {
+        if (shipments.countByOrderId(orderId) > 1)
+            throw new BusinessException(409, "订单有多个包裹，请指定包裹查看更正历史");
         Shipment shipment = shipments.selectByOrderId(orderId);
-        if (shipment == null) throw new BusinessException(404, "运单不存在");
+        if (shipment == null)
+            throw new BusinessException(404, "运单不存在");
         return new ShipmentCorrectionHistoryPageVO(corrections.version(shipment.getId()), corrections.history(orderId));
+    }
+
+    private ShipmentCorrectionHistoryPageVO packageHistory(Long orderId, Long shipmentId) {
+        Shipment shipment = shipments.selectById(shipmentId);
+        if (shipment == null || !orderId.equals(shipment.getOrderId()))
+            throw new BusinessException(404, "包裹不存在");
+        return new ShipmentCorrectionHistoryPageVO(corrections.version(shipmentId),
+                corrections.historyForShipment(shipmentId));
     }
 
     /** 管理员按状态和 ID 游标读取更正申请。 */

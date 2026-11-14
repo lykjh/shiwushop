@@ -19,9 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 class CategoryMoveRaceTests {
-    @Autowired private CategoryMapper categories;
-    @Autowired private CategoryService service;
-    @Autowired private JdbcTemplate jdbc;
+    @Autowired
+    private CategoryMapper categories;
+    @Autowired
+    private CategoryService service;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void simultaneousReciprocalMovesNeverPersistCycle() throws Exception {
@@ -36,12 +39,16 @@ class CategoryMoveRaceTests {
                     start.countDown();
                     first.get(10, TimeUnit.SECONDS);
                     second.get(10, TimeUnit.SECONDS);
-                    Long aParent = jdbc.queryForObject("SELECT parent_id FROM categories WHERE id=?", Long.class, a.getId());
-                    Long bParent = jdbc.queryForObject("SELECT parent_id FROM categories WHERE id=?", Long.class, b.getId());
+                    Long aParent = jdbc.queryForObject("SELECT parent_id FROM categories WHERE id=?", Long.class,
+                            a.getId());
+                    Long bParent = jdbc.queryForObject("SELECT parent_id FROM categories WHERE id=?", Long.class,
+                            b.getId());
                     assertFalse(b.getId().equals(aParent) && a.getId().equals(bParent), "run=" + run);
                 } finally {
-                    jdbc.update("UPDATE categories SET parent_id=NULL, level=1 WHERE id IN (?,?)", a.getId(), b.getId());
-                    jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='CATEGORY' AND aggregate_id IN (?,?)", a.getId(), b.getId());
+                    jdbc.update("UPDATE categories SET parent_id=NULL, level=1 WHERE id IN (?,?)", a.getId(),
+                            b.getId());
+                    jdbc.update("DELETE FROM outbox_events WHERE aggregate_type='CATEGORY' AND aggregate_id IN (?,?)",
+                            a.getId(), b.getId());
                     jdbc.update("DELETE FROM categories WHERE id IN (?,?)", a.getId(), b.getId());
                 }
             }

@@ -1,19 +1,40 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.shiwushop.product.mapper.review.ProductReviewMapper">
-    <!-- 仅已成功退款的件数扣减评价资格；锁订单明细以串行化同一明细的创建请求。 -->
+    <select id="lockOrder" resultType="long" flushCache="true">
+        SELECT id FROM orders WHERE id = #{orderId} FOR UPDATE
+    </select>
+
+    <select id="selectOrderIdByReviewId" resultType="long">
+        SELECT item.order_id FROM product_reviews review
+        JOIN order_items item ON item.id = review.order_item_id
+        WHERE review.id = #{reviewId} AND review.buyer_user_id = #{buyerId}
+    </select>
+
+    <!-- 每种件数独立聚合，避免多包裹与多次售后相乘；订单锁已由调用方先取得。 -->
     <select id="selectEligibilityForUpdate" resultType="com.shiwushop.product.vo.query.review.ReviewEligibility" flushCache="true">
         SELECT item.id AS orderItemId, item.order_id AS orderId, orders.user_id AS buyerUserId,
                sku.product_id AS productId, item.quantity, orders.status AS orderStatus,
-               shipment.status AS shipmentStatus,
+               (SELECT COALESCE(SUM(packed.quantity), 0)
+                FROM shipment_items packed
+                JOIN shipments shipment ON shipment.id = packed.shipment_id
+                WHERE packed.order_item_id = item.id AND shipment.order_id = item.order_id
+                  AND shipment.status = 'CONFIRMED' AND shipment.allocation_state = 'COMPLETE') AS confirmedQuantity,
                (SELECT COALESCE(SUM(refunded.quantity), 0)
                 FROM after_sale_items refunded
                 JOIN after_sale_cases sale ON sale.id = refunded.case_id
-                WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED') AS refundedQuantity
+                WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED') AS refundedQuantity,
+               (SELECT COALESCE(SUM(refunded.quantity), 0)
+                FROM after_sale_items refunded
+                JOIN after_sale_cases sale ON sale.id = refunded.case_id
+                LEFT JOIN shipments source ON source.id = refunded.source_shipment_id
+                WHERE refunded.order_item_id = item.id AND sale.status = 'REFUNDED'
+                  AND (refunded.source_kind = 'LEGACY_UNKNOWN' OR
+                       (refunded.source_kind = 'SHIPMENT' AND source.order_id = item.order_id
+                        AND source.status = 'CONFIRMED'))) AS refundedConfirmedQuantity
         FROM order_items item
         JOIN orders ON orders.id = item.order_id
         JOIN skus sku ON sku.id = item.sku_id
-        LEFT JOIN shipments shipment ON shipment.order_id = orders.id
         WHERE item.id = #{orderItemId}
         FOR UPDATE
     </select>

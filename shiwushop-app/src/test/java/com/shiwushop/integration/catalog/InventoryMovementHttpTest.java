@@ -12,9 +12,11 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.ObjectMapper;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -22,15 +24,18 @@ import static org.junit.jupiter.api.Assertions.*;
         "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class InventoryMovementHttpTest {
-    @LocalServerPort int port;
-    @Autowired JdbcTemplate jdbc;
+    @LocalServerPort
+    int port;
+    @Autowired
+    JdbcTemplate jdbc;
     final ObjectMapper json = new ObjectMapper();
     CatalogFixture catalog;
     HttpAccountClient merchant;
     long sku;
     String path;
 
-    @BeforeEach void prepare() throws Exception {
+    @BeforeEach
+    void prepare() throws Exception {
         catalog = new CatalogFixture(jdbc);
         long product = catalog.product("测试商品", "ON_SALE", "19.90", 20);
         sku = catalog.sku(product);
@@ -38,7 +43,8 @@ class InventoryMovementHttpTest {
         path = "/merchant/shops/" + catalog.shop + "/skus/" + sku + "/inventory-movements";
     }
 
-    @AfterEach void cleanup() {
+    @AfterEach
+    void cleanup() {
         merchant.close();
         jdbc.update("DELETE FROM inventory_movements WHERE sku_id=?", sku);
         catalog.close();
@@ -46,12 +52,14 @@ class InventoryMovementHttpTest {
 
     long movement(String reason, String time) {
         String key = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO inventory_movements(sku_id,reason,delta,balance_after,operation_key,created_at) VALUES (?,?,1,20,?,?)",
+        jdbc.update(
+                "INSERT INTO inventory_movements(sku_id,reason,delta,balance_after,operation_key,created_at) VALUES (?,?,1,20,?,?)",
                 sku, reason, key, time);
         return jdbc.queryForObject("SELECT id FROM inventory_movements WHERE operation_key=?", Long.class, key);
     }
 
-    @Test void ownerSeesEmptyMovementPageForOwnSku() throws Exception {
+    @Test
+    void ownerSeesEmptyMovementPageForOwnSku() throws Exception {
         var response = merchant.get(path);
         assertEquals(200, response.statusCode(), response.body());
         var data = json.readTree(response.body()).path("data");
@@ -59,7 +67,8 @@ class InventoryMovementHttpTest {
         assertFalse(data.path("hasMore").asBoolean());
     }
 
-    @Test void readsAllReasonsAndNeverReturnsOperationKeyOrChangesStock() throws Exception {
+    @Test
+    void readsAllReasonsAndNeverReturnsOperationKeyOrChangesStock() throws Exception {
         for (String reason : new String[]{"ORDER_DEDUCT", "ORDER_CANCEL_RETURN", "REFUND_RETURN", "MERCHANT_ADJUST"}) {
             movement(reason, "2026-11-03 10:00:00");
         }
@@ -71,10 +80,12 @@ class InventoryMovementHttpTest {
         assertEquals("ORDER_DEDUCT", items.get(3).path("reason").asString());
         assertFalse(items.get(0).has("operationKey"));
         assertEquals(20, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, sku));
-        assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE sku_id=?", Integer.class, sku));
+        assertEquals(4,
+                jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE sku_id=?", Integer.class, sku));
     }
 
-    @Test void filtersByReasonAndHalfOpenTimeRange() throws Exception {
+    @Test
+    void filtersByReasonAndHalfOpenTimeRange() throws Exception {
         movement("ORDER_DEDUCT", "2026-11-03 09:59:59");
         long included = movement("ORDER_DEDUCT", "2026-11-03 10:00:00");
         movement("MERCHANT_ADJUST", "2026-11-03 10:00:00");
@@ -88,7 +99,8 @@ class InventoryMovementHttpTest {
         assertEquals(included, items.get(0).path("id").asLong());
     }
 
-    @Test void cursorPagesSameTimeRowsAndIgnoresNewerInsert() throws Exception {
+    @Test
+    void cursorPagesSameTimeRowsAndIgnoresNewerInsert() throws Exception {
         long oldest = movement("MERCHANT_ADJUST", "2026-11-03 10:00:00");
         long middle = movement("MERCHANT_ADJUST", "2026-11-03 10:00:00");
         long newest = movement("MERCHANT_ADJUST", "2026-11-03 10:00:00");
@@ -103,12 +115,17 @@ class InventoryMovementHttpTest {
         assertFalse(second.path("hasMore").asBoolean());
     }
 
-    @Test void hidesOtherShopAndSku() throws Exception {
+    @Test
+    void hidesOtherShopAndSku() throws Exception {
         try (var other = new CatalogFixture(jdbc)) {
             long product = other.product("其他商品", "ON_SALE", "10.00", 5);
             long otherSku = other.sku(product);
-            assertEquals(404, merchant.get("/merchant/shops/" + other.shop + "/skus/" + otherSku + "/inventory-movements").statusCode());
-            assertEquals(404, merchant.get("/merchant/shops/" + catalog.shop + "/skus/" + otherSku + "/inventory-movements").statusCode());
+            assertEquals(404,
+                    merchant.get("/merchant/shops/" + other.shop + "/skus/" + otherSku + "/inventory-movements")
+                            .statusCode());
+            assertEquals(404,
+                    merchant.get("/merchant/shops/" + catalog.shop + "/skus/" + otherSku + "/inventory-movements")
+                            .statusCode());
         }
     }
 }

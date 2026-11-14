@@ -3,7 +3,6 @@ package com.shiwushop.unit.auth;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
 
-
 import com.shiwushop.common.media.mapper.MediaAssetMapper;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +25,7 @@ class MediaAssetAccessTests {
         when(mapper.selectReadyOwnedForUpdate(5L, 9L)).thenReturn(5L);
         access.requireReadyOwned(5L, 9L, "店铺标识媒体不存在或不可用");
     }
+
     @Test
     void distinguishesMissingOwnedMediaFromUnready() {
         MediaAssetMapper mapper = mock(MediaAssetMapper.class);
@@ -34,4 +34,5 @@ class MediaAssetAccessTests {
         when(mapper.selectOwnedStatusForUpdate(5L, 9L)).thenReturn("PENDING", "READY");
         assertEquals(409, assertThrows(BusinessException.class, () -> access.requireReadyOwned(5L, 9L)).getCode());
         access.requireReadyOwned(5L, 9L);
-    }}
+    }
+}

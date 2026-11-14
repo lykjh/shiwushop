@@ -22,8 +22,9 @@ public class InventoryMovementController {
     /** 按 ID 游标读取当前店主的 SKU 库存流水。 */
     @GetMapping("/merchant/shops/{shopId}/skus/{skuId}/inventory-movements")
     public Result<InventoryMovementPageVO> list(@PathVariable @Positive Long shopId,
-            @PathVariable @Positive Long skuId, @Valid @ModelAttribute InventoryMovementQuery query,
-            HttpServletRequest request) {
+                                                @PathVariable @Positive Long skuId,
+                                                @Valid @ModelAttribute InventoryMovementQuery query,
+                                                HttpServletRequest request) {
         return Result.success(movements.list(SessionUser.requireId(request), shopId, skuId, query));
     }
 }
