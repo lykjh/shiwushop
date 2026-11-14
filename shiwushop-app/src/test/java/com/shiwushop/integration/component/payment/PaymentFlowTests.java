@@ -508,7 +508,8 @@ class PaymentFlowTests {
             long started = System.nanoTime();
             mockMvc.perform(get("/payments/checkout/{outTradeNo}", outTradeNo))
                     .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.message").value("二维码生成中，请稍后重试"));
+                    .andExpect(content().contentType("text/html;charset=UTF-8"))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("二维码生成中，请稍后重试")));
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
             assertTrue(elapsedMs < 2000, "第二个请求被渠道调用期间的数据库行锁阻塞");
             System.out.println("P01 concurrent checkout conflict latency_ms=" + elapsedMs);
