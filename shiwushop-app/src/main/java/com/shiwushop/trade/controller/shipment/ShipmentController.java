@@ -9,6 +9,7 @@ import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.trade.service.ShipmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -51,6 +52,18 @@ public class ShipmentController {
                                                   HttpServletRequest request) {
         return Result.success(shipmentService.buyerPackages(SessionUser.requireId(request), orderId));
     }
+
+    @PostMapping("/merchant/shops/{shopId}/orders/{orderId}/shipments/{shipmentId}/simulate-tracking")
+    public Result<ShipmentVO> simulateTracking(@PathVariable @Positive Long shopId,
+                                               @PathVariable @Positive Long orderId,
+                                               @PathVariable @Positive Long shipmentId,
+                                               @Valid @RequestBody SimulatedTracking body,
+                                               HttpServletRequest request) {
+        return Result.success(shipmentService.simulateTracking(SessionUser.requireId(request), shopId, orderId,
+                shipmentId, body.step()));
+    }
+
+    public record SimulatedTracking(@NotNull ShipmentService.SimulatedTrackingStep step) { }
 
     @PostMapping("/orders/{orderId}/shipments/{shipmentId}/confirm")
     public Result<ShipmentVO> confirmPackage(@PathVariable @Positive Long orderId,

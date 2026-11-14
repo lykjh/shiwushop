@@ -66,6 +66,7 @@ public final class RocketFaultApp implements AutoCloseable {
                         "--shop.alipay.app-id=", "--shop.alipay.seller-id=", "--shop.alipay.private-key-path=",
                         "--shop.alipay.public-key=",
                         "--shop.shipment.rocket-enabled=" + rocket,
+                        "--shop.shipment.simulation-enabled=true",
                         "--shop.shipment.rocket-publisher-enabled=" + rocketPublisher,
                         "--shop.shipment.rocket-preflight-verified=true",
                         "--shop.shipment.rocket-name-server=" + endpoint,

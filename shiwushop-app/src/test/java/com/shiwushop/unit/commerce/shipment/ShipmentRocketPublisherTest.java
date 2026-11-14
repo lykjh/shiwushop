@@ -2,6 +2,7 @@ package com.shiwushop.unit.commerce.shipment;
 
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.trade.entity.shipment.Shipment;
+import com.shiwushop.trade.entity.status.ShipmentStatus;
 import com.shiwushop.trade.mapper.shipment.ShipmentMapper;
 import com.shiwushop.trade.shipment.ShipmentOutboxPublisher;
 import org.springframework.messaging.Message;
@@ -33,6 +34,8 @@ class ShipmentRocketPublisherTest {
     final Shipment shipment = new Shipment();
 
     ShipmentRocketPublisherTest() {
+        shipment.setStatus(ShipmentStatus.SHIPPED);
+        shipment.setCarrierSignedAt(now.minusDays(10));
         event.setId(5L);
         event.setShipmentId(8L);
         when(outbox.selectPendingShipmentEvents(any(), eq(50))).thenReturn(List.of(event));

@@ -64,7 +64,9 @@
     </update>
 
     <select id="selectShipmentEvent" resultType="com.shiwushop.common.outbox.OutboxEventMapper$ShipmentConfirmEvent">
-        SELECT id, aggregate_id AS shipmentId, attempts FROM outbox_events
+        SELECT id, aggregate_id AS shipmentId, attempts,
+               JSON_CONTAINS_PATH(payload, 'one', '$.retired') AS retired
+        FROM outbox_events
         WHERE id = #{eventId} AND event_type = 'SHIPMENT_AUTO_CONFIRM'
     </select>
 

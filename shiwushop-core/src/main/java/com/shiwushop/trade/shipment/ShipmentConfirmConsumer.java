@@ -39,6 +39,8 @@ public class ShipmentConfirmConsumer {
             OutboxEventMapper.ShipmentConfirmEvent event = outbox.selectShipmentEvent(eventId);
             if (event == null)
                 throw new IllegalArgumentException("未知物流事件");
+            if (event.isRetired())
+                return;
             // 消费记录和收货状态同事务提交；MQ 重投时只执行一次确认。
             if (consumed.insertOnce(CONSUMER, eventId, LocalDateTime.now(clock)) == 0)
                 return;

@@ -22,12 +22,14 @@ import com.shiwushop.trade.mapper.shipment.ShipmentItemMapper;
 import com.shiwushop.trade.service.ShipmentService;
 import com.shiwushop.member.service.MemberRewardService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
@@ -35,8 +37,11 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class ShipmentServiceImpl implements ShipmentService {
-    /** 包裹发货后自动确认收货的期限，单位为天。 */
+    /** 包裹签收后自动确认收货的期限，单位为天。 */
     private static final int AUTO_CONFIRM_DAYS = 10;
+
+    @Value("${shop.shipment.simulation-enabled:false}")
+    private boolean simulationEnabled;
 
     private final ShipmentMapper shipmentMapper;
     private final ShipmentItemMapper shipmentItems;
@@ -125,7 +130,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private ShipmentVO createPackage(Long userId, Long orderId, String key, String carrier, String trackingNo,
                                      List<ShipmentPackageCreateDTO.Item> lines) {
-        LocalDateTime now = LocalDateTime.now(businessClock);
+        LocalDateTime now = LocalDateTime.now(businessClock).truncatedTo(ChronoUnit.SECONDS);
         Shipment shipment = new Shipment();
         shipment.setOrderId(orderId);
         shipment.setRequestKey(key);
@@ -135,11 +140,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setStatus(ShipmentStatus.SHIPPED);
         shipment.setShippedByUserId(userId);
         shipment.setShippedAt(now);
-        shipment.setAutoConfirmAt(now.plusDays(AUTO_CONFIRM_DAYS));
         shipmentMapper.insert(shipment);
         for (ShipmentPackageCreateDTO.Item line : lines)
             shipmentItems.insert(shipment.getId(), line.orderItemId(), line.quantity());
-        outboxEventMapper.insertShipmentAutoConfirm(shipment.getId(), shipment.getAutoConfirmAt().minusHours(23));
         auditMapper.record(userId, "SHIPMENT_CREATED", shipment.getId(), "商家发货", now);
         BusinessEventLog.committed("trade", "shipment_created", "shipment", shipment.getId());
         return toVO(shipment);
@@ -241,6 +244,50 @@ public class ShipmentServiceImpl implements ShipmentService {
         return toVO(shipment);
     }
 
+    @Override
+    @Transactional
+    public ShipmentVO simulateTracking(Long userId, Long shopId, Long orderId, Long shipmentId,
+                                       SimulatedTrackingStep step) {
+        if (!simulationEnabled)
+            throw new BusinessException(404, "模拟物流未开启");
+        merchantShopAccess.requireOwnedForUpdate(userId, shopId, "店铺不存在");
+        Order order = orderMapper.selectForUpdate(orderId);
+        if (order == null || !shopId.equals(order.getShopId()))
+            throw new BusinessException(404, "订单不存在");
+        Shipment shipment = shipmentMapper.selectByIdForUpdate(shipmentId);
+        if (shipment == null || !orderId.equals(shipment.getOrderId()))
+            throw new BusinessException(404, "包裹不存在");
+        if (order.getStatus() != OrderStatus.PAID || !"READY".equals(order.getFulfillmentState())
+                || !"COMPLETE".equals(shipment.getAllocationState())
+                || shipmentItems.packageEffectiveQuantity(shipmentId) <= 0)
+            throw new BusinessException(409, "包裹当前不能推进物流");
+        if (shipment.getCarrierSignedAt() != null)
+            return toVO(shipment);
+
+        LocalDateTime now = LocalDateTime.now(businessClock).truncatedTo(ChronoUnit.SECONDS);
+        if (now.isBefore(shipment.getShippedAt()))
+            throw new BusinessException(409, "当前时间早于包裹发货时间");
+        switch (step) {
+            case IN_TRANSIT -> {
+                if (shipment.getSimulatedInTransitAt() == null) {
+                    shipmentMapper.recordSimulatedTransit(shipmentId, now);
+                    shipment.setSimulatedInTransitAt(now);
+                }
+            }
+            case SIGNED -> {
+                if (shipment.getSimulatedInTransitAt() != null && now.isBefore(shipment.getSimulatedInTransitAt()))
+                    throw new BusinessException(409, "当前时间早于包裹运输时间");
+                LocalDateTime deadline = now.plusDays(AUTO_CONFIRM_DAYS);
+                shipmentMapper.recordCarrierSigning(shipmentId, now, deadline);
+                shipment.setCarrierSignedAt(now);
+                shipment.setAutoConfirmAt(deadline);
+                if (shipment.getStatus() == ShipmentStatus.SHIPPED)
+                    outboxEventMapper.insertShipmentAutoConfirm(shipmentId, deadline.minusHours(23));
+            }
+        }
+        return toVO(shipment);
+    }
+
     /** 到期自动确认未退款的已发货订单；与买家确认使用相同锁顺序防重复。 */
     @Override
     @Transactional
@@ -255,7 +302,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         Shipment shipment = shipmentMapper.selectByIdForUpdate(shipmentId);
         LocalDateTime now = LocalDateTime.now(businessClock);
         if (shipment == null || !order.getId().equals(shipment.getOrderId())
-                || shipment.getStatus() != ShipmentStatus.SHIPPED)
+                || shipment.getStatus() != ShipmentStatus.SHIPPED
+                || shipment.getCarrierSignedAt() == null || shipment.getAutoConfirmAt() == null)
             return true;
         if ("STOPPED".equals(order.getFulfillmentState())
                 || !"COMPLETE".equals(shipment.getAllocationState())
@@ -303,7 +351,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     /** 统一转换查询响应；无运单时显式给出 NOT_SHIPPED。 */
     private ShipmentVO toVO(Long orderId, Shipment shipment) {
         return shipment == null ? new ShipmentVO(null, orderId, "NOT_SHIPPED", null, null,
-                null, null, null, null, List.of()) : toVO(shipment);
+                null, null, null, null, null, null, List.of(), simulationEnabled) : toVO(shipment);
     }
 
     /** 将运单状态、追踪信息和确认来源转换为对外响应。 */
@@ -312,7 +360,8 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .map(item -> new ShipmentVO.Item(item.getOrderItemId(), item.getQuantity())).toList();
         return new ShipmentVO(shipment.getId(), shipment.getOrderId(), shipment.getStatus().name(),
                 shipment.getCarrierName(), shipment.getTrackingNo(), shipment.getShippedAt(),
-                shipment.getAutoConfirmAt(), shipment.getConfirmedAt(),
-                shipment.getConfirmSource() == null ? null : shipment.getConfirmSource().name(), lines);
+                shipment.getSimulatedInTransitAt(), shipment.getCarrierSignedAt(),
+                shipment.getCarrierSignedAt() == null ? null : shipment.getAutoConfirmAt(), shipment.getConfirmedAt(),
+                shipment.getConfirmSource() == null ? null : shipment.getConfirmSource().name(), lines, simulationEnabled);
     }
 }

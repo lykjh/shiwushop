@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 // 强制集成入口：无条件跳过；必须显式 -Dtest=ShipmentRocketLiveIT，环境缺失即失败。
 @SpringBootTest(properties = {
+        "shop.shipment.simulation-enabled=true",
         "shop.shipment.rocket-enabled=true",
         "shop.shipment.rocket-name-server=${shipment.live.name-server:localhost:29876}", "shop.shipment.expiry-enabled=false",
         "shop.shipment.scan-delay-ms=600000", "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -62,7 +63,7 @@ class ShipmentRocketLiveIT {
         createShipmentFixture();
         var shipment = shipmentMapper.selectByOrderId(orderId);
         long event = eventId(shipment.getId());
-        assertEquals(shipment.getShippedAt().plusDays(10), shipment.getAutoConfirmAt());
+        assertEquals(shipment.getCarrierSignedAt().plusDays(10), shipment.getAutoConfirmAt());
         assertEquals(shipment.getAutoConfirmAt().minusHours(23),
                 jdbc.queryForObject("SELECT next_attempt_at FROM outbox_events WHERE id=?", LocalDateTime.class,
                         event));
@@ -71,7 +72,7 @@ class ShipmentRocketLiveIT {
         assertThrows(IllegalStateException.class, () -> consumer.handle(Long.toString(event)));
         assertEquals(0, consumed(event));
         jdbc.update(
-                "UPDATE shipments SET shipped_at=DATE_SUB(NOW(),INTERVAL 10 DAY), auto_confirm_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE id=?",
+                "UPDATE shipments SET shipped_at=NOW()-INTERVAL 11 DAY, carrier_signed_at=NOW()-INTERVAL 10 DAY-INTERVAL 1 SECOND, auto_confirm_at=NOW()-INTERVAL 1 SECOND WHERE id=?",
                 shipment.getId());
         consumer.handle(Long.toString(event));
         consumer.handle(Long.toString(event));
@@ -152,7 +153,7 @@ class ShipmentRocketLiveIT {
         var shipment = shipmentMapper.selectByOrderId(orderId);
         long event = eventId(shipment.getId());
         jdbc.update(
-                "UPDATE shipments SET shipped_at=DATE_SUB(NOW(),INTERVAL 10 DAY), auto_confirm_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE id=?",
+                "UPDATE shipments SET shipped_at=NOW()-INTERVAL 11 DAY, carrier_signed_at=NOW()-INTERVAL 10 DAY-INTERVAL 1 SECOND, auto_confirm_at=NOW()-INTERVAL 1 SECOND WHERE id=?",
                 shipment.getId());
         var tx = new org.springframework.transaction.support.TransactionTemplate(
                 context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
@@ -176,7 +177,7 @@ class ShipmentRocketLiveIT {
         var shipment = shipmentMapper.selectByOrderId(orderId);
         long event = eventId(shipment.getId());
         jdbc.update(
-                "UPDATE shipments SET shipped_at=DATE_SUB(NOW(),INTERVAL 10 DAY), auto_confirm_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE id=?",
+                "UPDATE shipments SET shipped_at=NOW()-INTERVAL 11 DAY, carrier_signed_at=NOW()-INTERVAL 10 DAY-INTERVAL 1 SECOND, auto_confirm_at=NOW()-INTERVAL 1 SECOND WHERE id=?",
                 shipment.getId());
         jdbc.update("UPDATE outbox_events SET status=? WHERE id=?", state, event);
         new ShipmentExpiryJob(shipments, shipmentMapper, clock).confirmDue();
@@ -230,7 +231,10 @@ class ShipmentRocketLiveIT {
         skuId = jdbc.queryForObject("SELECT id FROM skus WHERE product_id=?", Long.class, productId);
         context.getBean(com.shiwushop.trade.mapper.order.OrderMapper.class)
                 .insertCheckoutItem(orderId, skuId, "旅行收纳包", "标准款", 1, new BigDecimal("40.00"));
-        shipments.ship(merchantId, shopId, orderId, new ShipmentCreateDTO("顺丰", "SF-ROCKET"));
+        var shipment = shipments.ship(merchantId, shopId, orderId, new ShipmentCreateDTO("顺丰", "SF-ROCKET"));
+        assertNull(shipment.autoConfirmAt());
+        shipments.simulateTracking(merchantId, shopId, orderId, shipment.shipmentId(),
+                ShipmentService.SimulatedTrackingStep.SIGNED);
     }
 
     @AfterEach

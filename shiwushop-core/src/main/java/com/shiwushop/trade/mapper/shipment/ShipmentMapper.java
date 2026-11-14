@@ -5,6 +5,7 @@ import com.shiwushop.trade.entity.shipment.Shipment;
 import com.shiwushop.trade.entity.status.ConfirmSource;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +35,14 @@ public interface ShipmentMapper extends BaseMapper<Shipment> {
     int confirm(@Param("shipmentId") Long shipmentId, @Param("source") ConfirmSource source,
                 @Param("now") LocalDateTime now);
 
+    @Update("UPDATE shipments SET simulated_in_transit_at=#{at} WHERE id=#{shipmentId}")
+    int recordSimulatedTransit(@Param("shipmentId") Long shipmentId, @Param("at") LocalDateTime at);
+
+    @Update("UPDATE shipments SET carrier_signed_at=#{at}, auto_confirm_at=#{deadline} WHERE id=#{shipmentId}")
+    int recordCarrierSigning(@Param("shipmentId") Long shipmentId, @Param("at") LocalDateTime at,
+                             @Param("deadline") LocalDateTime deadline);
+
+    /** 按截止时间和 ID 分批读取符合自动收货条件的包裹。 */
     List<Long> selectDueIds(@Param("now") LocalDateTime now, @Param("limit") int limit);
 
     Long oldestDueSeconds(@Param("now") LocalDateTime now);

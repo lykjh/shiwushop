@@ -18,7 +18,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -118,7 +117,7 @@ class MultiPackageShipmentTest {
         assertEquals("NOT_RECEIVED", orders.fulfillmentProgress(order).getReceiptProgress());
         assertEquals(first.shipmentId(), shipments.shipPackage(
                 fixture.catalog.merchant.id(), fixture.catalog.shop, order, firstRequest).shipmentId());
-        assertEquals(10, Duration.between(first.shippedAt(), first.autoConfirmAt()).toDays());
+        assertNull(first.autoConfirmAt());
         assertEquals(409, assertThrows(BusinessException.class,
                 () -> shipments.shipPackage(fixture.catalog.merchant.id(), fixture.catalog.shop, order,
                         new ShipmentPackageCreateDTO("parcel-too-many", "顺丰", "SF-EXCESS",
@@ -278,8 +277,9 @@ class MultiPackageShipmentTest {
         assertEquals(1, orders.fulfillmentProgress(order).getEffectiveShippedQuantity());
         assertEquals(stockBeforeRefund, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?",
                 Integer.class, fixture.sku));
-        assertEquals(false, shipments.confirmDue(first.shipmentId()));
-        jdbc.update("UPDATE shipments SET shipped_at=NOW()-INTERVAL 11 DAY, "
+        assertEquals(true, shipments.confirmDue(first.shipmentId()));
+        assertEquals("SHIPPED", shipments.buyerPackages(fixture.buyer.id(), order).getFirst().status());
+        jdbc.update("UPDATE shipments SET shipped_at=NOW()-INTERVAL 12 DAY, carrier_signed_at=NOW()-INTERVAL 11 DAY, "
                 + "auto_confirm_at=NOW()-INTERVAL 1 DAY WHERE id=?", first.shipmentId());
         assertEquals(true, shipments.confirmDue(first.shipmentId()));
         assertEquals(true, shipments.confirmDue(first.shipmentId()));

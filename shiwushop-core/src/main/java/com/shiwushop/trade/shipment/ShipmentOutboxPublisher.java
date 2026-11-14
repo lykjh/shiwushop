@@ -3,6 +3,7 @@ package com.shiwushop.trade.shipment;
 import com.shiwushop.trade.entity.shipment.Shipment;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.trade.mapper.shipment.ShipmentMapper;
+import com.shiwushop.trade.entity.status.ShipmentStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -81,6 +82,11 @@ public class ShipmentOutboxPublisher {
             if (shipment == null) {
                 outbox.markDead(event.getId(), token);
                 return false;
+            }
+            if (shipment.getStatus() != ShipmentStatus.SHIPPED || shipment.getCarrierSignedAt() == null
+                    || shipment.getAutoConfirmAt() == null) {
+                outbox.markDead(event.getId(), token);
+                return true;
             }
             LocalDateTime now = LocalDateTime.now(clock);
             // 十天期限仍保存在数据库，只在截止前 23 小时进入 Broker 定时窗口。

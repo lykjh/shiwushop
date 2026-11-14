@@ -22,6 +22,7 @@ foreach ($instance in 1,2) {
         '--shop.search.url=http://127.0.0.1:29200','--shop.search.discovery-enabled=false','--shop.search.worker-enabled=false',
         '--shop.alipay.app-id=','--shop.alipay.seller-id=','--shop.alipay.private-key-path=','--shop.alipay.public-key=',
         '--shop.shipment.rocket-enabled=true',
+        '--shop.shipment.simulation-enabled=true',
         '--shop.shipment.rocket-name-server=localhost:29876','--shop.shipment.expiry-enabled=false',
         '--shop.shipment.rocket-preflight-verified=true',
         '--shop.shipment.scan-delay-ms=30000','--shop.payment.expiry-scan-delay-ms=600000',

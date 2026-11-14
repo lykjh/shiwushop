@@ -2,6 +2,7 @@ package com.shiwushop.unit.commerce.shipment;
 
 import com.shiwushop.trade.shipment.ShipmentOutboxPublisher;
 import com.shiwushop.trade.entity.shipment.Shipment;
+import com.shiwushop.trade.entity.status.ShipmentStatus;
 import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.trade.mapper.shipment.ShipmentMapper;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -28,10 +29,23 @@ class ShipmentOutboxPublisherTest {
 
     ShipmentOutboxPublisherTest() {
         var shipment = new Shipment();
+        shipment.setStatus(ShipmentStatus.SHIPPED);
+        shipment.setCarrierSignedAt(LocalDateTime.now(clock).minusDays(10));
         shipment.setAutoConfirmAt(LocalDateTime.now(clock));
         when(outbox.selectPendingShipmentEvents(any(), eq(50))).thenReturn(List.of(event(5L, 8L), event(6L, 9L)));
         when(outbox.claimShipmentEvent(eq(5L), any(), any(), any())).thenReturn(1);
         when(shipments.selectById(8L)).thenReturn(shipment);
+    }
+
+    @Test
+    void unsignedShipmentWithAnOldDeadlineIsNotPublished() {
+        var shipment = new Shipment();
+        shipment.setStatus(ShipmentStatus.SHIPPED);
+        shipment.setAutoConfirmAt(LocalDateTime.now(clock));
+        when(shipments.selectById(8L)).thenReturn(shipment);
+        publisher.publishPending();
+        verify(outbox).markDead(eq(5L), any());
+        verifyNoInteractions(producer);
     }
 
     @Test

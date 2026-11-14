@@ -83,6 +83,7 @@ public interface OutboxEventMapper {
         private Long id;
         /** 关联发货包裹 ID。 */
         private Long shipmentId;
+        private boolean retired;
         /** 该事件已尝试发布的次数。 */
         private int attempts;
     }

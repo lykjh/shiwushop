@@ -449,13 +449,18 @@ class ShipmentRocketFaultIT {
                 Map.of("carrierName", "顺丰", "trackingNo", "SF-FAULT"));
         assertEquals(200, result.statusCode(), result.body());
         long shipment = jdbc.queryForObject("SELECT id FROM shipments WHERE order_id=?", Long.class, order);
-        var original = jdbc.queryForMap("SELECT shipped_at,auto_confirm_at FROM shipments WHERE id=?", shipment);
-        assertEquals(((LocalDateTime) original.get("shipped_at")).plusDays(10), original.get("auto_confirm_at"));
+        var signed = fixture.merchantClient.post(
+                "/merchant/shops/" + fixture.catalog.shop + "/orders/" + order
+                        + "/shipments/" + shipment + "/simulate-tracking", Map.of("step", "SIGNED"));
+        assertEquals(200, signed.statusCode(), signed.body());
+        var original = jdbc.queryForMap("SELECT carrier_signed_at,auto_confirm_at FROM shipments WHERE id=?", shipment);
+        assertEquals(((LocalDateTime) original.get("carrier_signed_at")).plusDays(10), original.get("auto_confirm_at"));
         long event = jdbc.queryForObject(
                 "SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?", Long.class,
                 shipment);
         due = due.withNano(0);
-        jdbc.update("UPDATE shipments SET shipped_at=?,auto_confirm_at=? WHERE id=?", due.minusDays(10), due, shipment);
+        jdbc.update("UPDATE shipments SET shipped_at=?,carrier_signed_at=?,auto_confirm_at=? WHERE id=?",
+                due.minusDays(11), due.minusDays(10), due, shipment);
         var sample = new Sample(event, shipment, order, due);
         samples.add(sample);
         return sample;

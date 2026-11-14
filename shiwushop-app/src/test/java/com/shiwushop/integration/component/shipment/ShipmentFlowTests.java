@@ -32,12 +32,16 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+@SpringBootTest(properties = {"shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "shop.shipment.simulation-enabled=true"})
 @AutoConfigureMockMvc
 @Transactional
 class ShipmentFlowTests {
@@ -87,14 +91,9 @@ class ShipmentFlowTests {
         assertEquals(1,
                 jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CREATED' AND target_id=?",
                         Integer.class, shipments.selectByOrderId(order.getId()).getId()));
-        assertEquals(1, jdbc.queryForObject(
+        assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Integer.class, shipments.selectByOrderId(order.getId()).getId()));
-        Long eventId = jdbc.queryForObject(
-                "SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
-                Long.class, shipments.selectByOrderId(order.getId()).getId());
-        assertEquals(shipments.selectByOrderId(order.getId()).getId(),
-                outbox.selectShipmentEvent(eventId).getShipmentId());
 
         mvc.perform(get(path).session(session(merchant))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SHIPPED"));
@@ -107,6 +106,47 @@ class ShipmentFlowTests {
                 "SELECT COUNT(*) FROM audit_events WHERE action='SHIPMENT_CONFIRMED_BY_BUYER' AND target_id=?",
                 Integer.class, shipments.selectByOrderId(order.getId()).getId()));
         assertEquals(OrderStatus.PAID, orders.selectById(order.getId()).getStatus());
+    }
+
+    @Test
+    void onlySigningSchedulesAndRepeatedStepsDoNotChangeDeadline() throws Exception {
+        Long merchant = user("MERCHANT");
+        Long buyer = user("USER");
+        Shop shop = shop(merchant);
+        Order order = order(shop, buyer, OrderStatus.PAID);
+        var parcel = shipmentService.ship(merchant, shop.getId(), order.getId(),
+                new com.shiwushop.trade.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
+        Long id = parcel.shipmentId();
+        assertNull(parcel.autoConfirmAt());
+        jdbc.update("UPDATE shipments SET shipped_at=NOW()-INTERVAL 15 DAY WHERE id=?", id);
+        assertTrue(shipmentService.confirmDue(id));
+        assertEquals(ShipmentStatus.SHIPPED, shipments.selectById(id).getStatus());
+
+        String route = "/merchant/shops/" + shop.getId() + "/orders/" + order.getId()
+                + "/shipments/" + id + "/simulate-tracking";
+        String signed = "{\"step\":\"SIGNED\"}";
+        mvc.perform(post(route).session(session(buyer)).contentType(MediaType.APPLICATION_JSON)
+                        .content(signed)).andExpect(status().isNotFound());
+        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"step\":\"IN_TRANSIT\"}")).andExpect(status().isOk());
+        assertFalse(shipmentService.dueShipmentIds().contains(id));
+        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+                        .content(signed)).andExpect(status().isOk());
+        Shipment signedParcel = shipments.selectById(id);
+        assertNotNull(signedParcel.getSimulatedInTransitAt());
+        assertEquals(signedParcel.getCarrierSignedAt().plusDays(10), signedParcel.getAutoConfirmAt());
+        assertFalse(shipmentService.confirmDue(id));
+        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+                        .content(signed)).andExpect(status().isOk());
+        assertEquals(signedParcel.getCarrierSignedAt(), shipments.selectById(id).getCarrierSignedAt());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
+                Integer.class, id));
+        Long eventId = jdbc.queryForObject(
+                "SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?", Long.class, id);
+        assertEquals(id, outbox.selectShipmentEvent(eventId).getShipmentId());
+        assertEquals(signedParcel.getAutoConfirmAt().minusHours(23), jdbc.queryForObject(
+                "SELECT next_attempt_at FROM outbox_events WHERE id=?", LocalDateTime.class, eventId));
     }
 
     @Test
@@ -143,8 +183,9 @@ class ShipmentFlowTests {
         shipmentService.ship(merchant, shop.getId(), order.getId(),
                 new com.shiwushop.trade.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
         Shipment shipment = shipments.selectByOrderId(order.getId());
-        shipment.setShippedAt(LocalDateTime.now().minusDays(11));
-        shipment.setAutoConfirmAt(LocalDateTime.now().minusDays(1));
+        shipment.setShippedAt(LocalDateTime.now().minusDays(12));
+        shipment.setCarrierSignedAt(shipment.getShippedAt().plusDays(1));
+        shipment.setAutoConfirmAt(shipment.getCarrierSignedAt().plusDays(10));
         shipments.updateById(shipment);
 
         shipmentService.confirmDue(shipment.getId());
@@ -163,8 +204,9 @@ class ShipmentFlowTests {
         shipmentService.ship(merchant, shop.getId(), order.getId(),
                 new com.shiwushop.trade.dto.shipment.ShipmentCreateDTO("顺丰", "SF123"));
         Shipment shipment = shipments.selectByOrderId(order.getId());
-        shipment.setShippedAt(LocalDateTime.now().minusDays(11));
-        shipment.setAutoConfirmAt(LocalDateTime.now().minusDays(1));
+        shipment.setShippedAt(LocalDateTime.now().minusDays(12));
+        shipment.setCarrierSignedAt(shipment.getShippedAt().plusDays(1));
+        shipment.setAutoConfirmAt(shipment.getCarrierSignedAt().plusDays(10));
         shipments.updateById(shipment);
 
         String tradeNo = UUID.randomUUID().toString();

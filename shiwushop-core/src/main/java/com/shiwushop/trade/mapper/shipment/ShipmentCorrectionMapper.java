@@ -34,7 +34,12 @@ public interface ShipmentCorrectionMapper {
     @Select("SELECT * FROM shipment_corrections WHERE id=#{id} FOR UPDATE")
     ShipmentCorrection findForUpdate(@Param("id") Long id);
 
-    @Update("UPDATE shipments SET carrier_name=#{carrier}, tracking_no=#{tracking}, correction_version=correction_version+1 WHERE id=#{id} AND correction_version=#{version} AND status='SHIPPED'")
+    /** 仅在原版本匹配且仍已发货时替换承运商和单号。 */
+    @Update("""
+            UPDATE shipments SET carrier_name=#{carrier}, tracking_no=#{tracking}, simulated_in_transit_at=NULL,
+                correction_version=correction_version+1
+            WHERE id=#{id} AND correction_version=#{version} AND status='SHIPPED' AND carrier_signed_at IS NULL
+            """)
     int apply(@Param("id") Long id, @Param("version") int version,
               @Param("carrier") String carrier, @Param("tracking") String tracking);
 

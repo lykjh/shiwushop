@@ -31,7 +31,11 @@ public class Shipment {
     private Long shippedByUserId;
     /** 包裹发货时间。 */
     private LocalDateTime shippedAt;
-    /** 该包裹发货后 10 天的自动收货截止时间。 */
+    /** 演示物流的运输节点时间。 */
+    private LocalDateTime simulatedInTransitAt;
+    /** 物流签收时间，独立于确认收货时间。 */
+    private LocalDateTime carrierSignedAt;
+    /** 该包裹签收后 10 天的自动收货截止时间。 */
     private LocalDateTime autoConfirmAt;
     /** 包裹确认收货时间。 */
     private LocalDateTime confirmedAt;

@@ -67,7 +67,7 @@ class ShipmentConcurrencyTests {
     }
 
     @Test
-    void concurrentShipmentsCreateOneRecordAndOneEvent() throws Exception {
+    void concurrentShipmentsCreateOneRecordWithoutSchedulingReceipt() throws Exception {
         Fixture fixture = fixture();
         ShipmentCreateDTO request = new ShipmentCreateDTO("顺丰", "SF123");
         try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
@@ -87,7 +87,7 @@ class ShipmentConcurrencyTests {
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM shipments WHERE order_id=?",
                 Integer.class, fixture.orderId()));
         Shipment shipment = shipments.selectByOrderId(fixture.orderId());
-        assertEquals(1, jdbc.queryForObject(
+        assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Integer.class, shipment.getId()));
     }
@@ -98,8 +98,9 @@ class ShipmentConcurrencyTests {
         service.ship(fixture.merchant(), fixture.shopId(), fixture.orderId(),
                 new ShipmentCreateDTO("顺丰", "SF123"));
         Shipment shipment = shipments.selectByOrderId(fixture.orderId());
-        jdbc.update("UPDATE shipments SET shipped_at=?, auto_confirm_at=? WHERE id=?",
-                LocalDateTime.now().minusDays(11), LocalDateTime.now().minusSeconds(1), shipment.getId());
+        var due = LocalDateTime.now().minusSeconds(1);
+        jdbc.update("UPDATE shipments SET shipped_at=?, carrier_signed_at=?, auto_confirm_at=? WHERE id=?",
+                due.minusDays(11), due.minusDays(10), due, shipment.getId());
 
         try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
             CountDownLatch start = new CountDownLatch(1);

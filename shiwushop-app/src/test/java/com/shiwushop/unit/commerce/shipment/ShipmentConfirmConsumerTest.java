@@ -23,6 +23,18 @@ class ShipmentConfirmConsumerTest {
     }
 
     @Test
+    void retiredLegacyEventDoesNotReachReceiptProcessing() {
+        var outbox = mock(OutboxEventMapper.class);
+        var consumed = mock(ConsumedEventMapper.class);
+        var service = mock(ShipmentService.class);
+        var event = new OutboxEventMapper.ShipmentConfirmEvent();
+        event.setRetired(true);
+        when(outbox.selectShipmentEvent(5L)).thenReturn(event);
+        new ShipmentConfirmConsumer(outbox, consumed, service, Clock.systemUTC()).handle("5");
+        verifyNoInteractions(consumed, service);
+    }
+
+    @Test
     void earlyDeliveryPropagatesFailureForTransactionRollback() {
         var outbox = mock(OutboxEventMapper.class);
         var consumed = mock(ConsumedEventMapper.class);

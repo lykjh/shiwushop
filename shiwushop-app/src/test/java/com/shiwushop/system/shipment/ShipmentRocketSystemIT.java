@@ -42,9 +42,13 @@ class ShipmentRocketSystemIT {
                     assertEquals(200, response.statusCode(), response.body());
                     long shipment = jdbc.queryForObject("SELECT id FROM shipments WHERE order_id=?", Long.class, order);
                     shipmentIds.add(shipment);
-                    var times = jdbc.queryForMap("SELECT shipped_at,auto_confirm_at FROM shipments WHERE id=?",
+                    var signed = fixture.merchantClient.post(
+                            "/merchant/shops/" + fixture.catalog.shop + "/orders/" + order
+                                    + "/shipments/" + shipment + "/simulate-tracking", Map.of("step", "SIGNED"));
+                    assertEquals(200, signed.statusCode(), signed.body());
+                    var times = jdbc.queryForMap("SELECT carrier_signed_at,auto_confirm_at FROM shipments WHERE id=?",
                             shipment);
-                    assertEquals(((LocalDateTime) times.get("shipped_at")).plusDays(10),
+                    assertEquals(((LocalDateTime) times.get("carrier_signed_at")).plusDays(10),
                             times.get("auto_confirm_at"));
                     events.add(jdbc.queryForObject(
                             "SELECT id FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",

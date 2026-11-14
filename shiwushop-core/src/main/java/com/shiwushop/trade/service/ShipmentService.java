@@ -27,6 +27,11 @@ public interface ShipmentService {
 
     ShipmentVO confirmPackageByBuyer(Long userId, Long orderId, Long shipmentId);
 
+    enum SimulatedTrackingStep { IN_TRANSIT, SIGNED }
+
+    /** 店主在启用演示物流的环境中推进一个包裹的轨迹。 */
+    ShipmentVO simulateTracking(Long userId, Long shopId, Long orderId, Long shipmentId, SimulatedTrackingStep step);
+
     /** 自动确认到期物流；false 仅表示仍需等待原截止，终态或确认完成返回 true。 */
     boolean confirmDue(Long shipmentId);
 

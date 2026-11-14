@@ -73,7 +73,7 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
             if (shipment == null || !orderId.equals(shipment.getOrderId()))
                 throw new BusinessException(404, "包裹不存在");
         }
-        if (shipment == null || shipment.getStatus() != ShipmentStatus.SHIPPED)
+        if (shipment == null || shipment.getStatus() != ShipmentStatus.SHIPPED || shipment.getCarrierSignedAt() != null)
             throw new BusinessException(409, "运单不可更正");
         int version = corrections.version(shipment.getId());
         ShipmentCorrection pending = corrections.pendingForUpdate(shipment.getId());
@@ -133,7 +133,7 @@ public class ShipmentCorrectionServiceImpl implements ShipmentCorrectionService 
         if (body.approved() && (!current.getRequestedBy().equals(shop.getOwnerUserId())
                 || order.getStatus() != OrderStatus.PAID || shipment == null ||
                 !shipment.getId().equals(current.getShipmentId())
-                || shipment.getStatus() != ShipmentStatus.SHIPPED
+                || shipment.getStatus() != ShipmentStatus.SHIPPED || shipment.getCarrierSignedAt() != null
                 || corrections.version(shipment.getId()) != current.getOriginalVersion()))
             throw new BusinessException(409, "运单状态或版本已变化");
         if (body.approved() && corrections.apply(shipment.getId(), current.getOriginalVersion(),

@@ -15,7 +15,8 @@
     </update>
 
     <sql id="duePackage">
-        shipment.status = 'SHIPPED' AND shipment.auto_confirm_at &lt;= #{now}
+        shipment.status = 'SHIPPED' AND shipment.carrier_signed_at IS NOT NULL
+        AND shipment.auto_confirm_at &lt;= #{now}
         AND shipment.allocation_state='COMPLETE' AND order_head.fulfillment_state='READY'
         AND (SELECT COALESCE(SUM(si.quantity),0) FROM shipment_items si
              WHERE si.shipment_id=shipment.id) &gt;
