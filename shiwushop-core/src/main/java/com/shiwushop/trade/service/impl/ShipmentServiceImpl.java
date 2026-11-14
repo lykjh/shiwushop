@@ -58,7 +58,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     public ShipmentVO ship(Long userId, Long shopId, Long orderId, ShipmentCreateDTO request) {
-        merchantShopAccess.requireOwnedForUpdate(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireRoleForUpdate(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order order = orderMapper.selectForUpdate(orderId);
         requireShippable(order, shopId);
         List<Shipment> existing = shipmentMapper.selectAllByOrderId(orderId);
@@ -80,7 +80,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     public ShipmentVO shipPackage(Long userId, Long shopId, Long orderId, ShipmentPackageCreateDTO request) {
-        merchantShopAccess.requireOwnedForUpdate(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireRoleForUpdate(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order order = orderMapper.selectForUpdate(orderId);
         requireShippable(order, shopId);
         Shipment existing = shipmentMapper.selectByRequestKeyForUpdate(orderId, request.requestKey());
@@ -151,7 +151,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     /** 核对店铺归属后查看运单；尚未发货时返回未发货状态。 */
     @Override
     public ShipmentVO merchantDetail(Long userId, Long shopId, Long orderId) {
-        merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireRole(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order order = orderMapper.selectById(orderId);
         if (order == null || !shopId.equals(order.getShopId())) {
             throw new BusinessException(404, "订单不存在");
@@ -164,7 +164,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     public List<ShipmentVO> merchantPackages(Long userId, Long shopId, Long orderId) {
-        merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireRole(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order order = orderMapper.selectById(orderId);
         if (order == null || !shopId.equals(order.getShopId()))
             throw new BusinessException(404, "订单不存在");

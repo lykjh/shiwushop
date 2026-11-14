@@ -65,12 +65,12 @@ public class OrderServiceImpl implements OrderService {
         return slice(rows, size);
     }
 
-    /** 核对店铺归属后按游标列出该店订单，阻止跨店游标混用。 */
+    /** 核对本店履约权限后按游标列出该店订单，阻止跨店游标混用。 */
     @Override
     public OrderSliceVO listMerchant(Long userId, Long shopId, Long afterId, int size) {
 
         PageSpec.of(1, size, "店铺或分页参数错误");
-        merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
+        merchantShopAccess.requireRole(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order cursor = cursor(afterId);
         if (cursor != null && !shopId.equals(cursor.getShopId()))
             throw new BusinessException(400, "订单游标无效");
@@ -102,11 +102,11 @@ public class OrderServiceImpl implements OrderService {
         return new OrderSliceVO(items, hasMore, hasMore ? items.getLast().getId() : null);
     }
 
-    /** 仅向当前店主返回本店订单详情，包含下单时的收货信息。 */
+    /** 向店主或获授权的履约员工返回本店订单及发货所需的收货信息。 */
     @Override
     public OrderDetailVO detailMerchant(Long userId, Long shopId, Long orderId) {
 
-        Shop shop = merchantShopAccess.requireOwned(userId, shopId, "店铺不存在");
+        Shop shop = merchantShopAccess.requireRole(userId, shopId, "FULFILLMENT", "店铺不存在");
         Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
                 .eq(Order::getId, orderId)
                 .eq(Order::getShopId, shopId));

@@ -120,7 +120,8 @@ class ManualSettlementTransactionTest {
                     fixture.catalog.merchant.id(), key, List.of(
                     new SettlementRequests.Selection(order, "signed merchant evidence"))));
             return true;
-        } catch (org.springframework.dao.DuplicateKeyException duplicate) {
+        } catch (BusinessException duplicate) {
+            assertEquals(409, duplicate.getCode());
             return false;
         }
     }
@@ -145,9 +146,13 @@ class ManualSettlementTransactionTest {
                     fixture.catalog.merchant.id());
         }
         assertEquals(1, count("SELECT COUNT(*) FROM manual_settlement_lines WHERE active=1 AND order_id=?", order));
-        assertThrows(RuntimeException.class, () -> service.create(adminId,
+        assertEquals(false, service.candidates(adminId, fixture.catalog.shop, null, 20)
+                .items().stream().anyMatch(c -> c.orderId() == order));
+        var occupied = assertThrows(BusinessException.class, () -> service.create(adminId,
                 new SettlementRequests.Create(fixture.catalog.shop, fixture.catalog.merchant.id(),
                         "settlement-second", selection)));
+        assertEquals(409, occupied.getCode());
+        assertEquals("订单 " + order + " 已纳入结算单，请刷新候选订单", occupied.getMessage());
         assertEquals(1, count("SELECT COUNT(*) FROM manual_settlement_lines WHERE active=1 AND order_id=?", order));
 
         jdbc.update("UPDATE orders SET fully_received_at=NOW() WHERE id=?", order);
@@ -171,6 +176,8 @@ class ManualSettlementTransactionTest {
                 + "AND target_id=? AND action='MANUAL_SETTLEMENT_VOID'", first.id()));
         assertEquals(0, count("SELECT COUNT(*) FROM manual_settlement_lines WHERE active=1 AND order_id=?", order));
         jdbc.update("UPDATE orders SET fully_received_at=DATE_SUB(NOW(), INTERVAL 8 DAY) WHERE id=?", order);
+        assertEquals("PAYABLE", service.candidates(adminId, fixture.catalog.shop, null, 20)
+                .items().stream().filter(c -> c.orderId() == order).findFirst().orElseThrow().state());
         var rebuilt = service.create(adminId, new SettlementRequests.Create(fixture.catalog.shop,
                 fixture.catalog.merchant.id(), "settlement-third", selection));
         assertEquals("DRAFT", rebuilt.status());

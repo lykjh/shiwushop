@@ -87,8 +87,17 @@ public class ManualSettlementMapper {
     }
 
     public List<Long> candidateIds(long shopId, Long afterId, int size) {
-        return jdbc.queryForList("SELECT id FROM orders WHERE shop_id=? AND (? IS NULL OR id<?) "
-                + "ORDER BY id DESC LIMIT ?", Long.class, shopId, afterId, afterId, size);
+        return jdbc.queryForList("""
+                SELECT o.id FROM orders o WHERE o.shop_id=? AND (? IS NULL OR o.id<?)
+                  AND NOT EXISTS (SELECT 1 FROM manual_settlement_lines l WHERE l.active_order_id=o.id)
+                ORDER BY o.id DESC LIMIT ?
+                """, Long.class, shopId, afterId, afterId, size);
+    }
+
+    public boolean hasActiveLine(long orderId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM manual_settlement_lines WHERE active_order_id=?)",
+                Boolean.class, orderId));
     }
 
     public List<Long> settlementIds(Long shopId, Long payeeId, Long afterId, int size) {

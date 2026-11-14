@@ -143,6 +143,8 @@ public class ManualSettlementServiceImpl implements ManualSettlementService {
             Order order = orders.selectForUpdate(selection.orderId());
             if (order == null || !request.shopId().equals(order.getShopId()))
                 throw new BusinessException(404, "订单不属于该店铺");
+            if (settlements.hasActiveLine(order.getId()))
+                throw new BusinessException(409, "订单 " + order.getId() + " 已纳入结算单，请刷新候选订单");
             Quote quote = quote(order, selection.ownershipEvidence());
             if (!"PAYABLE".equals(quote.candidate().state()))
                 throw new BusinessException(409, "订单暂不可结算：" + quote.candidate().missingFacts());
