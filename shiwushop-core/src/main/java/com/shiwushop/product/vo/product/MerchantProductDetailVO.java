@@ -26,6 +26,8 @@ public class MerchantProductDetailVO {
     private Long coverMediaId;
     /** 商品状态，取值见 ProductStatus。 */
     private String status;
+    /** 提交审核时使用的商品资料修订号。 */
+    private Long revision;
     /** 图片媒体 ID 列表。 */
     private List<Long> imageMediaIds;
     /** 商品规格选项列表。 */

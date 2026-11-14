@@ -51,7 +51,7 @@ class SmsCodeDelivery {
     }
 
     /** 渠道失败时删除预留挑战；发送额度仍视为已使用，避免反复冲击渠道。 */
-    void send(String phone, String purpose, String remoteAddress, boolean binding) {
+    long send(String phone, String purpose, String remoteAddress, boolean binding) {
         if (!sender.configured())
             throw new BusinessException(503, "短信渠道未配置");
         long retry = limiter.tokenBucketRetrySeconds("shiwushop:sms:send:ip:" + limiter.digest(remoteAddress),
@@ -70,7 +70,7 @@ class SmsCodeDelivery {
             if (account == null || account.getStatus() != AccountStatus.ACTIVE) {
                 challenges.abort(digest, purpose, token);
                 log.info("sms purpose={} outcome=not_eligible", purpose);
-                return;
+                return challenges.cooldownSeconds();
             }
         }
         if ("entry".equals(purpose) || "password-reset".equals(purpose)) {
@@ -98,5 +98,6 @@ class SmsCodeDelivery {
                     e.getClass().getSimpleName());
             throw e;
         }
+        return challenges.cooldownSeconds();
     }
 }

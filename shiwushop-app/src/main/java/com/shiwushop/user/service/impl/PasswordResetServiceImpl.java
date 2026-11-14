@@ -86,8 +86,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     /** 沿用发送冷却、号码额度和入口保护；未绑定号码不会注册账号或收到短信。 */
     @Override
-    public void sendCode(String phone, HttpServletRequest request) {
-        delivery.send(phone, PURPOSE, request.getRemoteAddr(), false);
+    public long sendCode(String phone, HttpServletRequest request) {
+        return delivery.send(phone, PURPOSE, request.getRemoteAddr(), false);
     }
 
     /** 重新核验会替换当前浏览器的旧票据。 */

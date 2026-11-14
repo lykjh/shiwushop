@@ -12,6 +12,7 @@ import com.shiwushop.product.vo.product.MerchantProductVO;
 import com.shiwushop.product.vo.product.ProductOptionVO;
 import com.shiwushop.product.vo.product.ProductStatusVO;
 import com.shiwushop.product.vo.product.ProductListingVO;
+import com.shiwushop.product.vo.product.PendingProductListingPage;
 import com.shiwushop.product.dto.product.ProductListingDecisionDTO;
 import com.shiwushop.product.dto.product.ProductDisplayAttributesDTO;
 import com.shiwushop.product.vo.product.DisplayAttributeVO;
@@ -52,6 +53,13 @@ public interface ProductService {
     ProductListingVO submitListing(Long userId, Long productId, Long revision);
     ProductListingVO decideListing(Long reviewerId, Long productId, ProductListingDecisionDTO decision);
 
+    PendingProductListingPage listPendingListings(int page, int size);
+
+    PendingProductListingPage.Detail pendingListingDetail(Long productId);
+
+    void requirePendingListingImage(Long productId, Long revision, Long mediaId);
+
+    /** 展示参数整组替换，仅改变待审资料版本，不触及销售规格、价格或库存。 */
     List<DisplayAttributeVO> replaceDisplayAttributes(Long userId, Long productId, ProductDisplayAttributesDTO request);
 
     /** 返回商家管理页所需的商品、规格与 SKU 详情。 */

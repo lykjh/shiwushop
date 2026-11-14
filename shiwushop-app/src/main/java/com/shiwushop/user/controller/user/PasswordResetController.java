@@ -1,5 +1,7 @@
 package com.shiwushop.user.controller.user;
 
+import com.shiwushop.user.vo.user.SmsSendVO;
+
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.user.auth.JwtLogin;
@@ -25,9 +27,8 @@ public class PasswordResetController {
 
     /** 校验手机号格式后发送找回码，不通过发送结果公开手机号是否已绑定。 */
     @PostMapping("/send")
-    public Result<Void> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
-        service.sendCode(body.phone(), request);
-        return Result.success();
+    public Result<SmsSendVO> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
+        return Result.success(new SmsSendVO(service.sendCode(body.phone(), request)));
     }
 
     /** 核验找回码；票据随后只能由持有当前 Cookie 的客户端使用。 */

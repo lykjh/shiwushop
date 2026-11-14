@@ -1,5 +1,7 @@
 package com.shiwushop.user.controller.user;
 
+import com.shiwushop.user.vo.user.SmsSendVO;
+
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
@@ -50,9 +52,8 @@ public class AccountDeletionRequestController {
     }
 
     @PostMapping("/send-code")
-    public Result<Void> sendCode(HttpServletRequest request) {
-        proof.sendCode(SessionUser.requireId(request), PURPOSE, request.getRemoteAddr());
-        return Result.success();
+    public Result<SmsSendVO> sendCode(HttpServletRequest request) {
+        return Result.success(new SmsSendVO(proof.sendCode(SessionUser.requireId(request), PURPOSE, request.getRemoteAddr())));
     }
 
     @PostMapping

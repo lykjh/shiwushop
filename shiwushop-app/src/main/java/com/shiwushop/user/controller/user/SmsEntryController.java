@@ -1,5 +1,7 @@
 package com.shiwushop.user.controller.user;
 
+import com.shiwushop.user.vo.user.SmsSendVO;
+
 import com.shiwushop.user.dto.user.SmsCodeDTO;
 import com.shiwushop.user.dto.user.SmsEntryRegisterDTO;
 import com.shiwushop.user.dto.user.SmsPhoneDTO;
@@ -25,9 +27,8 @@ public class SmsEntryController {
 
     /** 发送响应不揭露手机号是否已绑定。 */
     @PostMapping("/send")
-    public Result<Void> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
-        entry.sendCode(body.phone(), request);
-        return Result.success();
+    public Result<SmsSendVO> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
+        return Result.success(new SmsSendVO(entry.sendCode(body.phone(), request)));
     }
 
     /** 已绑定账号直接登录；未绑定账号返回短期设密码票据。 */

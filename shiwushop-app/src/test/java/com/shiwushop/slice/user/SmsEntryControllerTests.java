@@ -38,6 +38,7 @@ class SmsEntryControllerTests {
 
     @Test
     void threeRoutesForwardValidatedFieldsAndKeepTheirResponseShapes() throws Exception {
+        when(service.sendCode(org.mockito.ArgumentMatchers.eq("13800000000"), any())).thenReturn(7L);
         when(service.verify(org.mockito.ArgumentMatchers.eq("13800000000"),
                 org.mockito.ArgumentMatchers.eq("123456"), any(), any()))
                 .thenReturn(SmsEntryVerifyVO.setPassword("ticket"));
@@ -47,7 +48,7 @@ class SmsEntryControllerTests {
 
         mvc.perform(post("/users/sms/entry/send").with(csrf().asHeader()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"13800000000\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.cooldownSeconds").value(7));
         verify(service).sendCode(org.mockito.ArgumentMatchers.eq("13800000000"), any());
         mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"13800000000\",\"code\":\"123456\"}"))

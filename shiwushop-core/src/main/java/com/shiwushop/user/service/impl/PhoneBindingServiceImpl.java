@@ -40,9 +40,9 @@ public class PhoneBindingServiceImpl implements PhoneBindingService {
 
     /** 绑定码仅供已登录的有效账号申请。 */
     @Override
-    public void sendCode(Long userId, String phone, String remoteAddress) {
+    public long sendCode(Long userId, String phone, String remoteAddress) {
         accountAccess.checkActive(userId);
-        delivery.send(phone, BIND, remoteAddress, true);
+        return delivery.send(phone, BIND, remoteAddress, true);
     }
 
     /** 在同一事务中更新绑定和鉴权版本，使原有会话失效。 */

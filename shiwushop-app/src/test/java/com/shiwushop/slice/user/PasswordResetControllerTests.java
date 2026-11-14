@@ -45,9 +45,10 @@ class PasswordResetControllerTests {
 
     @Test
     void threeRoutesForwardInputsAndClearLoginOnlyAfterSuccess() throws Exception {
+        when(service.sendCode(eq("13812345678"), any())).thenReturn(5L);
         mvc.perform(post("/users/password/reset/send").with(csrf().asHeader()).contentType("application/json")
                         .content("{\"phone\":\"13812345678\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data").isEmpty());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.cooldownSeconds").value(5));
         verify(service).sendCode(eq("13812345678"), any());
         when(service.verify(eq("13812345678"), eq("123456"), any()))
                 .thenReturn(new PasswordResetVerifyVO(ticket, 300));

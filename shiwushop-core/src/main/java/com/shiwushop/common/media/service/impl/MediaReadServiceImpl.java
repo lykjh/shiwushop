@@ -34,23 +34,30 @@ public class MediaReadServiceImpl implements MediaReadService {
      */
     @Override
     public ImageFile read(Long mediaId, Long currentUserId) {
-        return read(mediaId, currentUserId, false);
+        return read(mediaId, currentUserId, null);
     }
 
     /** 管理端仅能读取私有资质；管理员身份在本层再次核验。 */
     @Override
     public ImageFile readCredentialForReview(Long mediaId, Long reviewerId) {
         accounts.requireAdmin(reviewerId);
-        return read(mediaId, reviewerId, true);
+        return read(mediaId, reviewerId, "CREDENTIAL");
     }
 
-    private ImageFile read(Long mediaId, Long currentUserId, boolean review) {
+    @Override
+    public ImageFile readProductImageForReview(Long mediaId, Long reviewerId) {
+        accounts.requireAdmin(reviewerId);
+        return read(mediaId, reviewerId, "PUBLIC");
+    }
+
+    private ImageFile read(Long mediaId, Long currentUserId, String reviewPurpose) {
         if (mediaId == null || mediaId <= 0)
             throw new BusinessException(404, "图片不存在");
         MediaAsset asset = assets.selectReady(mediaId);
         if (asset == null)
             throw new BusinessException(404, "图片不存在");
-        if (review && !"CREDENTIAL".equals(asset.getPurpose()))
+        boolean review = reviewPurpose != null;
+        if (review && !reviewPurpose.equals(asset.getPurpose()))
             throw new BusinessException(404, "图片不存在");
         boolean owner = currentUserId != null && currentUserId.equals(asset.getUploadedByUserId());
         if (owner)

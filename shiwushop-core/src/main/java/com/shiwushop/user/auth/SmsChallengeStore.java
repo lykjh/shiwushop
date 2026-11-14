@@ -84,6 +84,10 @@ public class SmsChallengeStore {
         this.failuresPerCode = failuresPerCode;
     }
 
+    public long cooldownSeconds() {
+        return cooldownMillis / 1000;
+    }
+
     /** 同槽原子检查冷却与滚动发送额度，保存待渠道确认的挑战。 */
     public void reserve(String digest, String purpose, String token, String mac) {
         String prefix = prefix(digest);

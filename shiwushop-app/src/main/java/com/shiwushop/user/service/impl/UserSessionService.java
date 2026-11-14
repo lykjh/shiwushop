@@ -28,8 +28,8 @@ public class UserSessionService {
                 .sorted(Comparator.comparing(SessionView::createdAt).reversed()).toList();
     }
 
-    public void sendCode(Long userId, String remoteAddress) {
-        proof.sendCode(userId, PURPOSE, remoteAddress);
+    public long sendCode(Long userId, String remoteAddress) {
+        return proof.sendCode(userId, PURPOSE, remoteAddress);
     }
 
     public void revoke(Identity current, String ref, AccountProofDTO verification) {

@@ -23,9 +23,9 @@ public class AccountProofService {
     private final SmsCodeDelivery delivery;
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder();
 
-    public void sendCode(Long userId, String purpose, String remoteAddress) {
+    public long sendCode(Long userId, String purpose, String remoteAddress) {
         String phone = boundPhone(userId);
-        delivery.send(phone, purpose, remoteAddress, true);
+        return delivery.send(phone, purpose, remoteAddress, true);
     }
 
     public void verify(Long userId, String purpose, String password, String code) {

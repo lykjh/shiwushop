@@ -1,5 +1,7 @@
 package com.shiwushop.user.controller.user;
 
+import com.shiwushop.user.vo.user.SmsSendVO;
+
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.user.dto.user.AccountProofDTO;
@@ -28,9 +30,8 @@ public class UserSessionController {
     }
 
     @PostMapping("/send-code")
-    public Result<Void> sendCode(HttpServletRequest request) {
-        sessions.sendCode(SessionUser.requireId(request), request.getRemoteAddr());
-        return Result.success();
+    public Result<SmsSendVO> sendCode(HttpServletRequest request) {
+        return Result.success(new SmsSendVO(sessions.sendCode(SessionUser.requireId(request), request.getRemoteAddr())));
     }
 
     @PostMapping("/{sessionRef}/revoke")

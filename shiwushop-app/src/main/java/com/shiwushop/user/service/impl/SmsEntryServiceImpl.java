@@ -57,9 +57,9 @@ public class SmsEntryServiceImpl implements SmsEntryService {
 
     /** 新入口对未绑定手机号也实际发送验证码，另设全站短信发送预算。 */
     @Override
-    public void sendCode(String phone, HttpServletRequest request) {
+    public long sendCode(String phone, HttpServletRequest request) {
         requireAnonymous(request);
-        delivery.send(phone, ENTRY, request.getRemoteAddr(), true);
+        return delivery.send(phone, ENTRY, request.getRemoteAddr(), true);
     }
 
     /** 验证码仅消费一次；已有账号登录，首次使用则签发与当前浏览器绑定的票据。 */

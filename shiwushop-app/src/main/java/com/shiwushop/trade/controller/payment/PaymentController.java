@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.nio.charset.StandardCharsets;
@@ -48,11 +49,21 @@ public class PaymentController {
     /** 根据商户订单号输出支付宝收银台页面，并禁止浏览器缓存支付页面。 */
     @GetMapping(value = "/payments/checkout/{outTradeNo}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> checkout(@PathVariable String outTradeNo) {
-        var checkout = paymentService.checkoutPage(outTradeNo);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
-                .body(PaymentQrPage.render(checkout.qrCode(), checkout.amount(), checkout.payExpiresAt(),
-                        checkout.channel()));
+        MediaType html = new MediaType("text", "html", StandardCharsets.UTF_8);
+        try {
+            var checkout = paymentService.checkoutPage(outTradeNo);
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(html)
+                    .body(PaymentQrPage.render(checkout.qrCode(), checkout.amount(), checkout.payExpiresAt(),
+                            checkout.channel()));
+        } catch (BusinessException e) {
+            return ResponseEntity.status(e.getCode()).cacheControl(CacheControl.noStore()).contentType(html)
+                    .body("""
+                            <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">
+                            <title>收银台暂不可用</title></head><body>
+                            <h1>收银台暂不可用</h1><p>%s</p>
+                            <p>请返回商城查看订单和支付状态。</p></body></html>
+                            """.formatted(HtmlUtils.htmlEscape(e.getMessage())));
+        }
     }
 
     /** 查询本人订单的本地支付状态，不主动请求支付网关。 */

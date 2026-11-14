@@ -15,14 +15,12 @@ import com.shiwushop.trade.controller.payment.PaymentController;
 import com.shiwushop.trade.service.OrderPaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import static org.mockito.Mockito.mock;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PaymentController.class)
@@ -68,12 +66,22 @@ class PaymentCheckoutControllerSliceTests {
     }
 
     @Test
+    void expiredCheckoutLinkReturnsBusinessStatusForBrowserNavigation() throws Exception {
+        when(payments.checkoutPage("SHIWUSHOP1"))
+                .thenThrow(new BusinessException(404, "支付记录不存在"));
+        mvc.perform(get("/payments/checkout/SHIWUSHOP1").accept("text/html"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().contentType("text/html;charset=UTF-8"))
+                .andExpect(content().string(containsString("请返回商城查看订单和支付状态。")));
+    }
+
+    @Test
     void reportsActiveClaimAsProcessingConflict() throws Exception {
         when(payments.checkoutPage("SHIWUSHOP1"))
                 .thenThrow(new BusinessException(409, "二维码生成中，请稍后重试"));
         mvc.perform(get("/payments/checkout/SHIWUSHOP1"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(409))
-                .andExpect(jsonPath("$.message").value("二维码生成中，请稍后重试"));
+                .andExpect(content().string(containsString("二维码生成中，请稍后重试")));
     }
 }

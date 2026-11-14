@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 /** 已验证手机号的密码找回；与首次注册、旧密码改密保持独立用途。 */
 public interface PasswordResetService {
     /** 仅向已绑定且启用的账号发送找回码；未绑定号码对外仍返回成功。 */
-    void sendCode(String phone, HttpServletRequest request);
+    long sendCode(String phone, HttpServletRequest request);
 
     /** 消费找回码并签发绑定当前浏览器的五分钟重设票据。 */
     PasswordResetVerifyVO verify(String phone, String code, HttpServletRequest request);

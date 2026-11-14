@@ -37,6 +37,7 @@ import com.shiwushop.product.vo.product.ProductOptionVO;
 import com.shiwushop.product.vo.product.ProductOptionValueVO;
 import com.shiwushop.product.vo.product.ProductStatusVO;
 import com.shiwushop.product.vo.product.ProductListingVO;
+import com.shiwushop.product.vo.product.PendingProductListingPage;
 import com.shiwushop.product.vo.product.DisplayAttributeVO;
 import com.shiwushop.product.vo.sku.MerchantSkuVO;
 import com.shiwushop.product.vo.sku.SkuStatusVO;
@@ -816,9 +817,36 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public MerchantProductDetailVO merchantDetail(Long userId, Long productId) {
+        return productDetail(requireOwnedProduct(userId, productId, false).product());
+    }
 
-        Product product = requireOwnedProduct(userId, productId, false).product();
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PendingProductListingPage listPendingListings(int page, int size) {
+        PageSpec spec = PageSpec.of(page, size);
+        long total = listingSubmissions.countPending();
+        return new PendingProductListingPage(
+                listingSubmissions.listPending(spec.offset(), spec.size()), spec.page(), spec.size(), total);
+    }
 
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PendingProductListingPage.Detail pendingListingDetail(Long productId) {
+        var pending = listingSubmissions.findPending(productId);
+        if (pending == null)
+            throw new BusinessException(404, "待审商品不存在");
+        return new PendingProductListingPage.Detail(
+                productDetail(productMapper.selectById(productId)), pending.submittedAt());
+    }
+
+    @Override
+    public void requirePendingListingImage(Long productId, Long revision, Long mediaId) {
+        if (!listingSubmissions.hasPendingImage(productId, revision, mediaId))
+            throw new BusinessException(404, "图片不存在");
+    }
+
+    private MerchantProductDetailVO productDetail(Product product) {
+        Long productId = product.getId();
         List<ProductImage> images = productImageMapper.selectList(
                 new LambdaQueryWrapper<ProductImage>()
                         .eq(ProductImage::getProductId, productId)
@@ -846,7 +874,7 @@ public class ProductServiceImpl implements ProductService {
         return new MerchantProductDetailVO(
                 product.getId(), product.getShopId(), product.getCategoryId(),
                 productMapper.selectBrandId(productId), product.getName(), product.getDescription(),
-                coverMediaId, product.getStatus().name(), imageMediaIds, options, skus,
+                coverMediaId, product.getStatus().name(), product.getRevision(), imageMediaIds, options, skus,
                 displayAttributes.list(productId).stream()
                         .map(a -> new DisplayAttributeVO(a.getAttributeKey(), a.getAttributeValue(), a.getPosition()))
                         .toList());

@@ -1,5 +1,7 @@
 package com.shiwushop.user.controller.user;
 
+import com.shiwushop.user.vo.user.SmsSendVO;
+
 import com.shiwushop.user.dto.user.PhoneBindDTO;
 import com.shiwushop.user.dto.user.SmsPhoneDTO;
 import com.shiwushop.user.service.PhoneBindingService;
@@ -27,9 +29,8 @@ public class PhoneBindingController {
 
     /** 发送验证码前确认当前账号有效，验证码不出现在响应里。 */
     @PostMapping("/send")
-    public Result<Void> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
-        binding.sendCode(SessionUser.requireId(request), body.phone(), request.getRemoteAddr());
-        return Result.success();
+    public Result<SmsSendVO> send(@Valid @RequestBody SmsPhoneDTO body, HttpServletRequest request) {
+        return Result.success(new SmsSendVO(binding.sendCode(SessionUser.requireId(request), body.phone(), request.getRemoteAddr())));
     }
 
     /** 当前密码和一次性验证码均通过后换绑手机号，并注销旧会话。 */
