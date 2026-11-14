@@ -12,15 +12,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SessionUserTests {
     @Test
-    void readsOnlyLongUserIdWithoutCreatingSession() {
+    void ignoresLegacySessionIdentityAndReadsVerifiedRequestIdentity() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         assertNull(SessionUser.currentId(request));
         assertNull(request.getSession(false));
 
-        request.getSession().setAttribute("userId", "7");
-        assertNull(SessionUser.currentId(request));
         request.getSession().setAttribute("userId", 7L);
+        assertNull(SessionUser.currentId(request));
+        SessionUser.identify(request, new SessionUser.Identity(7L, 3, "verified"));
         assertEquals(7L, SessionUser.currentId(request));
+        assertEquals(3, SessionUser.require(request).authVersion());
     }
 
     @Test
@@ -28,7 +29,7 @@ class SessionUserTests {
         MockHttpServletRequest request = new MockHttpServletRequest();
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> SessionUser.requireId(request)).getCode());
-        request.getSession().setAttribute("userId", 7L);
+        SessionUser.identify(request, new SessionUser.Identity(7L, 3, "verified"));
         assertEquals(7L, SessionUser.requireId(request));
     }
 

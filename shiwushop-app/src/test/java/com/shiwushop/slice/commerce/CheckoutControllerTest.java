@@ -19,6 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.*;
 import java.util.stream.*;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,7 +62,7 @@ class CheckoutControllerTest {
     void rejectsInvalidRequestBeforeCheckout(Map.Entry<String, Object> field) throws Exception {
         var body = body();
         body.put(field.getKey(), field.getValue());
-        mvc.perform(post("/checkouts").session(session()).with(csrf()).contentType("application/json")
+        mvc.perform(post("/checkouts").with(withMockLogin(session())).with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
@@ -71,7 +72,7 @@ class CheckoutControllerTest {
     void oneHundredItemsReachCheckoutService() throws Exception {
         var body = body();
         body.put("cartItemIds", LongStream.rangeClosed(1, 100).boxed().toList());
-        mvc.perform(post("/checkouts").session(session()).with(csrf()).contentType("application/json")
+        mvc.perform(post("/checkouts").with(withMockLogin(session())).with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(body)))
                 .andExpect(status().isOk());
         verify(service).checkoutSelected(eq(42L), any());
@@ -81,7 +82,7 @@ class CheckoutControllerTest {
     void zeroTotalReachesServiceForServerSideQuoteVerification() throws Exception {
         var request = body();
         request.put("confirmedTotal", "0");
-        mvc.perform(post("/checkouts").session(session()).with(csrf()).contentType("application/json")
+        mvc.perform(post("/checkouts").with(withMockLogin(session())).with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(request)))
                 .andExpect(status().isOk());
         verify(service).checkoutSelected(eq(42L), any());
@@ -89,7 +90,7 @@ class CheckoutControllerTest {
 
     @Test
     void anonymousRequestCannotCheckout() throws Exception {
-        mvc.perform(post("/checkouts").with(csrf()).contentType("application/json")
+        mvc.perform(post("/checkouts").with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(body())))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(service);

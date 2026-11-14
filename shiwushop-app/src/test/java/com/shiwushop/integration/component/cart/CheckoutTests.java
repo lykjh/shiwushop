@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.LongStream;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -101,7 +102,7 @@ class CheckoutTests {
         }
 
         long start = System.nanoTime();
-        mockMvc.perform(post("/checkouts").session(fixture.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(fixture.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(ids, fixture.address.getId(), "1000.00")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orders.length()").value(1));
@@ -118,7 +119,7 @@ class CheckoutTests {
         List<Long> ids = LongStream.rangeClosed(1, 101).boxed().toList();
         int requestsBefore = jdbc.queryForObject("SELECT COUNT(*) FROM checkout_requests WHERE user_id=?",
                 Integer.class, fixture.buyer.getId());
-        mockMvc.perform(post("/checkouts").session(fixture.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(fixture.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(ids, fixture.address.getId(), "10.00")))
                 .andExpect(status().isBadRequest());
 
@@ -145,7 +146,7 @@ class CheckoutTests {
 
         mockMvc.perform(post("/checkouts").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        MvcResult response = mockMvc.perform(post("/checkouts").session(f.session)
+        MvcResult response = mockMvc.perform(post("/checkouts").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orders.length()").value(2))
@@ -156,7 +157,7 @@ class CheckoutTests {
                 .andReturn();
         long firstOrderId = om.readTree(response.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong();
-        mockMvc.perform(get("/orders/{id}", firstOrderId).session(f.session))
+        mockMvc.perform(get("/orders/{id}", firstOrderId).with(withMockLogin(f.session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.shopId").value(f.firstShop.getId()))
                 .andExpect(jsonPath("$.data.items.length()").value(2))
@@ -187,7 +188,7 @@ class CheckoutTests {
         assertEquals("上海市", orderMapper.selectById(firstOrderId).getProvince());
         assertEquals("测试收货地址", privacyCipher.decrypt(f.buyer.getId(), "orders:detail", 1,
                 orderMapper.selectById(firstOrderId).getDetailCiphertext()));
-        MvcResult retry = mockMvc.perform(post("/checkouts").session(f.session)
+        MvcResult retry = mockMvc.perform(post("/checkouts").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn();
         assertEquals(firstOrderId, om.readTree(retry.getResponse().getContentAsString())
@@ -195,7 +196,7 @@ class CheckoutTests {
         assertEquals(3, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
                 Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId(), f.thirdSku.getProductId()));
-        mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId()), f.address.getId(), "10.00", key)))
                 .andExpect(status().isConflict());
     }
@@ -207,7 +208,7 @@ class CheckoutTests {
         CartItem second = item(f, f.secondSku, 1);
         int ordersBefore = jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class);
 
-        mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId(), second.getId()), f.address.getId(), "24.00")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.reason").value("PRICE_CHANGED"))
@@ -217,7 +218,7 @@ class CheckoutTests {
 
         f.secondSku.setStock(0);
         skuMapper.updateById(f.secondSku);
-        mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId(), second.getId()), f.address.getId(), "25.00")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.reason").value("OUT_OF_STOCK"))
@@ -240,10 +241,10 @@ class CheckoutTests {
         UserProfile other = user();
         MockHttpSession otherSession = new MockHttpSession();
         otherSession.setAttribute("userId", other.getId());
-        mockMvc.perform(post("/checkouts").session(otherSession).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(otherSession)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId()), f.address.getId(), "10.00")))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId(), first.getId()), f.address.getId(), "20.00")))
                 .andExpect(status().isBadRequest());
         assertNotNull(cartItemMapper.selectById(first.getId()));
@@ -257,7 +258,7 @@ class CheckoutTests {
 
         mockMvc.perform(post("/checkouts/direct").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        MvcResult response = mockMvc.perform(post("/checkouts/direct").session(f.session)
+        MvcResult response = mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orders.length()").value(1))
@@ -266,7 +267,7 @@ class CheckoutTests {
                 .andReturn();
         long orderId = om.readTree(response.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong();
-        mockMvc.perform(get("/orders/{id}", orderId).session(f.session))
+        mockMvc.perform(get("/orders/{id}", orderId).with(withMockLogin(f.session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].skuId").value(f.firstSku.getId()))
                 .andExpect(jsonPath("$.data.items[0].quantity").value(2));
@@ -278,7 +279,7 @@ class CheckoutTests {
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
                 Integer.class, f.firstSku.getProductId()));
-        MvcResult retry = mockMvc.perform(post("/checkouts/direct").session(f.session)
+        MvcResult retry = mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn();
         assertEquals(orderId, om.readTree(retry.getResponse().getContentAsString())
@@ -301,7 +302,7 @@ class CheckoutTests {
         CartItem first = item(f, f.firstSku, 1);
         CartItem second = item(f, other, 1);
 
-        mockMvc.perform(post("/checkouts").session(f.session).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId(), second.getId()), f.address.getId(), "20.00")))
                 .andExpect(status().isOk());
         assertEquals(1, jdbc.queryForObject(
@@ -313,27 +314,27 @@ class CheckoutTests {
     void directPurchaseRejectsWrongPriceMissingResourcesAndUnavailableSku() throws Exception {
         Fixture f = fixture();
         int ordersBefore = jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class);
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(f.firstSku.getId(), 1, f.address.getId(), "9.00")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.reason").value("PRICE_CHANGED"))
                 .andExpect(jsonPath("$.data.latestTotal").value(10.00));
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(Long.MAX_VALUE, 1, f.address.getId(), "10.00")))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(f.firstSku.getId(), 1, Long.MAX_VALUE, "10.00")))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(f.firstSku.getId(), 0, f.address.getId(), "10.00")))
                 .andExpect(status().isBadRequest());
         f.firstSku.setStock(0);
         skuMapper.updateById(f.firstSku);
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(f.firstSku.getId(), 1, f.address.getId(), "10.00")))
                 .andExpect(status().isConflict())
@@ -342,7 +343,7 @@ class CheckoutTests {
         skuMapper.updateById(f.firstSku);
         f.firstShop.setEnabled(0);
         shopMapper.updateById(f.firstShop);
-        mockMvc.perform(post("/checkouts/direct").session(f.session)
+        mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(directBody(f.firstSku.getId(), 1, f.address.getId(), "10.00")))
                 .andExpect(status().isConflict())

@@ -1,8 +1,10 @@
 package com.shiwushop.unit.auth;
 
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.captcha.CaptchaRateLimiter;
 import com.shiwushop.common.auth.RateLimiter;
+import com.shiwushop.support.MockBrowserFlow;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -20,7 +22,7 @@ import static org.mockito.Mockito.when;
 
 class CaptchaRateLimiterTests {
     @Test
-    void freshSessionsShareTheWideExitBucket() {
+    void freshBrowserIdsShareTheWideExitBucket() {
         RateLimiter counters = mock(RateLimiter.class);
         when(counters.digest(anyString())).thenAnswer(call -> call.getArgument(0));
         AtomicInteger exitRequests = new AtomicInteger();
@@ -41,23 +43,24 @@ class CaptchaRateLimiterTests {
     }
 
     @Test
-    void repeatedVerificationFailuresBlockOnlyThatSession() {
+    void repeatedVerificationFailuresBlockOnlyThatBrowser() {
         RateLimiter counters = mock(RateLimiter.class);
         when(counters.digest(anyString())).thenAnswer(call -> call.getArgument(0));
         CaptchaRateLimiter limiter = new CaptchaRateLimiter(counters, 1, 5, 30, 100,
                 2, 10, 60, 120, 10, 300_000);
         MockHttpServletRequest blocked = request();
-        String key = "shiwushop:captcha:rate:valid:failures:rolling:" + blocked.getSession().getId();
+        String browserId = BrowserFlow.requireId(blocked);
+        String key = "shiwushop:captcha:rate:valid:failures:rolling:" + browserId;
         when(counters.failureCount(key, 300_000)).thenReturn(10L);
         when(counters.failureRetrySeconds(key, 300_000)).thenReturn(60L);
 
         BusinessException error = assertThrows(BusinessException.class, () -> limiter.checkValid(blocked));
         assertEquals(429, error.getCode());
         limiter.checkValid(request());
-        limiter.recordValidFailure(blocked.getSession().getId());
+        limiter.recordValidFailure(browserId);
         verify(counters).recordFailure(key, 300_000, 10);
         verify(counters).tokenBucketRetrySeconds(
-                "shiwushop:captcha:rate:valid:session:" + blocked.getSession().getId(), 2, 10);
+                "shiwushop:captcha:rate:valid:session:" + browserId, 2, 10);
         verify(counters, times(2)).tokenBucketRetrySeconds(
                 "shiwushop:captcha:rate:valid:ip:203.0.113.10", 60, 120);
     }
@@ -65,7 +68,7 @@ class CaptchaRateLimiterTests {
     private static MockHttpServletRequest request() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("203.0.113.10");
-        request.getSession(true);
+        MockBrowserFlow.bind(request);
         return request;
     }
 }

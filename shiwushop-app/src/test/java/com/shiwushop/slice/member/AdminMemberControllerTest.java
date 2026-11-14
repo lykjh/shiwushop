@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.stream.Stream;
 
+import static com.shiwushop.support.MockLogin.loginAs;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -47,8 +48,8 @@ class AdminMemberControllerTest {
         for (String kind : new String[]{"growth", "point"}) {
             String body = kind.equals("growth") ? "{\"deltaAmount\":1,\"reason\":\"修正\",\"evidenceRef\":\"E1\"}"
                     : "{\"deltaPointUnits\":-1,\"reason\":\"修正\",\"evidenceRef\":\"E1\"}";
-            mvc.perform(post("/admin/members/7/" + kind + "-adjustments").sessionAttr("userId", 42L)
-                            .with(csrf()).header("Idempotency-Key", key).contentType("application/json").content(body))
+            mvc.perform(post("/admin/members/7/" + kind + "-adjustments").with(loginAs(42L))
+                            .with(csrf().asHeader()).header("Idempotency-Key", key).contentType("application/json").content(body))
                     .andExpect(status().isOk());
         }
         verify(administration).adjustGrowth(eq(42L), eq(7L), eq(key), any());
@@ -61,8 +62,8 @@ class AdminMemberControllerTest {
         for (String kind : new String[]{"growth", "point"}) {
             String body = kind.equals("growth") ? "{\"deltaAmount\":1,\"reason\":\"修正\",\"evidenceRef\":\"E1\"}"
                     : "{\"deltaPointUnits\":-1,\"reason\":\"修正\",\"evidenceRef\":\"E1\"}";
-            mvc.perform(post("/admin/members/7/" + kind + "-adjustments").sessionAttr("userId", 42L)
-                            .with(csrf()).header("Idempotency-Key", key).contentType("application/json").content(body))
+            mvc.perform(post("/admin/members/7/" + kind + "-adjustments").with(loginAs(42L))
+                            .with(csrf().asHeader()).header("Idempotency-Key", key).contentType("application/json").content(body))
                     .andExpect(status().isBadRequest());
         }
         verifyNoInteractions(administration, accounts);

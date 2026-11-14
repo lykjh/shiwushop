@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,14 +50,14 @@ class ShopStatusUpdateTests {
         Shop shop = insertShop();
         MockHttpSession admin = sessionFor(insertUser("ADMIN"));
 
-        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("enabled", 0))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.enabled").value(0));
         assertEquals(0, shopMapper.selectById(shop.getId()).getEnabled());
 
-        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("enabled", 1))))
                 .andExpect(status().isOk())
@@ -72,11 +73,11 @@ class ShopStatusUpdateTests {
         Shop shop = insertShop();
         MockHttpSession admin = sessionFor(insertUser("ADMIN"));
 
-        mockMvc.perform(put("/admin/shops/{id}/status", Long.MAX_VALUE).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/status", Long.MAX_VALUE).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("enabled", 0))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/status", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("enabled", 2))))
                 .andExpect(status().isBadRequest());
@@ -95,7 +96,7 @@ class ShopStatusUpdateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put("/admin/shops/{id}/status", shop.getId())
-                        .session(sessionFor(insertUser("MERCHANT")))
+                        .with(withMockLogin(sessionFor(insertUser("MERCHANT"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         assertEquals(1, shopMapper.selectById(shop.getId()).getEnabled());

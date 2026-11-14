@@ -1,5 +1,7 @@
 package com.shiwushop.unit.auth;
 
+import com.shiwushop.support.MockBrowserFlow;
+
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.GlobalExceptionHandler;
 import com.shiwushop.user.auth.AuthRiskLimiter;
@@ -236,6 +238,7 @@ class AuthRiskLimiterTests {
         Set<String> volumeKeys = new HashSet<>();
         for (int i = 0; i < 100; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest();
+            MockBrowserFlow.bind(request);
             request.setRemoteAddr("203.0.113.10");
             request.addHeader("User-Agent", "Mozilla/5.0 Chrome/" + i + ".0");
             risk.loginRequiresCaptcha("buyer" + i, request);
@@ -299,6 +302,7 @@ class AuthRiskLimiterTests {
 
     private MockHttpServletRequest request() {
         MockHttpServletRequest request = new MockHttpServletRequest();
+        MockBrowserFlow.bind(request);
         request.setRemoteAddr("203.0.113.10");
         request.addHeader("User-Agent", "shared-browser");
         return request;

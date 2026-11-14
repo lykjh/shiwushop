@@ -1,6 +1,7 @@
 package com.shiwushop.slice.user;
 
 import com.shiwushop.support.ControllerSliceSecurity;
+import com.shiwushop.user.auth.JwtLogin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -17,7 +18,9 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.shiwushop.support.MockLogin.loginAs;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,21 +33,23 @@ class SmsControllerRoutesTests {
     private MockMvc mvc;
     @MockitoBean
     private PhoneBindingService binding;
+    @MockitoBean
+    private JwtLogin jwt;
 
     @Test
-    void bindingRoutesKeepAccountIdentityAndInvalidateSessionAfterConfirmation() throws Exception {
+    void bindingRoutesKeepAccountIdentityAndClearJwtAfterConfirmation() throws Exception {
         MockHttpSession session = new MockHttpSession();
-        session.setAttribute("userId", 7L);
-        mvc.perform(post("/users/phone/bind/send").with(csrf()).session(session).remoteAddress("192.0.2.7")
+        mvc.perform(post("/users/phone/bind/send").with(csrf().asHeader()).session(session).with(loginAs(7L)).remoteAddress("192.0.2.7")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"13800000000\"}"))
                 .andExpect(status().isOk());
         verify(binding).sendCode(7L, "13800000000", "192.0.2.7");
 
-        mvc.perform(post("/users/phone/bind/confirm").with(csrf()).session(session)
+        mvc.perform(post("/users/phone/bind/confirm").with(csrf().asHeader()).session(session).with(loginAs(7L))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"Shop123!\",\"phone\":\"13800000000\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk());
         verify(binding).bind(7L, "Shop123!", "13800000000", "123456");
-        assertTrue(session.isInvalid());
+        verify(jwt).clearCookie(any());
+        assertFalse(session.isInvalid());
     }
 }

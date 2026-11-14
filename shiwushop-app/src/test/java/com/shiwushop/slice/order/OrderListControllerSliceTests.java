@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import com.shiwushop.trade.controller.order.OrderController;
@@ -46,12 +47,12 @@ class OrderListControllerSliceTests {
         row.setId(10L);
         when(orders.list(7L, null, 1)).thenReturn(new OrderSliceVO(List.of(row), true, 10L));
 
-        mvc.perform(get("/orders?size=1").session(session))
+        mvc.perform(get("/orders?size=1").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].id").value(10))
                 .andExpect(jsonPath("$.data.nextCursor").value(10))
                 .andExpect(jsonPath("$.data.total").doesNotExist());
-        mvc.perform(get("/orders?page=2").session(session)).andExpect(status().isBadRequest());
+        mvc.perform(get("/orders?page=2").with(withMockLogin(session))).andExpect(status().isBadRequest());
     }
 
     @Test
@@ -60,7 +61,7 @@ class OrderListControllerSliceTests {
         when(orders.listMerchant(7L, 9L, 10L, 5))
                 .thenReturn(new OrderSliceVO(List.of(), false, null));
 
-        mvc.perform(get("/merchant/shops/9/orders?afterId=10&size=5").session(session))
+        mvc.perform(get("/merchant/shops/9/orders?afterId=10&size=5").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasMore").value(false));
     }
@@ -73,7 +74,7 @@ class OrderListControllerSliceTests {
                         new OrderDetailVO(11L, 9L, "示例店铺", "UNPAID", null, false, null, List.of(), "NORMAL", "CASH",
                                 "READY", null, null, null, 0, null));
 
-        mvc.perform(get("/merchant/shops/9/orders/11").session(session))
+        mvc.perform(get("/merchant/shops/9/orders/11").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(11))
                 .andExpect(jsonPath("$.data.status").value("UNPAID"))

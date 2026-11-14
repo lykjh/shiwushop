@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,7 +63,7 @@ class MerchantProductListTests {
 
         mockMvc.perform(get("/merchant/products")
                         .param("shopId", shop.getId().toString())
-                        .param("page", "1").param("size", "2").session(session))
+                        .param("page", "1").param("size", "2").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(2))
@@ -74,7 +75,7 @@ class MerchantProductListTests {
 
         mockMvc.perform(get("/merchant/products")
                         .param("shopId", shop.getId().toString())
-                        .param("page", "2").param("size", "2").session(session))
+                        .param("page", "2").param("size", "2").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(3))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
@@ -90,16 +91,16 @@ class MerchantProductListTests {
         mockMvc.perform(get("/merchant/products").param("shopId", shopId))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/merchant/products").param("shopId", shopId)
-                        .session(session(user("MERCHANT"))))
+                        .with(withMockLogin(session(user("MERCHANT")))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/merchant/products").param("shopId", shopId)
-                        .session(session(user("USER"))))
+                        .with(withMockLogin(session(user("USER")))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/merchant/products").param("shopId", shopId)
-                        .param("page", "0").session(session(owner)))
+                        .param("page", "0").with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/merchant/products").param("shopId", shopId)
-                        .param("size", "101").session(session(owner)))
+                        .param("size", "101").with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
     }
 

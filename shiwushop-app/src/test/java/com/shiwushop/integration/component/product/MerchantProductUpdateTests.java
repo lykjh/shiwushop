@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -76,7 +77,7 @@ class MerchantProductUpdateTests {
         image(product, media(owner), true, 0);
         Long cover = media(owner), detail = media(owner);
 
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "新版商品",
                                 "description", "新版介绍", "coverMediaId", cover,
@@ -89,7 +90,7 @@ class MerchantProductUpdateTests {
         assertEquals(List.of(cover, detail), images(product).stream().map(ProductImage::getMediaId).toList());
         assertEquals(1, images(product).getFirst().getIsCover());
 
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
                                 "brandId", brand.getId(), "imageMediaIds", List.of()))))
@@ -109,7 +110,7 @@ class MerchantProductUpdateTests {
         Long first = media(owner), second = media(owner);
         image(product, first, true, 0);
         image(product, second, false, 1);
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "只换封面",
                                 "coverMediaId", second))))
@@ -127,15 +128,15 @@ class MerchantProductUpdateTests {
         mvc.perform(
                         put("/merchant/products/{id}", product.getId()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(user("MERCHANT")))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(user("MERCHANT"))))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "旧 URL",
                                 "coverUrl", "https://example.com/a.jpg"))))
                 .andExpect(status().isBadRequest());
         Long foreign = media(user("MERCHANT"));
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "越权图片",
                                 "coverMediaId", foreign, "imageMediaIds", List.of(foreign)))))
@@ -154,18 +155,18 @@ class MerchantProductUpdateTests {
         productService.submitListing(owner, product.getId(), revision);
         productService.decideListing(user("ADMIN"), product.getId(),
                 new ProductListingDecisionDTO(revision, true, null));
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON).content(body(child.getId(), "保留图片")))
                 .andExpect(status().isConflict());
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("categoryId", child.getId(), "name", "清空图片",
                                 "imageMediaIds", List.of()))))
                 .andExpect(status().isConflict());
-        mvc.perform(put("/merchant/products/{id}/status", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}/status", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"OFF_SALE\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(put("/merchant/products/{id}", product.getId()).session(session(owner))
+        mvc.perform(put("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON).content(body(child.getId(), "保留图片")))
                 .andExpect(status().isOk());
         assertEquals("保留图片", products.selectById(product.getId()).getName());

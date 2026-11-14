@@ -11,6 +11,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class TestCsrfConfig {
     @Bean
     MockMvcBuilderCustomizer csrfForExistingMockMvcTests() {
-        return builder -> builder.defaultRequest(get("/").with(csrf()));
+        return builder -> builder.defaultRequest(get("/").with(csrf().asHeader()));
     }
 }

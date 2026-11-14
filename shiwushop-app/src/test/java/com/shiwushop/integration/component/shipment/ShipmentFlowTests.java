@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -74,16 +75,16 @@ class ShipmentFlowTests {
         Order order = order(shop, buyer, OrderStatus.PAID);
         String path = "/merchant/shops/" + shop.getId() + "/orders/" + order.getId() + "/shipment";
 
-        mvc.perform(get("/orders/{id}/shipment", order.getId()).session(session(buyer)))
+        mvc.perform(get("/orders/{id}/shipment", order.getId()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("NOT_SHIPPED"));
-        mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(path).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"carrierName\":\" 顺丰速运 \",\"trackingNo\":\" SF123 \"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.carrierName").value("顺丰速运"))
                 .andExpect(jsonPath("$.data.trackingNo").value("SF123"));
-        mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(path).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"carrierName\":\"顺丰速运\",\"trackingNo\":\"SF123\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("SHIPPED"));
-        mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(path).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"carrierName\":\"顺丰速运\",\"trackingNo\":\"OTHER\"}"))
                 .andExpect(status().isConflict());
         assertEquals(1,
@@ -95,11 +96,11 @@ class ShipmentFlowTests {
                 "SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='SHIPMENT' AND aggregate_id=?",
                 Integer.class, shipments.selectByOrderId(order.getId()).getId()));
 
-        mvc.perform(get(path).session(session(merchant))).andExpect(status().isOk())
+        mvc.perform(get(path).with(withMockLogin(session(merchant)))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SHIPPED"));
-        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).session(session(buyer)))
+        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.confirmSource").value("BUYER"));
-        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).session(session(buyer)))
+        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.confirmSource").value("BUYER"));
         assertEquals(ShipmentStatus.CONFIRMED, shipments.selectByOrderId(order.getId()).getStatus());
         assertEquals(1, jdbc.queryForObject(
@@ -125,18 +126,18 @@ class ShipmentFlowTests {
         String route = "/merchant/shops/" + shop.getId() + "/orders/" + order.getId()
                 + "/shipments/" + id + "/simulate-tracking";
         String signed = "{\"step\":\"SIGNED\"}";
-        mvc.perform(post(route).session(session(buyer)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(route).with(withMockLogin(session(buyer))).contentType(MediaType.APPLICATION_JSON)
                         .content(signed)).andExpect(status().isNotFound());
-        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(route).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"step\":\"IN_TRANSIT\"}")).andExpect(status().isOk());
         assertFalse(shipmentService.dueShipmentIds().contains(id));
-        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(route).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content(signed)).andExpect(status().isOk());
         Shipment signedParcel = shipments.selectById(id);
         assertNotNull(signedParcel.getSimulatedInTransitAt());
         assertEquals(signedParcel.getCarrierSignedAt().plusDays(10), signedParcel.getAutoConfirmAt());
         assertFalse(shipmentService.confirmDue(id));
-        mvc.perform(post(route).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(route).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content(signed)).andExpect(status().isOk());
         assertEquals(signedParcel.getCarrierSignedAt(), shipments.selectById(id).getCarrierSignedAt());
         assertEquals(1, jdbc.queryForObject(
@@ -161,16 +162,16 @@ class ShipmentFlowTests {
 
         mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post(path).session(session(outsider)).contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post(path).with(withMockLogin(session(outsider))).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
-        mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post(path).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict());
-        mvc.perform(post(path).session(session(merchant)).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(path).with(withMockLogin(session(merchant))).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"carrierName\":\"  \",\"trackingNo\":\"SF123\"}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/orders/{id}/shipment", order.getId()).session(session(merchant)))
+        mvc.perform(get("/orders/{id}/shipment", order.getId()).with(withMockLogin(session(merchant))))
                 .andExpect(status().isNotFound());
-        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).session(session(buyer)))
+        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isConflict());
     }
 
@@ -190,7 +191,7 @@ class ShipmentFlowTests {
 
         shipmentService.confirmDue(shipment.getId());
         shipmentService.confirmDue(shipment.getId());
-        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).session(session(buyer)))
+        mvc.perform(post("/orders/{id}/shipment/confirm", order.getId()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.confirmSource").value("SYSTEM"));
         assertEquals(OrderStatus.PAID, orders.selectById(order.getId()).getStatus());
     }

@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -54,7 +55,7 @@ class CategoryUpdateTests {
         Category leaf = insert("智能手机-" + suffix, branch.getId(), 3);
 
         mockMvc.perform(put("/admin/categories/{id}", branch.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", branch.getName(), "visible", 1, "sortOrder", 2))))
                 .andExpect(status().isOk())
@@ -65,7 +66,7 @@ class CategoryUpdateTests {
         assertEquals(1L, searchEvents(branch.getId()));
 
         mockMvc.perform(put("/admin/categories/{id}", branch.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", branch.getName(), "parentId", root.getId(),
                                 "visible", 1, "sortOrder", 0))))
@@ -88,27 +89,27 @@ class CategoryUpdateTests {
         Category otherChild = insert("上衣-" + suffix, otherRoot.getId(), 2);
 
         mockMvc.perform(put("/admin/categories/{id}", root.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", root.getName(), "parentId", child.getId(),
                                 "visible", 1, "sortOrder", 0))))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(put("/admin/categories/{id}", root.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", root.getName(), "parentId", otherChild.getId(),
                                 "visible", 1, "sortOrder", 0))))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(put("/admin/categories/{id}", otherRoot.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", root.getName(), "visible", 1, "sortOrder", 0))))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(put("/admin/categories/{id}", root.getId())
-                        .session(admin).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", root.getName(), "visible", 2, "sortOrder", 0))))
                 .andExpect(status().isBadRequest());
@@ -129,7 +130,7 @@ class CategoryUpdateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put("/admin/categories/{id}", category.getId())
-                        .session(sessionForRole("USER"))
+                        .with(withMockLogin(sessionForRole("USER")))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
     }

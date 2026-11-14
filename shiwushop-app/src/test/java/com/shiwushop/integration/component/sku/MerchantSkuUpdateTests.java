@@ -38,6 +38,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -76,7 +77,7 @@ class MerchantSkuUpdateTests {
         String body = "{\"price\":3899.00,\"stock\":8}";
 
         mockMvc.perform(put("/merchant/products/{productId}/skus/{skuId}", f.productId, f.skuId)
-                        .session(f.session).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(f.skuId))
                 .andExpect(jsonPath("$.data.productId").value(f.productId))
@@ -105,10 +106,10 @@ class MerchantSkuUpdateTests {
     void recordsOnlyActualStockChanges() throws Exception {
         Fixture f = fixture();
         String path = "/merchant/products/{productId}/skus/{skuId}";
-        mockMvc.perform(put(path, f.productId, f.skuId).session(f.session)
+        mockMvc.perform(put(path, f.productId, f.skuId).with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"price\":20.00,\"stock\":1}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(put(path, f.productId, f.skuId).session(f.session)
+        mockMvc.perform(put(path, f.productId, f.skuId).with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"price\":21.00,\"stock\":1}"))
                 .andExpect(status().isOk());
         assertEquals(1, jdbcTemplate.queryForObject(
@@ -129,13 +130,13 @@ class MerchantSkuUpdateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put(path, f.productId, f.skuId)
-                        .session(session(user())).contentType(MediaType.APPLICATION_JSON).content(valid))
+                        .with(withMockLogin(session(user()))).contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isNotFound());
         mockMvc.perform(put(path, f.productId, f.skuId + 999999)
-                        .session(f.session).contentType(MediaType.APPLICATION_JSON).content(valid))
+                        .with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isNotFound());
         mockMvc.perform(put(path, f.productId + 999999, f.skuId)
-                        .session(f.session).contentType(MediaType.APPLICATION_JSON).content(valid))
+                        .with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isNotFound());
 
         for (String bad : List.of(
@@ -144,7 +145,7 @@ class MerchantSkuUpdateTests {
                 "{\"price\":19.999,\"stock\":8}",
                 "{\"stock\":8}")) {
             mockMvc.perform(put(path, f.productId, f.skuId)
-                            .session(f.session).contentType(MediaType.APPLICATION_JSON).content(bad))
+                            .with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON).content(bad))
                     .andExpect(status().isBadRequest());
         }
         assertEquals(new BigDecimal("3999.00"), skuMapper.selectById(f.skuId).getPrice());

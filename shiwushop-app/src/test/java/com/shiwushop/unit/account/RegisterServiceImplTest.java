@@ -8,6 +8,7 @@ import com.shiwushop.user.mapper.user.*;
 import com.shiwushop.user.service.impl.RegisterServiceImpl;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.captcha.CaptchaService;
+import com.shiwushop.support.MockBrowserFlow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +34,7 @@ class RegisterServiceImplTest {
     @BeforeEach
     void prepare() {
         request.setRemoteAddr("198.51.100.10");
+        MockBrowserFlow.bind(request);
         dto = new RegisterDTO("buyer_zhang", "Shop123!", "proof");
         doAnswer(call -> {
             ((com.shiwushop.user.entity.user.UserProfile) call.getArgument(0)).setId(42L);

@@ -37,6 +37,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -114,7 +115,7 @@ class CartAvailabilityTests {
         linkMapper.insertLink(sku.getId(), value.getId());
 
         String body = om.writeValueAsString(Map.of("skuId", sku.getId(), "quantity", 2));
-        MvcResult added = mockMvc.perform(post("/cart/items").session(session)
+        MvcResult added = mockMvc.perform(post("/cart/items").with(withMockLogin(session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.productId").value(product.getId()))
@@ -124,35 +125,35 @@ class CartAvailabilityTests {
                 .andReturn();
         long itemId = om.readTree(added.getResponse().getContentAsString()).path("data").path("id").asLong();
 
-        mockMvc.perform(put("/cart/items/{id}", itemId).session(session)
+        mockMvc.perform(put("/cart/items/{id}", itemId).with(withMockLogin(session))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.quantity").value(1));
-        mockMvc.perform(put("/cart/items/{id}", itemId).session(session)
+        mockMvc.perform(put("/cart/items/{id}", itemId).with(withMockLogin(session))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":2}"))
                 .andExpect(status().isOk());
 
         sku.setStock(1);
         skuMapper.updateById(sku);
-        mockMvc.perform(get("/cart/items").session(session))
+        mockMvc.perform(get("/cart/items").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].available").value(false))
                 .andExpect(jsonPath("$.data[0].unavailableReason").value("库存不足"));
         shop.setEnabled(0);
         shopMapper.updateById(shop);
-        mockMvc.perform(get("/cart/items").session(session))
+        mockMvc.perform(get("/cart/items").with(withMockLogin(session)))
                 .andExpect(jsonPath("$.data[0].unavailableReason").value("店铺已暂停营业"));
         shop.setEnabled(1);
         shopMapper.updateById(shop);
         category.setVisible(0);
         categoryMapper.updateById(category);
-        mockMvc.perform(get("/cart/items").session(session))
+        mockMvc.perform(get("/cart/items").with(withMockLogin(session)))
                 .andExpect(jsonPath("$.data[0].unavailableReason").value("分类已隐藏"));
-        mockMvc.perform(post("/cart/items").session(session)
+        mockMvc.perform(post("/cart/items").with(withMockLogin(session))
                         .contentType(MediaType.APPLICATION_JSON).content(
                                 om.writeValueAsString(Map.of("skuId", sku.getId(), "quantity", 1))))
                 .andExpect(status().isConflict());
-        mockMvc.perform(delete("/cart/items/{id}", itemId).session(session))
+        mockMvc.perform(delete("/cart/items/{id}", itemId).with(withMockLogin(session)))
                 .andExpect(status().isOk());
     }
 }

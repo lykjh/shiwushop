@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -48,7 +49,7 @@ class AddressListTests {
         addressService.create(otherId, dto("他人地址"));
         jdbcTemplate.update("UPDATE addresses SET deleted_at = NOW() WHERE id = ?", deleted.getId());
 
-        mockMvc.perform(get("/addresses").session(session(ownerId)))
+        mockMvc.perform(get("/addresses").with(withMockLogin(session(ownerId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == " + visible.getId() + ")].consignee")
                         .value(hasItem("张三")))
@@ -60,11 +61,11 @@ class AddressListTests {
 
     @Test
     void requiresActiveLogin() throws Exception {
-        mockMvc.perform(get("/addresses").session(new MockHttpSession()))
+        mockMvc.perform(get("/addresses").with(withMockLogin(new MockHttpSession())))
                 .andExpect(status().isUnauthorized());
         Long userId = user();
         jdbcTemplate.update("UPDATE user_accounts SET status = 'DISABLED' WHERE user_id = ?", userId);
-        mockMvc.perform(get("/addresses").session(session(userId)))
+        mockMvc.perform(get("/addresses").with(withMockLogin(session(userId))))
                 .andExpect(status().isUnauthorized());
     }
 

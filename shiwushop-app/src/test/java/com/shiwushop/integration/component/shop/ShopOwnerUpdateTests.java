@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,7 +52,7 @@ class ShopOwnerUpdateTests {
         Shop shop = insertShop(oldOwnerId);
 
         mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId())
-                        .session(sessionFor(insertUser("ADMIN")))
+                        .with(withMockLogin(sessionFor(insertUser("ADMIN"))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", newOwnerId))))
                 .andExpect(status().isOk())
@@ -70,24 +71,24 @@ class ShopOwnerUpdateTests {
         Long newOwnerId = insertUser("USER");
         String valid = om.writeValueAsString(Map.of("ownerUserId", newOwnerId));
 
-        mockMvc.perform(put("/admin/shops/{id}/owner", Long.MAX_VALUE).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/owner", Long.MAX_VALUE).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", Long.MAX_VALUE))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", insertUser("ADMIN")))))
                 .andExpect(status().isConflict());
         Long disabledId = insertUser("USER");
         jdbcTemplate.update("UPDATE user_accounts SET status = 'DISABLED' WHERE user_id = ?", disabledId);
-        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", disabledId))))
                 .andExpect(status().isConflict());
-        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).session(admin)
+        mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", -1))))
                 .andExpect(status().isBadRequest());
@@ -107,7 +108,7 @@ class ShopOwnerUpdateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put("/admin/shops/{id}/owner", shop.getId())
-                        .session(sessionFor(insertUser("MERCHANT")))
+                        .with(withMockLogin(sessionFor(insertUser("MERCHANT"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         assertEquals(oldOwnerId, shopMapper.selectById(shop.getId()).getOwnerUserId());

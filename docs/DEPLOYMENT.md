@@ -15,3 +15,9 @@
 - 对外代理只转发业务接口；健康与指标端点限制在可信网络。反向代理配置见 [`deploy/nginx/shiwushop.conf`](../deploy/nginx/shiwushop.conf)。
 - 发布前备份数据库并验证恢复流程。Flyway 迁移失败时保留现场，不手工改写 `flyway_schema_history`；回退应用前核对数据库结构兼容性。
 - 本仓库不包含旧业务数据；空库启动仅建立结构。
+
+## JWT configuration
+
+Set `SHOP_AUTH_JWT_SECRET` in the deployment environment before starting the application. Use the same Base64-encoded key on every instance, generated from at least 32 random bytes. Keep it outside Git. Rotating the key invalidates existing login tokens and browser flow credentials. Existing Spring Session users need to log in again after the upgrade.
+
+The Compose template defaults the auth cookie path to `/` for root-level routes. For a storefront served only under `/api`, use `SHOP_AUTH_JWT_COOKIE_PATH=/api`. Serve the login and CSRF cookies over HTTPS.

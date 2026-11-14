@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -55,7 +56,7 @@ class ShopProfileUpdateTests {
         String newName = "新店铺-" + UUID.randomUUID();
         Long newMediaId = mediaId(ownerId, "READY");
 
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", newName,
                                 "logoMediaId", newMediaId, "description", "新的店铺简介"))))
@@ -70,7 +71,7 @@ class ShopProfileUpdateTests {
         assertEquals("新的店铺简介", updated.getDescription());
         assertEquals(newMediaId, updated.getLogoMediaId());
 
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", newName))))
                 .andExpect(status().isOk());
@@ -89,10 +90,10 @@ class ShopProfileUpdateTests {
         shopMapper.updateById(shop);
         String body = om.writeValueAsString(Map.of("name", "新店名-" + UUID.randomUUID()));
 
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(oldOwnerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(oldOwnerId)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(newOwnerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(newOwnerId)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk());
     }
@@ -104,27 +105,27 @@ class ShopProfileUpdateTests {
         Shop other = insertShop(insertUser("MERCHANT"), "他人店铺-" + UUID.randomUUID(), 1);
         String duplicate = om.writeValueAsString(Map.of("name", other.getName()));
 
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON).content(duplicate))
                 .andExpect(status().isConflict());
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", " "))))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(put("/merchant/shops/{id}", shop.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(duplicate))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(put("/merchant/shops/{id}", other.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", other.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON).content(duplicate))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+        mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", "旧地址", "logoUrl",
                                 "https://example.com/logo.png"))))
                 .andExpect(status().isBadRequest());
         for (Long mediaId : new Long[]{mediaId(ownerId, "STAGED"),
                 mediaId(insertUser("MERCHANT"), "READY"), Long.MAX_VALUE}) {
-            mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).session(sessionFor(ownerId))
+            mockMvc.perform(put("/merchant/shops/{id}", shop.getId()).with(withMockLogin(sessionFor(ownerId)))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(om.writeValueAsString(Map.of("name", shop.getName(),
                                     "logoMediaId", mediaId))))

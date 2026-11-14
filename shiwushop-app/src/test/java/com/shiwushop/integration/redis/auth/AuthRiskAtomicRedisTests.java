@@ -1,5 +1,7 @@
 package com.shiwushop.integration.redis.auth;
 
+import com.shiwushop.support.MockBrowserFlow;
+
 import com.shiwushop.user.auth.AuthRiskLimiter;
 import com.shiwushop.common.auth.RateLimiter;
 import io.lettuce.core.cluster.SlotHash;
@@ -145,6 +147,7 @@ class AuthRiskAtomicRedisTests {
                     5, 5, 30, 5, 16, 5, 30, 12, 60, 120, 0.5);
             for (int i = 0; i < 500; i++) {
                 MockHttpServletRequest request = new MockHttpServletRequest();
+                MockBrowserFlow.bind(request);
                 request.setRemoteAddr(address);
                 request.addHeader("User-Agent", "Mozilla/5.0 Chrome/" + i + ".0");
                 risk.registerRequiresCaptcha(request);

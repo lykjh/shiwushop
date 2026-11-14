@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,7 +56,7 @@ class CategoryDeleteTests {
     void deletesEmptyCategoryAndReturns404ForMissingCategory() throws Exception {
         Category category = insertCategory(null, 1);
 
-        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).session(adminSession()))
+        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).with(withMockLogin(adminSession())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
         assertNull(categoryMapper.selectById(category.getId()));
@@ -63,7 +64,7 @@ class CategoryDeleteTests {
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?",
                 Long.class, category.getId()));
 
-        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).session(adminSession()))
+        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).with(withMockLogin(adminSession())))
                 .andExpect(status().isNotFound());
     }
 
@@ -87,9 +88,9 @@ class CategoryDeleteTests {
         product.setStatus(ProductStatus.DRAFT);
         productMapper.insert(product);
 
-        mockMvc.perform(delete("/admin/categories/{id}", parent.getId()).session(admin))
+        mockMvc.perform(delete("/admin/categories/{id}", parent.getId()).with(withMockLogin(admin)))
                 .andExpect(status().isConflict());
-        mockMvc.perform(delete("/admin/categories/{id}", child.getId()).session(admin))
+        mockMvc.perform(delete("/admin/categories/{id}", child.getId()).with(withMockLogin(admin)))
                 .andExpect(status().isConflict());
 
         assertNotNull(categoryMapper.selectById(parent.getId()));
@@ -102,7 +103,7 @@ class CategoryDeleteTests {
 
         mockMvc.perform(delete("/admin/categories/{id}", category.getId()))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).session(sessionForRole("USER")))
+        mockMvc.perform(delete("/admin/categories/{id}", category.getId()).with(withMockLogin(sessionForRole("USER"))))
                 .andExpect(status().isForbidden());
         assertNotNull(categoryMapper.selectById(category.getId()));
     }

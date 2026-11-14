@@ -6,6 +6,7 @@ import com.shiwushop.support.LoginTestRequest;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.user.dto.user.RegisterDTO;
 import com.shiwushop.user.service.RegisterService;
+import com.shiwushop.user.auth.JwtLogin;
 import com.shiwushop.common.media.service.MediaService;
 import com.shiwushop.common.media.MediaOrphanCleanup;
 import com.jayway.jsonpath.JsonPath;
@@ -15,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc(addFilters = false)
+@AutoConfigureMockMvc
 @TestPropertySource(properties = "shop.media.root=./target/media-security-tests")
 class MediaSecurityTests {
     @Autowired
@@ -71,15 +72,15 @@ class MediaSecurityTests {
 
     @Test
     void decodesAndReencodesRealImageAndProtectsUnreferencedFile() throws Exception {
-        MockHttpSession owner = account();
-        MockHttpSession other = account();
+        Cookie owner = account();
+        Cookie other = account();
         BufferedImage image = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
         image.setRGB(0, 0, 0x123456);
         ByteArrayOutputStream source = new ByteArrayOutputStream();
         ImageIO.write(image, "png", source);
         byte[] input = source.toByteArray();
         String response = mvc.perform(multipart("/media").file(new MockMultipartFile(
-                        "file", "misleading.jpg", "text/plain", input)).session(owner).with(csrf()))
+                        "file", "misleading.jpg", "text/plain", input)).cookie(owner).with(csrf().asHeader()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").isNumber())
                 .andReturn().getResponse().getContentAsString();
@@ -87,7 +88,7 @@ class MediaSecurityTests {
         mediaIds.add(mediaId);
         assertEquals("image/png",
                 jdbc.queryForObject("SELECT mime_type FROM media_assets WHERE id=?", String.class, mediaId));
-        byte[] output = mvc.perform(get("/media/{id}", mediaId).session(owner))
+        byte[] output = mvc.perform(get("/media/{id}", mediaId).cookie(owner))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andReturn().getResponse().getContentAsByteArray();
@@ -95,7 +96,7 @@ class MediaSecurityTests {
         assertNotNull(decoded);
         assertEquals(0x123456, decoded.getRGB(0, 0) & 0xffffff);
         mvc.perform(get("/media/{id}", mediaId)).andExpect(status().isNotFound());
-        mvc.perform(get("/media/{id}", mediaId).session(other)).andExpect(status().isNotFound());
+        mvc.perform(get("/media/{id}", mediaId).cookie(other)).andExpect(status().isNotFound());
 
         String suffix = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO shops (owner_user_id,name,enabled) VALUES (?,?,1)", userIds.getFirst(),
@@ -130,13 +131,13 @@ class MediaSecurityTests {
 
     @Test
     void rejectsDisguisedAndOversizedImageWithoutMediaRow() throws Exception {
-        MockHttpSession owner = account();
+        Cookie owner = account();
         int before = jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class);
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "fake.png", "image/png",
-                        "<script>alert(1)</script>".getBytes())).session(owner).with(csrf()))
+                        "<script>alert(1)</script>".getBytes())).cookie(owner).with(csrf().asHeader()))
                 .andExpect(status().isBadRequest());
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "large.png", "image/png",
-                        new byte[10 * 1024 * 1024 + 1])).session(owner).with(csrf()))
+                        new byte[10 * 1024 * 1024 + 1])).cookie(owner).with(csrf().asHeader()))
                 .andExpect(status().isPayloadTooLarge());
         ByteArrayOutputStream small = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB), "png", small);
@@ -146,14 +147,14 @@ class MediaSecurityTests {
         crc.update(pixelBomb, 12, 17);
         ByteBuffer.wrap(pixelBomb, 29, 4).putInt((int) crc.getValue());
         mvc.perform(multipart("/media").file(new MockMultipartFile("file", "bomb.png", "image/png",
-                        pixelBomb)).session(owner).with(csrf()))
+                        pixelBomb)).cookie(owner).with(csrf().asHeader()))
                 .andExpect(status().isPayloadTooLarge());
         assertEquals(before, jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class));
     }
 
     @Test
     void storageFailureReturns503WithoutCreatingMediaRow() throws Exception {
-        MockHttpSession owner = account();
+        Cookie owner = account();
         Path blocker = Path.of("target/media-security-tests/storage-blocker");
         Files.createDirectories(blocker.getParent());
         Files.writeString(blocker, "file, not directory");
@@ -164,7 +165,7 @@ class MediaSecurityTests {
         try {
             ReflectionTestUtils.setField(mediaService, "storageRoot", blocker.resolve("images").toString());
             mvc.perform(multipart("/media").file(new MockMultipartFile("file", "test.png", "image/png",
-                            image.toByteArray())).session(owner).with(csrf()))
+                            image.toByteArray())).cookie(owner).with(csrf().asHeader()))
                     .andExpect(status().isServiceUnavailable())
                     .andExpect(jsonPath("$.message").value("图片暂时无法保存"));
             assertEquals(before, jdbc.queryForObject("SELECT COUNT(*) FROM media_assets", Integer.class));
@@ -198,12 +199,12 @@ class MediaSecurityTests {
         assertFalse(Files.exists(orphan));
     }
 
-    private MockHttpSession account() throws Exception {
+    private Cookie account() throws Exception {
         String name = "media_" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(users, proofs, new RegisterDTO(name, "Shop123!", null));
         userIds.add(jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username=?", Long.class, name));
-        return (MockHttpSession) mvc.perform(LoginTestRequest.login(proofs, name, "Shop123!"))
-                .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+        return mvc.perform(LoginTestRequest.login(proofs, name, "Shop123!").with(csrf().asHeader()))
+                .andExpect(status().isOk()).andReturn().getResponse().getCookie(JwtLogin.COOKIE);
     }
 
     @AfterEach

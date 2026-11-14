@@ -2,15 +2,17 @@ package com.shiwushop.user.controller.user;
 
 import com.shiwushop.user.dto.user.ChangePasswordDTO;
 import com.shiwushop.user.dto.user.LoginDTO;
+import com.shiwushop.user.auth.JwtLogin;
 import com.shiwushop.user.service.AccountService;
 import com.shiwushop.user.service.LoginService;
 import com.shiwushop.user.vo.user.LoginVO;
 import com.shiwushop.user.vo.user.UserInfoVO;
 import com.shiwushop.common.Result;
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.common.logging.BusinessEventLog;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -27,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class LoginController {
     private final LoginService loginService;
     private final AccountService accountService;
+    private final JwtLogin jwt;
+    private final BrowserFlow browserFlow;
 
     /** 返回 Spring Security 为当前请求建立的 CSRF 令牌。 */
     @GetMapping("/csrf")
@@ -37,33 +41,34 @@ public class LoginController {
 
     /** 账号密码及风险验证由登录服务完成；成功后返回现有 LoginVO。 */
     @PostMapping("/login")
-    public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request) {
-        return Result.success(loginService.login(dto, request));
+    public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request,
+                                 HttpServletResponse response) {
+        return Result.success(loginService.login(dto, request, response));
     }
 
-    /** 使当前 Session 失效；尚未登录的调用仍返回成功。 */
+    /** Redis 确认撤销后才清除 Cookie。 */
     @PostMapping("/logout")
-    public Result<Void> logout(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            Long userId = SessionUser.currentId(request);
-            session.invalidate();
-            if (userId != null)
-                BusinessEventLog.committed("user", "logout", "user", userId);
-        }
+    public Result<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        jwt.revokeCurrent(request);
+        jwt.clearCookie(response);
+        browserFlow.rotate(response);
+        Long userId = SessionUser.currentId(request);
+        if (userId != null)
+            BusinessEventLog.committed("user", "logout", "user", userId);
         return Result.success();
     }
 
-    /** 改密提升鉴权版本并撤销当前 Session，用户随后重新登录。 */
+    /** 改密提升鉴权版本，旧 JWT 失效。 */
     @PostMapping("/password")
     public Result<Void> changePassword(@Valid @RequestBody ChangePasswordDTO body,
-                                       HttpServletRequest request) {
+                                       HttpServletRequest request, HttpServletResponse response) {
         accountService.changePassword(SessionUser.requireId(request), body.oldPassword(), body.newPassword());
-        request.getSession(false).invalidate();
+        jwt.clearCookie(response);
+        browserFlow.rotate(response);
         return Result.success();
     }
 
-    /** 依据现有 Session 查询当前启用中的账号。 */
+    /** 查询当前启用中的账号。 */
     @GetMapping("/me")
     public Result<UserInfoVO> me(HttpServletRequest request) {
         return Result.success(accountService.currentUser(SessionUser.requireId(request)));

@@ -10,24 +10,21 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "shop.account.deletion-request-enabled=true",
-        "spring.session.data.redis.namespace=shiwushop:session:deletion-http"})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "shop.account.deletion-request-enabled=true")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AccountDeletionRequestHttpTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired StringRedisTemplate redis;
-    @Autowired FindByIndexNameSessionRepository<? extends Session> sessions;
     final ObjectMapper json = new ObjectMapper();
     TestAccounts fixtures;
     TestAccounts.Account user;
@@ -43,9 +40,7 @@ class AccountDeletionRequestHttpTest {
     @AfterEach
     void cleanup() {
         for (long id : new long[] {user.id(), other.id()}) {
-            for (String sessionId : sessions.findByPrincipalName(Long.toString(id)).keySet())
-                sessions.deleteById(sessionId);
-            redis.delete("shiwushop:auth:state:" + id);
+            redis.delete(List.of("shiwushop:auth:state:" + id, "shiwushop:auth:logins:" + id));
             jdbc.update("DELETE FROM account_deletion_requests WHERE user_id=?", id);
         }
         fixtures.close();

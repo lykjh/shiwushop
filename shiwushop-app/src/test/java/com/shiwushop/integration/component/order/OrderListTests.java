@@ -34,6 +34,7 @@ import java.util.List;
 
 import tools.jackson.databind.ObjectMapper;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,7 +81,7 @@ class OrderListTests {
         Long cursor = null;
         ArrayList<Long> seen = new ArrayList<>();
         while (true) {
-            var request = get("/orders").param("size", "5").session(session);
+            var request = get("/orders").param("size", "5").with(withMockLogin(session));
             if (cursor != null)
                 request.param("afterId", cursor.toString());
             var response = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
@@ -112,7 +113,7 @@ class OrderListTests {
         session.setAttribute("userId", buyer);
 
         mockMvc.perform(get("/orders")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/orders?size=1").session(session))
+        mockMvc.perform(get("/orders?size=1").with(withMockLogin(session)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").doesNotExist())
                 .andExpect(jsonPath("$.data.items.length()").value(1))
@@ -122,21 +123,21 @@ class OrderListTests {
                 .andExpect(jsonPath("$.data.nextCursor").value(newer.getId()));
         order(buyer, shop.getId());
         mockMvc.perform(get("/orders").param("afterId", newer.getId().toString())
-                        .param("size", "1").session(session))
+                        .param("size", "1").with(withMockLogin(session)))
                 .andExpect(jsonPath("$.data.items[0].id").value(older.getId()))
                 .andExpect(jsonPath("$.data.hasMore").value(false));
-        mockMvc.perform(get("/orders?page=0").session(session)).andExpect(status().isBadRequest());
-        mockMvc.perform(get("/orders?page=2").session(session)).andExpect(status().isBadRequest());
-        mockMvc.perform(get("/orders?includeTotal=true").session(session)).andExpect(status().isBadRequest());
-        mockMvc.perform(get("/orders").param("afterId", foreign.getId().toString()).session(session))
+        mockMvc.perform(get("/orders?page=0").with(withMockLogin(session))).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders?page=2").with(withMockLogin(session))).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders?includeTotal=true").with(withMockLogin(session))).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders").param("afterId", foreign.getId().toString()).with(withMockLogin(session)))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(get("/orders?afterId=0").session(session)).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders?afterId=0").with(withMockLogin(session))).andExpect(status().isBadRequest());
         UserAccount account = accountMapper.selectById(buyer);
         account.setStatus(AccountStatus.DISABLED);
         accountMapper.updateById(account);
         // Fixture SQL bypasses the service's cache invalidation.
         redis.delete("shiwushop:auth:state:" + buyer);
-        mockMvc.perform(get("/orders").session(session)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/orders").with(withMockLogin(session))).andExpect(status().isUnauthorized());
     }
 
     private Long user() {

@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+if (-not $env:SHOP_AUTH_JWT_SECRET) { throw 'Set a shared test SHOP_AUTH_JWT_SECRET before starting system test apps' }
 Set-Location (Join-Path $PSScriptRoot '../..')
 $root = (Get-Location).Path
 $builtJar = Join-Path $root 'shiwushop-app/target/shiwushop-app-1.0-SNAPSHOT.jar'
@@ -21,6 +22,7 @@ foreach ($instance in 1,2) {
         '--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
         '--shop.search.url=http://127.0.0.1:29200','--shop.search.discovery-enabled=false','--shop.search.worker-enabled=false',
         '--shop.alipay.app-id=','--shop.alipay.seller-id=','--shop.alipay.private-key-path=','--shop.alipay.public-key=',
+        '--shop.auth.jwt.cookie-path=/','--shop.auth.jwt.cookie-secure=false',
         '--shop.shipment.rocket-enabled=true',
         '--shop.shipment.simulation-enabled=true',
         '--shop.shipment.rocket-name-server=localhost:29876','--shop.shipment.expiry-enabled=false',

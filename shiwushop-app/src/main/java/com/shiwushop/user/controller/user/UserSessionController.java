@@ -24,7 +24,7 @@ public class UserSessionController {
 
     @GetMapping
     public Result<List<UserSessionService.SessionView>> list(HttpServletRequest request) {
-        return Result.success(sessions.list(SessionUser.requireId(request), request.getSession(false)));
+        return Result.success(sessions.list(SessionUser.require(request)));
     }
 
     @PostMapping("/send-code")
@@ -36,13 +36,13 @@ public class UserSessionController {
     @PostMapping("/{sessionRef}/revoke")
     public Result<Void> revoke(@PathVariable String sessionRef, @Valid @RequestBody AccountProofDTO body,
                                HttpServletRequest request) {
-        sessions.revoke(SessionUser.requireId(request), request.getSession(false), sessionRef, body);
+        sessions.revoke(SessionUser.require(request), sessionRef, body);
         return Result.success();
     }
 
     @PostMapping("/revoke-others")
     public Result<Void> revokeOthers(@Valid @RequestBody AccountProofDTO body, HttpServletRequest request) {
-        sessions.revokeOthers(SessionUser.requireId(request), request.getSession(false), body);
+        sessions.revokeOthers(SessionUser.require(request), body);
         return Result.success();
     }
 }

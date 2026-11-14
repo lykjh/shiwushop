@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,7 +64,7 @@ class AddressCreateTests {
         String valid = body("正常", 0);
         mockMvc.perform(post("/addresses").contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/addresses").session(session(user()))
+        mockMvc.perform(post("/addresses").with(withMockLogin(session(user())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("consignee", "张三", "phone", "13800138000",
                                 "address", "旧版完整地址"))))
@@ -71,7 +72,7 @@ class AddressCreateTests {
     }
 
     private long create(MockHttpSession session, String detail, int isDefault) throws Exception {
-        String response = mockMvc.perform(post("/addresses").session(session)
+        String response = mockMvc.perform(post("/addresses").with(withMockLogin(session))
                         .contentType(MediaType.APPLICATION_JSON).content(body(detail, isDefault)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.consignee").value("张三"))

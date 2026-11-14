@@ -33,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -76,7 +77,7 @@ class MerchantOrderDetailTests {
         skuMapper.updateById(sku);
 
         mockMvc.perform(get("/merchant/shops/{shopId}/orders/{orderId}", shop.getId(), order.getId())
-                        .session(session(owner)))
+                        .with(withMockLogin(session(owner))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(order.getId()))
                 .andExpect(jsonPath("$.data.shopName").value(shop.getName()))
@@ -105,26 +106,26 @@ class MerchantOrderDetailTests {
 
         mockMvc.perform(get(path, shop.getId(), order.getId()))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get(path, shop.getId(), order.getId()).session(session(otherMerchant)))
+        mockMvc.perform(get(path, shop.getId(), order.getId()).with(withMockLogin(session(otherMerchant))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get(path, shop.getId(), otherOrder.getId()).session(session(owner)))
+        mockMvc.perform(get(path, shop.getId(), otherOrder.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get(path, shop.getId(), Long.MAX_VALUE).session(session(owner)))
+        mockMvc.perform(get(path, shop.getId(), Long.MAX_VALUE).with(withMockLogin(session(owner))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get(path, shop.getId(), 0).session(session(owner)))
+        mockMvc.perform(get(path, shop.getId(), 0).with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(get(path, 0, order.getId()).session(session(owner)))
+        mockMvc.perform(get(path, 0, order.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
 
         Shop ordinaryShop = shop(ordinary, 1);
-        mockMvc.perform(get(path, ordinaryShop.getId(), order.getId()).session(session(ordinary)))
+        mockMvc.perform(get(path, ordinaryShop.getId(), order.getId()).with(withMockLogin(session(ordinary))))
                 .andExpect(status().isForbidden());
 
         shop.setOwnerUserId(otherMerchant);
         shopMapper.updateById(shop);
-        mockMvc.perform(get(path, shop.getId(), order.getId()).session(session(owner)))
+        mockMvc.perform(get(path, shop.getId(), order.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get(path, shop.getId(), order.getId()).session(session(otherMerchant)))
+        mockMvc.perform(get(path, shop.getId(), order.getId()).with(withMockLogin(session(otherMerchant))))
                 .andExpect(status().isOk());
     }
 

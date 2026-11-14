@@ -8,7 +8,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.annotation.Repeat;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -20,6 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static com.shiwushop.support.MockBrowserFlow.withBrowserFlow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -58,7 +58,7 @@ class UserRegisterTests {
         assertEquals(0, countAccounts(bad));
 
         String noProof = "buyer_" + UUID.randomUUID().toString().replace("-", "");
-        mockMvc.perform(post("/users/register").remoteAddress(remoteAddress)
+        mockMvc.perform(post("/users/register").with(withBrowserFlow(UUID.randomUUID().toString())).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(noProof, "asdfg123456")))
                 .andExpect(status().isForbidden());
@@ -140,7 +140,7 @@ class UserRegisterTests {
     @Test
     void missingProofRequiresCaptcha() throws Exception {
         String username = "buyer_" + UUID.randomUUID().toString().replace("-", "");
-        mockMvc.perform(post("/users/register").remoteAddress(remoteAddress)
+        mockMvc.perform(post("/users/register").with(withBrowserFlow(UUID.randomUUID().toString())).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(username, "Shop123!")))
                 .andExpect(status().isForbidden())
@@ -148,31 +148,26 @@ class UserRegisterTests {
     }
 
     @Test
-    void registrationProofCannotBeReusedOrUsedByAnotherSession() throws Exception {
-        MockHttpSession owner = new MockHttpSession();
-        String proof = proofs.issue("register-" + UUID.randomUUID(), owner.getId());
+    void registrationProofCanOnlyBeUsedOnceByItsOwner() throws Exception {
+        String owner = UUID.randomUUID().toString();
+        String proof = proofs.issue("register-" + UUID.randomUUID(), owner);
         String first = "buyer_" + UUID.randomUUID().toString().replace("-", "");
         String second = "buyer_" + UUID.randomUUID().toString().replace("-", "");
-        mockMvc.perform(post("/users/register").session(new MockHttpSession()).remoteAddress(remoteAddress)
+        mockMvc.perform(post("/users/register").with(withBrowserFlow(UUID.randomUUID().toString())).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(body(first, "Shop123!", proof)))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(post("/users/register").session(owner).remoteAddress(remoteAddress)
+        mockMvc.perform(post("/users/register").with(withBrowserFlow(owner)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(body(first, "Shop123!", proof)))
-                .andExpect(status().isBadRequest());
-
-        String freshProof = proofs.issue("register-" + UUID.randomUUID(), owner.getId());
-        mockMvc.perform(post("/users/register").session(owner).remoteAddress(remoteAddress)
-                        .contentType(MediaType.APPLICATION_JSON).content(body(first, "Shop123!", freshProof)))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/users/register").session(owner).remoteAddress(remoteAddress)
-                        .contentType(MediaType.APPLICATION_JSON).content(body(second, "Shop123!", freshProof)))
+        mockMvc.perform(post("/users/register").with(withBrowserFlow(owner)).remoteAddress(remoteAddress)
+                        .contentType(MediaType.APPLICATION_JSON).content(body(second, "Shop123!", proof)))
                 .andExpect(status().isBadRequest());
     }
 
     private MockHttpServletRequestBuilder register(String username, String password) {
-        MockHttpSession session = new MockHttpSession();
-        String proof = proofs.issue("register-" + UUID.randomUUID(), session.getId());
-        return post("/users/register").session(session).remoteAddress(remoteAddress)
+        String session = UUID.randomUUID().toString();
+        String proof = proofs.issue("register-" + UUID.randomUUID(), session);
+        return post("/users/register").with(withBrowserFlow(session)).remoteAddress(remoteAddress)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body(username, password, proof));
     }

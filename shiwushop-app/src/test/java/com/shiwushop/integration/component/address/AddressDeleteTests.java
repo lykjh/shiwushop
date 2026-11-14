@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -46,16 +47,16 @@ class AddressDeleteTests {
         Long userId = user();
         AddressVO address = addressService.create(userId, dto());
 
-        mockMvc.perform(delete("/addresses/{id}", address.getId()).session(session(userId)))
+        mockMvc.perform(delete("/addresses/{id}", address.getId()).with(withMockLogin(session(userId))))
                 .andExpect(status().isOk());
         assertNotNull(jdbcTemplate.queryForObject(
                 "SELECT deleted_at FROM addresses WHERE id = ?", java.time.LocalDateTime.class, address.getId()));
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT is_default FROM addresses WHERE id = ?", Integer.class, address.getId()));
-        mockMvc.perform(get("/addresses").session(session(userId)))
+        mockMvc.perform(get("/addresses").with(withMockLogin(session(userId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
-        mockMvc.perform(delete("/addresses/{id}", address.getId()).session(session(userId)))
+        mockMvc.perform(delete("/addresses/{id}", address.getId()).with(withMockLogin(session(userId))))
                 .andExpect(status().isNotFound());
         AddressVO replacement = addressService.create(userId, dto());
         assertEquals(1, jdbcTemplate.queryForObject(
@@ -66,7 +67,7 @@ class AddressDeleteTests {
     void rejectsOtherOwnerAndAnonymousDelete() throws Exception {
         Long ownerId = user();
         AddressVO address = addressService.create(ownerId, dto());
-        mockMvc.perform(delete("/addresses/{id}", address.getId()).session(session(user())))
+        mockMvc.perform(delete("/addresses/{id}", address.getId()).with(withMockLogin(session(user()))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(delete("/addresses/{id}", address.getId()))
                 .andExpect(status().isUnauthorized());

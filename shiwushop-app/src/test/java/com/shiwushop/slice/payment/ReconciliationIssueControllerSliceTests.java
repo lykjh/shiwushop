@@ -14,6 +14,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -40,7 +41,7 @@ class ReconciliationIssueControllerSliceTests {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
         when(auth.requireAdmin(any())).thenReturn(7L);
-        mvc.perform(post("/admin/payment-reconciliation/issues/10/claim").session(session).with(csrf()))
+        mvc.perform(post("/admin/payment-reconciliation/issues/10/claim").with(withMockLogin(session)).with(csrf().asHeader()))
                 .andExpect(status().isOk());
     }
 
@@ -48,13 +49,13 @@ class ReconciliationIssueControllerSliceTests {
     void rejectsInvalidEvidenceAndConclusionAtHttpBoundary() throws Exception {
         when(auth.requireAdmin(any())).thenReturn(7L);
         String root = "/admin/payment-reconciliation/issues/10";
-        mvc.perform(post(root + "/evidence").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(root + "/evidence").with(csrf().asHeader()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"billEvidence\":\"  \",\"localEvidence\":\"x\",\"channelQueryEvidence\":\"y\"}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post(root + "/resolve").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(root + "/resolve").with(csrf().asHeader()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"evidenceId\":1,\"conclusionType\":\"OTHER\",\"conclusion\":\"x\"}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/admin/payment-reconciliation/issues/0/claim").with(csrf()))
+        mvc.perform(post("/admin/payment-reconciliation/issues/0/claim").with(csrf().asHeader()))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(issues);
     }

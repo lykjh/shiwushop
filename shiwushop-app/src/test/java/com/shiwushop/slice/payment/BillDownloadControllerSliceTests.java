@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -37,7 +38,7 @@ class BillDownloadControllerSliceTests {
         var session = new MockHttpSession();
         session.setAttribute("userId", 7L);
         when(auth.requireAdmin(any())).thenReturn(7L);
-        mvc.perform(post("/admin/payment-bills").session(session).with(csrf())
+        mvc.perform(post("/admin/payment-bills").with(withMockLogin(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"billDate\":\"2026-10-01\"}"))
                 .andExpect(status().isOk());
     }

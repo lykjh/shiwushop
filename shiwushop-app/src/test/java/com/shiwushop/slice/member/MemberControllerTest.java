@@ -16,6 +16,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,7 +46,7 @@ class MemberControllerTest {
     void identityComesFromSessionNotQueryParameter() throws Exception {
         var session = new MockHttpSession();
         session.setAttribute("userId", 42L);
-        mvc.perform(get("/members/me").session(session).param("userId", "99")).andExpect(status().isOk());
+        mvc.perform(get("/members/me").with(withMockLogin(session)).param("userId", "99")).andExpect(status().isOk());
         verify(accounts).overview(42L);
     }
 
@@ -54,7 +55,7 @@ class MemberControllerTest {
     void invalidPageSizeStopsAtHttpBoundary(String size) throws Exception {
         var session = new MockHttpSession();
         session.setAttribute("userId", 42L);
-        mvc.perform(get("/members/me/point-entries").session(session).param("limit", size))
+        mvc.perform(get("/members/me/point-entries").with(withMockLogin(session)).param("limit", size))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(accounts);
     }
@@ -67,7 +68,7 @@ class MemberControllerTest {
                                                           String value) throws Exception {
         var session = new MockHttpSession();
         session.setAttribute("userId", 42L);
-        mvc.perform(get("/members/me/" + path).session(session).param(parameter, value))
+        mvc.perform(get("/members/me/" + path).with(withMockLogin(session)).param(parameter, value))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(accounts);
     }

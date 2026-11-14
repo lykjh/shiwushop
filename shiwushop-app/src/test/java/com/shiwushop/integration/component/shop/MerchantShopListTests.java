@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,7 +47,7 @@ class MerchantShopListTests {
         Shop paused = shop(owner, 0);
         Shop foreign = shop(user("MERCHANT"), 1);
 
-        mockMvc.perform(get("/merchant/shops").session(session(owner)))
+        mockMvc.perform(get("/merchant/shops").with(withMockLogin(session(owner))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == " + open.getId() + ")].enabled").value(hasItem(1)))
                 .andExpect(jsonPath("$.data[?(@.id == " + paused.getId() + ")].enabled").value(hasItem(0)))
@@ -57,11 +58,11 @@ class MerchantShopListTests {
     void requiresMerchantLogin() throws Exception {
         mockMvc.perform(get("/merchant/shops"))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/merchant/shops").session(session(user("USER"))))
+        mockMvc.perform(get("/merchant/shops").with(withMockLogin(session(user("USER")))))
                 .andExpect(status().isForbidden());
         Long disabled = user("MERCHANT");
         jdbcTemplate.update("UPDATE user_accounts SET status = 'DISABLED' WHERE user_id = ?", disabled);
-        mockMvc.perform(get("/merchant/shops").session(session(disabled)))
+        mockMvc.perform(get("/merchant/shops").with(withMockLogin(session(disabled))))
                 .andExpect(status().isUnauthorized());
     }
 

@@ -1,12 +1,15 @@
 package com.shiwushop.user.controller.user;
 
 import com.shiwushop.common.Result;
+import com.shiwushop.common.auth.BrowserFlow;
+import com.shiwushop.user.auth.JwtLogin;
 import com.shiwushop.user.dto.user.PasswordResetDTO;
 import com.shiwushop.user.dto.user.SmsCodeDTO;
 import com.shiwushop.user.dto.user.SmsPhoneDTO;
 import com.shiwushop.user.service.PasswordResetService;
 import com.shiwushop.user.vo.user.PasswordResetVerifyVO;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class PasswordResetController {
     private final PasswordResetService service;
+    private final JwtLogin jwt;
+    private final BrowserFlow browserFlow;
 
     /** 校验手机号格式后发送找回码，不通过发送结果公开手机号是否已绑定。 */
     @PostMapping("/send")
@@ -31,12 +36,13 @@ public class PasswordResetController {
         return Result.success(service.verify(body.phone(), body.code(), request));
     }
 
-    /** 事务提交后退出当前登录态；保留匿名 Session，避免并发请求保存已删除会话时报错。 */
+    /** 密码重设提交后清除登录 Cookie。 */
     @PostMapping
-    public Result<Void> reset(@Valid @RequestBody PasswordResetDTO body, HttpServletRequest request) {
+    public Result<Void> reset(@Valid @RequestBody PasswordResetDTO body, HttpServletRequest request,
+                              HttpServletResponse response) {
         service.reset(body.resetTicket(), body.newPassword(), request);
-        request.getSession(false).removeAttribute("userId");
-        request.getSession(false).removeAttribute("authVersion");
+        jwt.clearCookie(response);
+        browserFlow.rotate(response);
         return Result.success();
     }
 }

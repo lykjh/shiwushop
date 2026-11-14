@@ -8,6 +8,7 @@ import com.shiwushop.user.vo.user.LoginVO;
 import com.shiwushop.user.vo.user.SmsEntryVerifyVO;
 import com.shiwushop.common.Result;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,13 +32,15 @@ public class SmsEntryController {
 
     /** 已绑定账号直接登录；未绑定账号返回短期设密码票据。 */
     @PostMapping("/verify")
-    public Result<SmsEntryVerifyVO> verify(@Valid @RequestBody SmsCodeDTO body, HttpServletRequest request) {
-        return Result.success(entry.verify(body.phone(), body.code(), request));
+    public Result<SmsEntryVerifyVO> verify(@Valid @RequestBody SmsCodeDTO body, HttpServletRequest request,
+                                         HttpServletResponse response) {
+        return Result.success(entry.verify(body.phone(), body.code(), request, response));
     }
 
     /** 首次设密码后创建普通用户并立即登录。 */
     @PostMapping("/register")
-    public Result<LoginVO> register(@Valid @RequestBody SmsEntryRegisterDTO body, HttpServletRequest request) {
-        return Result.success(entry.register(body.phone(), body.registrationTicket(), body.password(), request));
+    public Result<LoginVO> register(@Valid @RequestBody SmsEntryRegisterDTO body, HttpServletRequest request,
+                                    HttpServletResponse response) {
+        return Result.success(entry.register(body.phone(), body.registrationTicket(), body.password(), request, response));
     }
 }

@@ -1,5 +1,6 @@
 package com.shiwushop.user.auth;
 
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.auth.RateLimiter;
 
 import com.shiwushop.common.BusinessException;
@@ -76,10 +77,9 @@ public class AuthRiskLimiter {
         return PREFIX + "account:fail:rolling:5m:" + rateLimiter.digest(username.toLowerCase(Locale.ROOT));
     }
 
-    /** 根据当前 Session ID 生成摘要键；原始会话标识不写入 Redis 键名。 */
+    /** 浏览器维度使用匿名标识的摘要，沿用现有风控键格式。 */
     private String sessionKey(HttpServletRequest request) {
-        // Session 失败历史跟随 Session，客户端换 IP 不会重置这条信号。
-        return PREFIX + "session:" + rateLimiter.digest(request.getSession(true).getId());
+        return PREFIX + "session:" + rateLimiter.digest(BrowserFlow.requireId(request));
     }
 
     /** 将请求出口与归一化浏览器类别合并为共享流量信号，不保存完整 IP 或 UA。 */
@@ -251,7 +251,7 @@ public class AuthRiskLimiter {
                         shared + ":register:session-attempts",
                         shared + ":register:session-attempt-index"),
                 "register".equals(action), WINDOW_MS, maxTrackedSessions,
-                rateLimiter.digest(request.getSession(true).getId()));
+                rateLimiter.digest(BrowserFlow.requireId(request)));
         request.setAttribute(PREFIX + action + ":bucket", risk.bucket());
         return risk;
     }

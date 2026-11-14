@@ -36,9 +36,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** 真实 HTTP、MySQL、Redis 和 Session；仅替换收费短信，故障用例单独注明注入边界。 */
+/** 真实 HTTP、MySQL 和 Redis；仅替换收费短信，故障用例单独注明注入边界。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "spring.session.data.redis.namespace=shiwushop:session:password-reset-http",
+        // This suite sends many independent fixtures through one loopback address.
+        "shop.sms.ip-burst=100",
+        "shop.sms.entry-global-burst=100",
         "shop.sms.lookup-key-base64=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
         "shop.privacy.key-v1-base64=QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -147,7 +149,7 @@ class PasswordResetHttpTest {
     }
 
     @Test
-    void crossSessionAndRegistrationProofsAreRejectedWithoutSpendingOwnersTicket() throws Exception {
+    void crossBrowserAndRegistrationProofsAreRejectedWithoutSpendingOwnersTicket() throws Exception {
         try (var owner = new HttpAccountClient(base); var stranger = new HttpAccountClient(base)) {
             String ticket = obtainTicket(owner);
             stranger.csrf();
@@ -202,7 +204,7 @@ class PasswordResetHttpTest {
             String messages = captured.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
                     .collect(java.util.stream.Collectors.joining("\n"));
             assertTrue(messages.contains("action=password_reset"));
-            for (String secret : List.of(phone, code.get(), ticket, "Shop456!", "MALLSESSION="))
+            for (String secret : List.of(phone, code.get(), ticket, "Shop456!", client.browserId(), "MALLAUTH="))
                 assertFalse(messages.contains(secret));
         } finally {
             logger.detachAppender(captured);
@@ -314,17 +316,15 @@ class PasswordResetHttpTest {
         try (var owner = new HttpAccountClient(base); var raw = HttpClient.newHttpClient();
              var pool = Executors.newFixedThreadPool(2)) {
             String ticket = obtainTicket(owner);
-            var csrfResponse = owner.get("/users/csrf");
-            String csrf = json.readTree(csrfResponse.body()).path("data").asString();
-            String cookie = Base64.getEncoder()
-                    .encodeToString(owner.sessionId().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String csrf = owner.csrfToken();
+            String cookie = owner.cookieHeader("/users/password/reset");
             var start = new CyclicBarrier(2);
             List<Future<Integer>> results = new ArrayList<>();
             for (String password : List.of("Shop456!", "Shop789!")) {
                 results.add(pool.submit(() -> {
                     start.await(5, TimeUnit.SECONDS);
                     return raw.send(HttpRequest.newBuilder(URI.create(base + "/users/password/reset"))
-                                    .header("Cookie", "MALLSESSION=" + cookie).header("X-CSRF-TOKEN", csrf)
+                                    .header("Cookie", cookie).header("X-CSRF-TOKEN", csrf)
                                     .header("Content-Type", "application/json")
                                     .POST(HttpRequest.BodyPublishers.ofString(
                                             json.writeValueAsString(Map.of("resetTicket", ticket, "newPassword", password))))
@@ -339,6 +339,38 @@ class PasswordResetHttpTest {
             assertTrue(statuses.stream().allMatch(s -> s == 200 || s == 401), statuses.toString());
             assertEquals(1, jdbc.queryForObject("SELECT auth_version FROM user_accounts WHERE user_id=?", Integer.class,
                     account.id()));
+        }
+    }
+
+    @Test
+    void newerTicketSupersedesResetThatAlreadyReadOldTicket() throws Exception {
+        var reachedAccountLock = new CountDownLatch(1);
+        var resumeReset = new CountDownLatch(1);
+        UserAccountMapper realMapper = sql.getMapper(UserAccountMapper.class);
+        doAnswer(call -> {
+            reachedAccountLock.countDown();
+            assertTrue(resumeReset.await(5, TimeUnit.SECONDS));
+            return realMapper.lockById(call.getArgument(0));
+        }).when(accounts).lockById(account.id());
+        try (var client = new HttpAccountClient(base); var pool = Executors.newSingleThreadExecutor()) {
+            String oldTicket = obtainTicket(client);
+            var pending = pool.submit(() -> client.post("/users/password/reset",
+                    Map.of("resetTicket", oldTicket, "newPassword", "Shop456!")));
+            String latest;
+            try {
+                assertTrue(reachedAccountLock.await(5, TimeUnit.SECONDS));
+                redis.delete(prefix + ":cooldown");
+                latest = obtainTicket(client);
+            } finally {
+                resumeReset.countDown();
+            }
+            var rejected = pending.get(15, TimeUnit.SECONDS);
+            assertEquals(401, rejected.statusCode(), rejected.body());
+            assertEquals(0, jdbc.queryForObject("SELECT auth_version FROM user_accounts WHERE user_id=?",
+                    Integer.class, account.id()));
+            var reset = client.post("/users/password/reset",
+                    Map.of("resetTicket", latest, "newPassword", "Shop789!"));
+            assertEquals(200, reset.statusCode(), reset.body());
         }
     }
 

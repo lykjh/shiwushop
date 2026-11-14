@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -55,13 +56,13 @@ class AdminProductStatusTests {
         Product product = product("ON_SALE");
         MockHttpSession admin = session(user("ADMIN"));
 
-        mockMvc.perform(request(product.getId(), "OFF_SALE").session(admin))
+        mockMvc.perform(request(product.getId(), "OFF_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(product.getId()))
                 .andExpect(jsonPath("$.data.status").value("OFF_SALE"));
         assertEquals(ProductStatus.OFF_SALE, productMapper.selectById(product.getId()).getStatus());
 
-        mockMvc.perform(request(product.getId(), "OFF_SALE").session(admin))
+        mockMvc.perform(request(product.getId(), "OFF_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isOk());
         assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
@@ -73,13 +74,13 @@ class AdminProductStatusTests {
         Product product = product("ON_SALE");
         MockHttpSession admin = session(user("ADMIN"));
 
-        mockMvc.perform(request(product.getId(), "ON_SALE").session(admin))
+        mockMvc.perform(request(product.getId(), "ON_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(request(product.getId(), "DRAFT").session(admin))
+        mockMvc.perform(request(product.getId(), "DRAFT").with(withMockLogin(admin)))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(request(Long.MAX_VALUE, "OFF_SALE").session(admin))
+        mockMvc.perform(request(Long.MAX_VALUE, "OFF_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(request(0L, "OFF_SALE").session(admin))
+        mockMvc.perform(request(0L, "OFF_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isBadRequest());
         assertEquals(ProductStatus.ON_SALE, productMapper.selectById(product.getId()).getStatus());
     }
@@ -91,7 +92,7 @@ class AdminProductStatusTests {
         mockMvc.perform(request(product.getId(), "OFF_SALE"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(request(product.getId(), "OFF_SALE")
-                        .session(merchant))
+                        .with(withMockLogin(merchant)))
                 .andExpect(status().isForbidden());
         assertEquals(ProductStatus.ON_SALE, productMapper.selectById(product.getId()).getStatus());
     }
@@ -99,7 +100,7 @@ class AdminProductStatusTests {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request(
             Long id, String nextStatus) {
         return put("/admin/products/{id}/status", id)
-                .with(csrf())
+                .with(csrf().asHeader())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"" + nextStatus + "\"}");
     }

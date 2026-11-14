@@ -46,7 +46,7 @@ class MerchantProductControllerTest {
     void rejectsInvalidProductBeforeBusinessService(Map.Entry<String, Object> field) throws Exception {
         Map<String, Object> body = new HashMap<>(Map.of("shopId", 1, "categoryId", 1, "name", "洁丽雅纯棉毛巾"));
         body.put(field.getKey(), field.getValue());
-        mvc.perform(post("/merchant/products").with(csrf()).contentType("application/json")
+        mvc.perform(post("/merchant/products").with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
@@ -64,7 +64,7 @@ class MerchantProductControllerTest {
     void rejectsInvalidSkuBeforeBusinessService(Map.Entry<String, Object> field) throws Exception {
         Map<String, Object> body = new HashMap<>(Map.of("optionValueIds", List.of(1), "price", "19.90", "stock", 5));
         body.put(field.getKey(), field.getValue());
-        mvc.perform(post("/merchant/products/1/skus").with(csrf()).contentType("application/json")
+        mvc.perform(post("/merchant/products/1/skus").with(csrf().asHeader()).contentType("application/json")
                         .content(json.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);

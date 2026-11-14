@@ -9,6 +9,7 @@ import com.shiwushop.user.dto.user.RegisterDTO;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
 import com.shiwushop.user.service.RegisterService;
+import com.shiwushop.user.auth.JwtLogin;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,12 +54,12 @@ class UserMeTests {
         Long userId = jdbcTemplate.queryForObject(
                 "SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
 
-        MockHttpSession session = (MockHttpSession) mockMvc.perform(
+        var jwt = mockMvc.perform(
                         LoginTestRequest.login(proofs, username, "Shop123!"))
                 .andExpect(status().isOk())
-                .andReturn().getRequest().getSession(false);
+                .andReturn().getResponse().getCookie(JwtLogin.COOKIE);
 
-        mockMvc.perform(get("/users/me").session(session))
+        mockMvc.perform(get("/users/me").cookie(jwt))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(userId))
                 .andExpect(jsonPath("$.data.username").value(username))
@@ -70,20 +71,20 @@ class UserMeTests {
                 .set(UserAccount::getStatus, "DISABLED"));
         // Fixture SQL bypasses the service's cache invalidation.
         redis.delete("shiwushop:auth:state:" + userId);
-        mockMvc.perform(get("/users/me").session(session))
+        mockMvc.perform(get("/users/me").cookie(jwt))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(401))
                 .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.message").value("请重新登录"));
+                .andExpect(jsonPath("$.message").value("请先登录"));
 
-        mockMvc.perform(post("/users/logout").session(session))
+        mockMvc.perform(post("/users/logout").cookie(jwt))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/users/me"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void missingOrStaleSessionReturnsUnauthorized() throws Exception {
+    void legacySessionCannotAuthenticateAndCanStillObtainCsrf() throws Exception {
         mockMvc.perform(get("/users/me"))
                 .andExpect(status().isUnauthorized());
 
@@ -95,7 +96,7 @@ class UserMeTests {
         MockHttpSession staleForCsrf = new MockHttpSession();
         staleForCsrf.setAttribute("userId", Long.MAX_VALUE);
         mockMvc.perform(get("/users/csrf").session(staleForCsrf))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isString());
     }
 }

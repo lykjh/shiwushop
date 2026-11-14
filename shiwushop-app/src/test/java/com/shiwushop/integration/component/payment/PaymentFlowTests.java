@@ -50,6 +50,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -120,7 +121,7 @@ class PaymentFlowTests {
         f.sku().setStock(1);
         skuMapper.updateById(f.sku());
         for (int i = 0; i < 2; i++) {
-            mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).session(session(f.buyer())))
+            mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).with(withMockLogin(session(f.buyer()))))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("CANCELLED"));
         }
         assertEquals(3, skuMapper.selectById(f.sku().getId()).getStock());
@@ -135,14 +136,14 @@ class PaymentFlowTests {
         var attempt = pendingAttempt(f, true);
         when(gateway.query(attempt.getOutTradeNo())).thenReturn(
                 new AlipayGateway.TradeResult("NOT_FOUND", attempt.getOutTradeNo(), null, null));
-        mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).session(session(f.buyer())))
+        mockMvc.perform(post("/orders/{id}/cancel", f.order().getId()).with(withMockLogin(session(f.buyer()))))
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.status").value("CANCEL_PENDING"));
         assertNotNull(orderMapper.selectById(f.order().getId()).getCancelRequestedAt());
-        mockMvc.perform(get("/orders/{id}", f.order().getId()).session(session(f.buyer())))
+        mockMvc.perform(get("/orders/{id}", f.order().getId()).with(withMockLogin(session(f.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("UNPAID"))
                 .andExpect(jsonPath("$.data.cancelPending").value(true));
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(f.order().getId()).getStatus());
-        mockMvc.perform(post("/orders/{id}/payment", f.order().getId()).session(session(f.buyer())))
+        mockMvc.perform(post("/orders/{id}/payment", f.order().getId()).with(withMockLogin(session(f.buyer()))))
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/payments/checkout/{outTradeNo}", attempt.getOutTradeNo()))
                 .andExpect(status().isConflict());
@@ -332,7 +333,7 @@ class PaymentFlowTests {
         Fixture fixture = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         when(gateway.channel()).thenReturn("ALIPAY");
         mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId())
-                        .session(session(fixture.buyer())))
+                        .with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.channel").value("ALIPAY"));
         var attempt = paymentMapper.selectLatest(fixture.order().getId());
@@ -344,12 +345,12 @@ class PaymentFlowTests {
         // 切换支付环境后，旧的待支付记录不能被新环境继续使用。
         when(gateway.channel()).thenReturn("ALIPAY_SANDBOX");
         mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId())
-                        .session(session(fixture.buyer())))
+                        .with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/payments/checkout/{outTradeNo}", attempt.getOutTradeNo()))
                 .andExpect(status().isConflict());
         mockMvc.perform(post("/orders/{id}/payment/sync", fixture.order().getId())
-                        .session(session(fixture.buyer())))
+                        .with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isConflict());
     }
 
@@ -360,9 +361,9 @@ class PaymentFlowTests {
         assertEquals(0L, productMapper.getSoldCount(fixture.product().getId()));
         mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).session(session(other)))
+        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).with(withMockLogin(session(other))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).session(session(fixture.buyer())))
+        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.payUrl", startsWith("http://localhost/payments/checkout/")));
         Long paymentId = paymentMapper.selectLatest(fixture.order().getId()).getId();
@@ -380,16 +381,16 @@ class PaymentFlowTests {
         verify(gateway, times(1)).qrCode(any(), any(), any());
         mockMvc.perform(get("/payments/checkout/missing"))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).session(session(fixture.buyer())))
+        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.paymentId").value(paymentId));
-        mockMvc.perform(get("/orders/{id}/payment", fixture.order().getId()).session(session(fixture.buyer())))
+        mockMvc.perform(get("/orders/{id}/payment", fixture.order().getId()).with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.orderStatus").value("UNPAID"));
         assertEquals(0L, productMapper.getSoldCount(fixture.product().getId()));
 
         when(gateway.query(outTradeNo)).thenReturn(new AlipayGateway.TradeResult(
                 "TRADE_SUCCESS", outTradeNo, "alipay-trade-1", new BigDecimal("20.00")));
         mockMvc.perform(post("/orders/{id}/payment/sync", fixture.order().getId())
-                        .session(session(fixture.buyer())))
+                        .with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.orderStatus").value("PAID"));
         assertNotNull(orderMapper.selectById(fixture.order().getId()).getPaidAt());
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
@@ -408,9 +409,9 @@ class PaymentFlowTests {
         assertEquals(1,
                 jdbc.queryForObject("SELECT COUNT(*) FROM payment_attempts WHERE order_id=? AND status='SUCCESS'",
                         Integer.class, fixture.order().getId()));
-        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).session(session(fixture.buyer())))
+        mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId()).with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isConflict());
-        mockMvc.perform(post("/orders/{id}/pay", fixture.order().getId()).session(session(fixture.buyer())))
+        mockMvc.perform(post("/orders/{id}/pay", fixture.order().getId()).with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isNotFound());
     }
 
@@ -435,17 +436,17 @@ class PaymentFlowTests {
         Fixture fixture = fixture(LocalDateTime.now(businessClock).plusMinutes(15));
         when(gateway.configured()).thenReturn(false);
         mockMvc.perform(post("/orders/{id}/payment", fixture.order().getId())
-                        .session(session(fixture.buyer())))
+                        .with(withMockLogin(session(fixture.buyer()))))
                 .andExpect(status().isServiceUnavailable());
         assertNull(paymentMapper.selectLatest(fixture.order().getId()));
 
         when(gateway.configured()).thenReturn(true);
         Fixture historical = fixture(null);
         mockMvc.perform(post("/orders/{id}/payment", historical.order().getId())
-                        .session(session(historical.buyer())))
+                        .with(withMockLogin(session(historical.buyer()))))
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/orders/{id}/payment", historical.order().getId())
-                        .session(session(historical.buyer())))
+                        .with(withMockLogin(session(historical.buyer()))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.payment").value((Object) null));
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(historical.order().getId()).getStatus());
     }

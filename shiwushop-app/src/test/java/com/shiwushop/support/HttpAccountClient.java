@@ -1,13 +1,17 @@
 package com.shiwushop.support;
 
+import com.shiwushop.user.auth.JwtLogin;
+import com.shiwushop.common.auth.BrowserFlow;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.net.*;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Base64;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 接口和系统测试共用的真实 HTTP 客户端；Cookie 与 CSRF 均由服务器签发。 */
 public final class HttpAccountClient implements AutoCloseable {
@@ -34,17 +38,39 @@ public final class HttpAccountClient implements AutoCloseable {
         csrf = json.readTree(response.body()).path("data").asString();
     }
 
-    public String sessionId() {
-        String value = cookies.getCookieStore().getCookies().stream()
-                .filter(c -> c.getName().equals("MALLSESSION")).findFirst().orElseThrow().getValue();
-        return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
+    public String browserId() {
+        return cookies.getCookieStore().getCookies().stream()
+                .filter(c -> c.getName().equals(BrowserFlow.INSECURE_COOKIE) || c.getName().equals(BrowserFlow.COOKIE))
+                .findFirst().orElseThrow().getValue().split("\\.")[0];
     }
 
-    public HttpResponse<String> post(String path, Map<String, Object> body) throws Exception {
+    public String csrfToken() {
+        return csrf;
+    }
+
+    public String cookieHeader(String path) throws IOException {
+        return cookies.get(URI.create(base + path), Map.of()).getOrDefault("Cookie", List.of())
+                .stream().collect(Collectors.joining("; "));
+    }
+
+    public String authToken() {
+        return cookies.getCookieStore().getCookies().stream()
+                .filter(c -> c.getName().equals(JwtLogin.COOKIE)).findFirst().map(HttpCookie::getValue).orElse(null);
+    }
+
+    public HttpResponse<String> replayAuthToken(String path, String token) throws Exception {
+        try (var replay = HttpClient.newHttpClient()) {
+            return replay.send(HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(15))
+                    .header("Cookie", JwtLogin.COOKIE + "=" + token).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+        }
+    }
+
+    public HttpResponse<String> post(String path, Map<String, ?> body) throws Exception {
         return post(path, body, true);
     }
 
-    public HttpResponse<String> post(String path, Map<String, Object> body, boolean withCsrf) throws Exception {
+    public HttpResponse<String> post(String path, Map<String, ?> body, boolean withCsrf) throws Exception {
         return request("POST", path, body, withCsrf, Map.of());
     }
 
@@ -54,6 +80,17 @@ public final class HttpAccountClient implements AutoCloseable {
 
     public HttpResponse<String> request(String method, String path, Object body, boolean withCsrf,
                                         Map<String, String> headers) throws Exception {
+        if (withCsrf)
+            csrf();
+        return send(method, path, body, withCsrf, headers);
+    }
+
+    public HttpResponse<String> postWithCurrentCsrf(String path, Map<String, ?> body) throws Exception {
+        return send("POST", path, body, true, Map.of());
+    }
+
+    private HttpResponse<String> send(String method, String path, Object body, boolean withCsrf,
+                                      Map<String, String> headers) throws Exception {
         var request = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(15))
                 .header("Content-Type", "application/json");
         if (withCsrf && csrf != null)
@@ -74,6 +111,7 @@ public final class HttpAccountClient implements AutoCloseable {
     }
 
     public HttpResponse<String> upload(String path, byte[] bytes, String filename, String mime) throws Exception {
+        csrf();
         String boundary = "shiwushop-http-boundary";
         var body = new java.io.ByteArrayOutputStream();
         body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + filename +

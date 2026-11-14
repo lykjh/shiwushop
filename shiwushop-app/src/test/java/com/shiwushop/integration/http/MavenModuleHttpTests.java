@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 真实 HTTP 检查 app 对 common/core/search 的装配，不使用 Controller 或业务替身。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "spring.session.data.redis.namespace=shiwushop:session:maven-module-http",
         "shop.search.discovery-enabled=false", "shop.search.worker-enabled=false"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MavenModuleHttpTests {
@@ -43,10 +42,10 @@ class MavenModuleHttpTests {
     }
 
     @Test
-    void appSecurityAndRedisSessionStillIssueCsrf() throws Exception {
+    void appSecurityIssuesCsrfAndBrowserCookieWithoutLogin() throws Exception {
         try (var client = new HttpAccountClient("http://127.0.0.1:" + port)) {
             client.csrf();
-            assertFalse(client.sessionId().isBlank());
+            assertFalse(client.browserId().isBlank());
             assertEquals(401, client.get("/users/me").statusCode());
         }
     }

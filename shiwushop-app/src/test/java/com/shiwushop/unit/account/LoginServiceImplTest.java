@@ -1,6 +1,5 @@
 package com.shiwushop.unit.account;
 
-import com.shiwushop.user.service.AccountAccess;
 import com.shiwushop.user.auth.*;
 import com.shiwushop.user.dto.user.LoginDTO;
 import com.shiwushop.user.entity.status.*;
@@ -8,11 +7,14 @@ import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
 import com.shiwushop.user.service.impl.LoginServiceImpl;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.captcha.CaptchaService;
+import com.shiwushop.support.MockBrowserFlow;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,12 +23,14 @@ import static org.mockito.Mockito.*;
 
 class LoginServiceImplTest {
     final UserAccountMapper accounts = mock(UserAccountMapper.class);
-    final AccountAccess access = mock(AccountAccess.class);
+    final JwtLogin jwt = mock(JwtLogin.class);
     final LoginRateLimiter ingress = mock(LoginRateLimiter.class);
     final AuthRiskLimiter risk = mock(AuthRiskLimiter.class);
     final CaptchaService captcha = mock(CaptchaService.class);
-    final LoginServiceImpl service = new LoginServiceImpl(accounts, access, ingress, risk, captcha);
+    final BrowserFlow browserFlow = mock(BrowserFlow.class);
+    final LoginServiceImpl service = new LoginServiceImpl(accounts, jwt, ingress, risk, captcha, browserFlow);
     final MockHttpServletRequest request = new MockHttpServletRequest();
+    final MockHttpServletResponse response = new MockHttpServletResponse();
     UserAccount account;
     LoginDTO dto;
 
@@ -40,18 +44,18 @@ class LoginServiceImplTest {
         account.setAuthVersion(3);
         account.setPasswordHash(new BCryptPasswordEncoder().encode("Shop123!"));
         when(accounts.selectOne(any())).thenReturn(account);
-        when(access.requireActive(42L)).thenReturn(account);
         request.setRemoteAddr("198.51.100.15");
+        MockBrowserFlow.bind(request);
         dto = new LoginDTO("buyer_zhang", "Shop123!", null);
     }
 
     @Test
-    void successRotatesSessionAndSetsOnlyVerifiedIdentity() {
-        String before = request.getSession(true).getId();
-        assertEquals(42L, service.login(dto, request).getId());
-        assertNotEquals(before, request.getSession().getId());
-        assertEquals(42L, request.getSession().getAttribute("userId"));
-        assertEquals(3, request.getSession().getAttribute("authVersion"));
+    void successIssuesJwtThenRotatesAnonymousBrowserIdWithoutCreatingSession() {
+        assertEquals(42L, service.login(dto, request, response).getId());
+        assertNull(request.getSession(false));
+        var ordered = inOrder(jwt, browserFlow);
+        ordered.verify(jwt).start(42L, 3, request, response);
+        ordered.verify(browserFlow).rotate(response);
         verify(risk).recordLoginSuccess("buyer_zhang", request);
         verify(risk, never()).recordLoginFailure(anyString(), any());
     }
@@ -84,33 +88,38 @@ class LoginServiceImplTest {
     @Test
     void highRiskRequiresProofBeforeReadingAccount() {
         when(risk.loginRequiresCaptcha(anyString(), any())).thenReturn(true);
-        assertEquals(403, assertThrows(BusinessException.class, () -> service.login(dto, request)).getCode());
+        assertEquals(403, assertThrows(BusinessException.class, () -> service.login(dto, request, response)).getCode());
         verifyNoInteractions(accounts);
-        assertNull(request.getSession().getAttribute("userId"));
+        verifyNoInteractions(jwt);
+        assertNull(request.getSession(false));
     }
 
     @Test
     void submittedProofIsValidatedEvenAtLowRisk() {
         dto.setCaptchaProof("invalid");
         doThrow(new BusinessException(400, "滑块验证已失效")).when(captcha).consumeLoginProof(anyString(), anyString());
-        assertEquals(400, assertThrows(BusinessException.class, () -> service.login(dto, request)).getCode());
+        assertEquals(400, assertThrows(BusinessException.class, () -> service.login(dto, request, response)).getCode());
         verifyNoInteractions(accounts);
-        assertNull(request.getSession().getAttribute("userId"));
+        verifyNoInteractions(jwt);
+        assertNull(request.getSession(false));
     }
 
     @Test
     void redisRiskOutageCannotGrantIdentity() {
         when(risk.loginRequiresCaptcha(anyString(), any())).thenThrow(new BusinessException(503, "风险服务不可用"));
-        assertEquals(503, assertThrows(BusinessException.class, () -> service.login(dto, request)).getCode());
+        assertEquals(503, assertThrows(BusinessException.class, () -> service.login(dto, request, response)).getCode());
         verifyNoInteractions(accounts);
-        assertNull(request.getSession().getAttribute("userId"));
+        verifyNoInteractions(jwt);
+        assertNull(request.getSession(false));
     }
 
     private void assertFailure() {
-        var error = assertThrows(BusinessException.class, () -> service.login(dto, request));
+        var error = assertThrows(BusinessException.class, () -> service.login(dto, request, response));
         assertEquals(401, error.getCode());
         assertEquals("账号或密码错误", error.getMessage());
-        assertNull(request.getSession().getAttribute("userId"));
+        assertNull(request.getSession(false));
+        verifyNoInteractions(jwt);
+        verifyNoInteractions(browserFlow);
         verify(risk).recordLoginFailure("buyer_zhang", request);
         verify(risk, never()).recordLoginSuccess(anyString(), any());
     }

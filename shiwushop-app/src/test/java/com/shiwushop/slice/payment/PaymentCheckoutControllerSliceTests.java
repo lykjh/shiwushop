@@ -40,7 +40,7 @@ class PaymentCheckoutControllerSliceTests {
                         new org.springframework.dao.DataAccessResourceFailureException("database unavailable"))
                 .when(payments).notifyPaid(org.mockito.ArgumentMatchers.anyMap());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/payments/alipay/notify")
-                        .with(csrf()).contentType("application/x-www-form-urlencoded").param("out_trade_no", "SHIWUSHOP1"))
+                        .with(csrf().asHeader()).contentType("application/x-www-form-urlencoded").param("out_trade_no", "SHIWUSHOP1"))
                 .andExpect(status().isServiceUnavailable()).andExpect(content().string("failure"));
     }
 
@@ -49,7 +49,7 @@ class PaymentCheckoutControllerSliceTests {
         org.mockito.Mockito.doThrow(new IllegalStateException("internal defect"))
                 .when(payments).notifyPaid(org.mockito.ArgumentMatchers.anyMap());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/payments/alipay/notify")
-                        .with(csrf()).contentType("application/x-www-form-urlencoded").param("out_trade_no", "SHIWUSHOP1"))
+                        .with(csrf().asHeader()).contentType("application/x-www-form-urlencoded").param("out_trade_no", "SHIWUSHOP1"))
                 .andExpect(status().isInternalServerError()).andExpect(content().string("failure"));
     }
 

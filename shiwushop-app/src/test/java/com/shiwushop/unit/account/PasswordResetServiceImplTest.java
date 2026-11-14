@@ -2,6 +2,7 @@ package com.shiwushop.unit.account;
 
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.auth.RateLimiter;
+import com.shiwushop.support.MockBrowserFlow;
 import com.shiwushop.user.auth.*;
 import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
@@ -11,11 +12,18 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,6 +39,10 @@ class PasswordResetServiceImplTest {
     final RateLimiter limiter = mock(RateLimiter.class);
     final AccountAuthCache cache = mock(AccountAuthCache.class);
     final Clock clock = mock(Clock.class);
+    final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
+    final ValueOperations<String, String> values = mock(ValueOperations.class);
+    final Map<String, String> grants = new HashMap<>();
     final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     PasswordResetServiceImpl service;
     MockHttpServletRequest request;
@@ -41,8 +53,9 @@ class PasswordResetServiceImplTest {
     void prepare() {
         // 发送边界在真实 HTTP 集成测试中覆盖，此类只测试核验与重设。
         service = new PasswordResetServiceImpl(phones, bindings, accounts, challenges, null,
-                loginLimiter, limiter, cache, clock);
+                loginLimiter, limiter, cache, clock, mock(JwtLogin.class), redis);
         request = new MockHttpServletRequest();
+        MockBrowserFlow.bind(request, "owner");
         account = new UserAccount();
         account.setUserId(71L);
         account.setStatus(AccountStatus.ACTIVE);
@@ -56,7 +69,16 @@ class PasswordResetServiceImplTest {
         when(accounts.selectById(71L)).thenReturn(account);
         when(accounts.lockById(71L)).thenReturn(account);
         when(accounts.changePassword(eq(71L), eq(2), anyString())).thenReturn(1);
-        when(limiter.digest(anyString())).thenAnswer(call -> "digest:" + call.getArgument(0));
+        when(limiter.digest(anyString())).thenAnswer(call -> "digest-" + call.getArgument(0));
+        when(redis.opsForValue()).thenReturn(values);
+        doAnswer(call -> {
+            grants.put(call.getArgument(0), call.getArgument(1));
+            return null;
+        }).when(values).set(anyString(), anyString(), eq(Duration.ofMinutes(5)));
+        when(values.get(anyString())).thenAnswer(call -> grants.get(call.getArgument(0)));
+        when(redis.execute(ArgumentMatchers.<RedisScript<Long>>any(), anyList(), anyString()))
+                .thenAnswer(call -> grants.remove(call.<List<String>>getArgument(1).getFirst(),
+                        call.<String>getArgument(2)) ? 1L : 0L);
     }
 
     @Test
@@ -64,7 +86,7 @@ class PasswordResetServiceImplTest {
         var proof = service.verify("13812345678", "123456", request);
         assertEquals(300, proof.expiresInSeconds());
         assertTrue(proof.resetTicket().matches("[A-Za-z0-9_-]{43}"));
-        assertNull(request.getSession().getAttribute("userId"));
+        assertNull(request.getSession(false));
         service.reset(proof.resetTicket(), "Shop456!", request);
         var hash = ArgumentCaptor.forClass(String.class);
         verify(accounts).changePassword(eq(71L), eq(2), hash.capture());
@@ -105,6 +127,7 @@ class PasswordResetServiceImplTest {
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
         assertNull(request.getSession(false));
+        assertTrue(grants.isEmpty());
         verifyNoInteractions(accounts);
     }
 
@@ -114,6 +137,7 @@ class PasswordResetServiceImplTest {
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
         assertNull(request.getSession(false));
+        assertTrue(grants.isEmpty());
         verifyNoInteractions(accounts);
     }
 
@@ -123,17 +147,31 @@ class PasswordResetServiceImplTest {
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.verify("13812345678", "123456", request)).getCode());
         assertNull(request.getSession(false));
+        assertTrue(grants.isEmpty());
     }
 
     @Test
-    void ticketIsBoundToSessionAndLatestVerification() {
+    void ticketIsBoundToBrowserAndLatestVerification() {
         var old = service.verify("13812345678", "123456", request);
         var latest = service.verify("13812345678", "123456", request);
+        var otherBrowser = new MockHttpServletRequest();
+        MockBrowserFlow.bind(otherBrowser, "other");
         assertEquals(401, assertThrows(BusinessException.class,
-                () -> service.reset(latest.resetTicket(), "Shop456!", new MockHttpServletRequest())).getCode());
+                () -> service.reset(latest.resetTicket(), "Shop456!", otherBrowser)).getCode());
         assertEquals(401, assertThrows(BusinessException.class,
                 () -> service.reset(old.resetTicket(), "Shop456!", request)).getCode());
         service.reset(latest.resetTicket(), "Shop456!", request);
+    }
+
+    @Test
+    void grantRedisFailureStopsPasswordUpdate() {
+        var proof = service.verify("13812345678", "123456", request);
+        doThrow(new DataAccessResourceFailureException("offline")).when(redis)
+                .execute(ArgumentMatchers.<RedisScript<Long>>any(), anyList(), anyString());
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> service.reset(proof.resetTicket(), "Shop456!", request));
+        verifyNoInteractions(cache);
+        verify(accounts, never()).changePassword(anyLong(), anyInt(), anyString());
     }
 
     @ParameterizedTest

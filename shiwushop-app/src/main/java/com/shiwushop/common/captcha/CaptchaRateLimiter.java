@@ -1,5 +1,6 @@
 package com.shiwushop.common.captcha;
 
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.auth.RateLimiter;
 
 import com.shiwushop.common.BusinessException;
@@ -62,28 +63,28 @@ public class CaptchaRateLimiter {
     /** 验证滑块轨迹前核对请求额度和该 Session 的连续失败次数。 */
     public void checkValid(HttpServletRequest request) {
         checkBuckets("valid", request, validSessionRate, validSessionBurst, validIpRate, validIpBurst);
-        String key = verifyFailureKey(request.getSession(true).getId());
+        String key = verifyFailureKey(BrowserFlow.requireId(request));
         if (limiter.failureCount(key, verifyFailureWindowMs) >= verifyFailureLimit) {
             reject(limiter.failureRetrySeconds(key, verifyFailureWindowMs));
         }
     }
 
     /** 在滚动窗口中记录一次轨迹验证失败。 */
-    public void recordValidFailure(String sessionId) {
-        limiter.recordFailure(verifyFailureKey(sessionId), verifyFailureWindowMs, verifyFailureLimit);
+    public void recordValidFailure(String browserId) {
+        limiter.recordFailure(verifyFailureKey(browserId), verifyFailureWindowMs, verifyFailureLimit);
     }
 
     /** 滑块验证成功后清除该 Session 的失败记录。 */
-    public void clearValidFailures(String sessionId) {
-        limiter.clear(verifyFailureKey(sessionId));
+    public void clearValidFailures(String browserId) {
+        limiter.clear(verifyFailureKey(browserId));
     }
 
     /** 为生成和校验分别检查会话桶与出口桶，避免两种成本共用额度。 */
     private void checkBuckets(String action, HttpServletRequest request,
                               long sessionRate, long sessionBurst, long ipRate, long ipBurst) {
         // 会话额度允许短时重试；出口桶只给生成资源设置宽松总量上界。
-        String sessionId = request.getSession(true).getId();
-        checkBucket(PREFIX + action + ":session:" + limiter.digest(sessionId), sessionRate, sessionBurst);
+        String browserId = BrowserFlow.requireId(request);
+        checkBucket(PREFIX + action + ":session:" + limiter.digest(browserId), sessionRate, sessionBurst);
         checkBucket(PREFIX + action + ":ip:" + limiter.digest(request.getRemoteAddr()), ipRate, ipBurst);
     }
 
@@ -94,9 +95,9 @@ public class CaptchaRateLimiter {
             reject(retry);
     }
 
-    /** 对 Session ID 求摘要构造滑块校验失败键，Redis 中不存原值。 */
-    private String verifyFailureKey(String sessionId) {
-        return PREFIX + "valid:failures:rolling:" + limiter.digest(sessionId);
+    /** 对匿名浏览器标识求摘要构造滑块校验失败键，Redis 中不存原值。 */
+    private String verifyFailureKey(String browserId) {
+        return PREFIX + "valid:failures:rolling:" + limiter.digest(browserId);
     }
 
     /** 用 HTTP 429 和重试秒数报告滑块额度耗尽。 */

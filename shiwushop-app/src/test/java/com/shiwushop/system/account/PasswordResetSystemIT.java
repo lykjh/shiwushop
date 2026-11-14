@@ -12,7 +12,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.net.http.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -60,7 +59,7 @@ class PasswordResetSystemIT {
         connection.destroy();
     }
 
-    /** 只模拟运营商已成功交付的验证码，后续 HTTP 校验、Session、事务及撤销均由部署实例执行。 */
+    /** 只模拟运营商已成功交付的验证码，后续 HTTP 校验、票据消费、事务及撤销均由部署实例执行。 */
     String verifyPreparedCode(HttpAccountClient owner) throws Exception {
         challenges.reserve(digest, "password-reset", "delivery-confirmed",
                 lookup.codeMac("password-reset", digest, "123456"));
@@ -76,10 +75,9 @@ class PasswordResetSystemIT {
              var raw = HttpClient.newHttpClient()) {
             owner.csrf();
             String ticket = verifyPreparedCode(owner);
-            String csrf = json.readTree(owner.get("/users/csrf").body()).path("data").asString();
-            String cookie = Base64.getEncoder().encodeToString(owner.sessionId().getBytes(StandardCharsets.UTF_8));
             var reset = raw.send(HttpRequest.newBuilder(URI.create(peer + "/users/password/reset"))
-                            .header("Cookie", "MALLSESSION=" + cookie).header("X-CSRF-TOKEN", csrf)
+                            .header("Cookie", owner.cookieHeader("/users/password/reset"))
+                            .header("X-CSRF-TOKEN", owner.csrfToken())
                             .header("Content-Type", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofString(
                                     json.writeValueAsString(Map.of("resetTicket", ticket, "newPassword", "Shop456!")))).build(),

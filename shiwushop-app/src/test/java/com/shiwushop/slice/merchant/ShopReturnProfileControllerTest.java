@@ -54,7 +54,7 @@ class ShopReturnProfileControllerTest {
                         "13812345678", "province", "江苏省", "city", "南京市", "district", "鼓楼区", "detail",
                         "中山北路28号"));
         body.put(field.getKey(), field.getValue());
-        mvc.perform(put("/merchant/shops/1/return-profile").with(csrf()).contentType("application/json")
+        mvc.perform(put("/merchant/shops/1/return-profile").with(csrf().asHeader()).contentType("application/json")
                 .content(json.writeValueAsString(body))).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
@@ -67,7 +67,7 @@ class ShopReturnProfileControllerTest {
                         "13812345678", "province", "江苏省", "city", "南京市", "district", "鼓楼区", "detail",
                         "中山北路28号"));
         body.remove(field);
-        mvc.perform(put("/merchant/shops/1/return-profile").with(csrf()).contentType("application/json")
+        mvc.perform(put("/merchant/shops/1/return-profile").with(csrf().asHeader()).contentType("application/json")
                 .content(json.writeValueAsString(body))).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
@@ -79,7 +79,7 @@ class ShopReturnProfileControllerTest {
         mvc.perform(get(path)).andExpect(status().isBadRequest());
         var body = Map.of("contactName", "王明", "contactPhone", "13912345678", "consignee", "张明", "phone",
                 "13812345678", "province", "江苏省", "city", "南京市", "district", "鼓楼区", "detail", "中山北路28号");
-        mvc.perform(put(path).with(csrf()).contentType("application/json").content(json.writeValueAsString(body)))
+        mvc.perform(put(path).with(csrf().asHeader()).contentType("application/json").content(json.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

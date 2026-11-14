@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static com.shiwushop.support.MockLogin.loginAs;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,7 +35,7 @@ class InventoryMovementControllerTest {
     void delegatesValidFilterAndCurrentUser() throws Exception {
         when(service.list(eq(7L), eq(2L), eq(3L), any())).thenReturn(
                 new InventoryMovementPageVO(List.of(), false, null));
-        mvc.perform(get(path).sessionAttr("userId", 7L).param("reason", "ORDER_DEDUCT")
+        mvc.perform(get(path).with(loginAs(7L)).param("reason", "ORDER_DEDUCT")
                         .param("createdFrom", "2026-11-01T00:00:00").param("size", "3"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isArray());
         verify(service).list(eq(7L), eq(2L), eq(3L),
@@ -45,7 +46,7 @@ class InventoryMovementControllerTest {
     void rejectsInvalidFiltersBeforeService() throws Exception {
         for (String query : List.of("?size=0", "?size=101", "?afterId=0", "?reason=BAD",
                 "?createdFrom=bad", "?createdFrom=2026-11-03T00:00:00&createdTo=2026-11-03T00:00:00")) {
-            mvc.perform(get(path + query).sessionAttr("userId", 7L)).andExpect(status().isBadRequest());
+            mvc.perform(get(path + query).with(loginAs(7L))).andExpect(status().isBadRequest());
         }
         verifyNoInteractions(service);
     }

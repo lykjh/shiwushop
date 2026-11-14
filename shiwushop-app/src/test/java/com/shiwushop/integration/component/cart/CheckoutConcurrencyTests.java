@@ -44,6 +44,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
@@ -157,7 +158,7 @@ class CheckoutConcurrencyTests {
                     ready.countDown();
                     if (!start.await(10, TimeUnit.SECONDS))
                         throw new IllegalStateException("并发请求未启动");
-                    return mockMvc.perform(post("/checkouts/direct").session(buyer)
+                    return mockMvc.perform(post("/checkouts/direct").with(withMockLogin(buyer))
                             .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
                 }));
             }
@@ -255,7 +256,7 @@ class CheckoutConcurrencyTests {
         String body = new ObjectMapper().writeValueAsString(Map.of("cartItemIds", cartIds,
                 "addressId", address.getId(), "confirmedTotal", new BigDecimal("14.00"),
                 "idempotencyKey", UUID.randomUUID().toString()));
-        MvcResult result = mockMvc.perform(post("/checkouts").session(session(firstUserId))
+        MvcResult result = mockMvc.perform(post("/checkouts").with(withMockLogin(session(firstUserId)))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
         assertEquals(500, result.getResponse().getStatus());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id=?", Integer.class, firstUserId));

@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -53,7 +54,7 @@ class ShopCreateTests {
         Long logoMediaId = mediaId(adminId, "READY");
         String name = "手测店铺-" + UUID.randomUUID();
 
-        MvcResult response = mockMvc.perform(post("/admin/shops").session(sessionFor(adminId))
+        MvcResult response = mockMvc.perform(post("/admin/shops").with(withMockLogin(sessionFor(adminId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "ownerUserId", ownerId, "name", name,
@@ -86,36 +87,36 @@ class ShopCreateTests {
         String name = "店铺-" + UUID.randomUUID();
         String first = om.writeValueAsString(Map.of("ownerUserId", ownerId, "name", name));
 
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(first))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", secondOwnerId, "name", name))))
                 .andExpect(status().isConflict());
         assertEquals("USER", role(secondOwnerId));
 
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", Long.MAX_VALUE, "name", "其他店"))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "ownerUserId", insertUser("ADMIN"), "name", "管理账号店-" + UUID.randomUUID()))))
                 .andExpect(status().isConflict());
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", secondOwnerId, "name", " "))))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(post("/admin/shops").session(admin)
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("ownerUserId", secondOwnerId, "name", "旧标识",
                                 "logoUrl", "https://example.com/logo.png"))))
                 .andExpect(status().isBadRequest());
         for (Long mediaId : new Long[]{mediaId(adminId, "STAGED"),
                 mediaId(secondOwnerId, "READY"), Long.MAX_VALUE}) {
-            mockMvc.perform(post("/admin/shops").session(admin)
+            mockMvc.perform(post("/admin/shops").with(withMockLogin(admin))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(om.writeValueAsString(Map.of("ownerUserId", secondOwnerId,
                                     "name", "非法标识-" + UUID.randomUUID(), "logoMediaId", mediaId))))
@@ -132,7 +133,7 @@ class ShopCreateTests {
         mockMvc.perform(post("/admin/shops")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/admin/shops").session(sessionFor(insertUser("USER")))
+        mockMvc.perform(post("/admin/shops").with(withMockLogin(sessionFor(insertUser("USER"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         assertEquals("USER", role(ownerId));

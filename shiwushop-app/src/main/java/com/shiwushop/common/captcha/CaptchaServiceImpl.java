@@ -17,9 +17,13 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class CaptchaServiceImpl implements CaptchaService {
+    /** 生成滑块图像并校验提交的拖动轨迹。 */
     private final ImageCaptchaApplication captchaApplication;
+    /** 签发和一次性消费绑定浏览器的滑块凭证。 */
     private final CaptchaProofStore proofStore;
+    /** 限制本实例同时生成滑块的任务数。 */
     private final Semaphore generationSlots;
+    /** 等待本地滑块生成许可的时长，单位为毫秒。 */
     private final long generationWaitMs;
 
     public CaptchaServiceImpl(ImageCaptchaApplication captchaApplication, CaptchaProofStore proofStore,
@@ -59,24 +63,24 @@ public class CaptchaServiceImpl implements CaptchaService {
         }
     }
 
-    /** 验证轨迹并签发绑定 Session 的一次性登录凭证。 */
+    /** 验证轨迹并签发绑定浏览器的一次性登录凭证。 */
     @Override
     public String verifyAndIssueProof(
             String captchaId,
             ImageCaptchaTrack track,
-            String sessionId
+            String browserId
     ) {
         ApiResponse<?> result = captchaApplication.matching(captchaId, track);
         if (result == null || !result.isSuccess()) {
             throw new BusinessException(400, "滑块验证失败，请重新获取");
         }
 
-        return proofStore.issue(captchaId, sessionId);
+        return proofStore.issue(captchaId, browserId);
     }
 
-    /** 登录或注册消费滑块凭证，拒绝跨 Session 或重复使用。 */
+    /** 登录或注册消费滑块凭证，拒绝跨浏览器或重复使用。 */
     @Override
-    public void consumeLoginProof(String proof, String sessionId) {
-        proofStore.consume(proof, sessionId);
+    public void consumeLoginProof(String proof, String browserId) {
+        proofStore.consume(proof, browserId);
     }
 }

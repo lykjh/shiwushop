@@ -33,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -70,25 +71,25 @@ class MerchantOrderListTests {
         item(oldest, 1);
         item(oldest, 2);
         item(newest, 1);
-        mvc.perform(get("/merchant/shops/{id}/orders?size=1", shop.getId()).session(session(owner)))
+        mvc.perform(get("/merchant/shops/{id}/orders?size=1", shop.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].id").value(newest.getId()))
                 .andExpect(jsonPath("$.data.items[0].itemCount").value(1))
                 .andExpect(jsonPath("$.data.hasMore").value(true))
                 .andExpect(jsonPath("$.data.nextCursor").value(newest.getId()));
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId())
-                        .param("afterId", newest.getId().toString()).param("size", "1").session(session(owner)))
+                        .param("afterId", newest.getId().toString()).param("size", "1").with(withMockLogin(session(owner))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value(oldest.getId()))
                 .andExpect(jsonPath("$.data.items[0].itemCount").value(2))
                 .andExpect(jsonPath("$.data.hasMore").value(false));
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId())
-                        .param("afterId", foreignOrder.getId().toString()).session(session(owner)))
+                        .param("afterId", foreignOrder.getId().toString()).with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
         shop.setOwnerUserId(nextOwner);
         shops.updateById(shop);
-        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(owner)))
+        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isNotFound());
-        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(nextOwner)))
+        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).with(withMockLogin(session(nextOwner))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(2));
     }
 
@@ -97,16 +98,16 @@ class MerchantOrderListTests {
         Long ordinary = user("USER"), merchant = user("MERCHANT");
         Shop shop = shop(ordinary, 1);
         mvc.perform(get("/merchant/shops/{id}/orders", shop.getId())).andExpect(status().isUnauthorized());
-        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(ordinary)))
+        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).with(withMockLogin(session(ordinary))))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(merchant)))
+        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).with(withMockLogin(session(merchant))))
                 .andExpect(status().isNotFound());
-        mvc.perform(get("/merchant/shops/{id}/orders?page=0", shop.getId()).session(session(ordinary)))
+        mvc.perform(get("/merchant/shops/{id}/orders?page=0", shop.getId()).with(withMockLogin(session(ordinary))))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/merchant/shops/{id}/orders?includeTotal=true", shop.getId()).session(session(ordinary)))
+        mvc.perform(get("/merchant/shops/{id}/orders?includeTotal=true", shop.getId()).with(withMockLogin(session(ordinary))))
                 .andExpect(status().isBadRequest());
         jdbc.update("UPDATE user_accounts SET status='DISABLED' WHERE user_id=?", ordinary);
-        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).session(session(ordinary)))
+        mvc.perform(get("/merchant/shops/{id}/orders", shop.getId()).with(withMockLogin(session(ordinary))))
                 .andExpect(status().isForbidden());
     }
 

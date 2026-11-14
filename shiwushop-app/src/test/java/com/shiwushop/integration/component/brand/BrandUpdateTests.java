@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -52,7 +53,7 @@ class BrandUpdateTests {
         MockHttpSession admin = sessionForRole("ADMIN");
         Long logoMediaId = mediaId(admin, "READY");
 
-        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", newName, "logoMediaId", logoMediaId, "enabled", 0))))
@@ -68,7 +69,7 @@ class BrandUpdateTests {
         assertEquals(logoMediaId, brandMapper.selectById(brand.getId()).getLogoMediaId());
         assertEquals(1L, searchEvents(brand.getId()));
 
-        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", newName, "enabled", 0))))
                 .andExpect(status().isOk())
@@ -84,25 +85,25 @@ class BrandUpdateTests {
         Brand second = insertBrand("品牌乙-" + UUID.randomUUID());
         String duplicate = om.writeValueAsString(Map.of("name", first.getName(), "enabled", 1));
 
-        mockMvc.perform(put("/admin/brands/{id}", second.getId()).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", second.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(duplicate))
                 .andExpect(status().isConflict());
-        mockMvc.perform(put("/admin/brands/{id}", Long.MAX_VALUE).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", Long.MAX_VALUE).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(duplicate))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/admin/brands/{id}", second.getId()).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", second.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", " ", "enabled", 2))))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(put("/admin/brands/{id}", second.getId()).session(admin)
+        mockMvc.perform(put("/admin/brands/{id}", second.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", "旧地址", "logoUrl",
                                 "https://example.com/logo.png", "enabled", 1))))
                 .andExpect(status().isBadRequest());
         for (Long mediaId : new Long[]{mediaId(admin, "STAGED"),
                 mediaId(sessionForRole("USER"), "READY"), Long.MAX_VALUE}) {
-            mockMvc.perform(put("/admin/brands/{id}", second.getId()).session(admin)
+            mockMvc.perform(put("/admin/brands/{id}", second.getId()).with(withMockLogin(admin))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(om.writeValueAsString(Map.of("name", "非法媒体-" + UUID.randomUUID(),
                                     "logoMediaId", mediaId, "enabled", 1))))
@@ -121,7 +122,7 @@ class BrandUpdateTests {
         mockMvc.perform(put("/admin/brands/{id}", brand.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).session(sessionForRole("USER"))
+        mockMvc.perform(put("/admin/brands/{id}", brand.getId()).with(withMockLogin(sessionForRole("USER")))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         assertEquals(1, brandMapper.selectById(brand.getId()).getEnabled());

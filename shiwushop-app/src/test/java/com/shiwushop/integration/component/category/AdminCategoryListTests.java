@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasItems;
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,7 +63,7 @@ class AdminCategoryListTests {
         child.setSortOrder(0);
         categoryMapper.insert(child);
 
-        mockMvc.perform(get("/admin/categories").session(sessionForRole("ADMIN")))
+        mockMvc.perform(get("/admin/categories").with(withMockLogin(sessionForRole("ADMIN"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].name", hasItems(rootName, childName)));
 
@@ -81,13 +82,13 @@ class AdminCategoryListTests {
         mockMvc.perform(get("/admin/categories").session(stale))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(get("/admin/categories").session(sessionForRole("USER")))
+        mockMvc.perform(get("/admin/categories").with(withMockLogin(sessionForRole("USER"))))
                 .andExpect(status().isForbidden());
 
         MockHttpSession disabled = sessionForRole("ADMIN");
         jdbcTemplate.update("UPDATE user_accounts SET status = 'DISABLED' WHERE user_id = ?",
                 disabled.getAttribute("userId"));
-        mockMvc.perform(get("/admin/categories").session(disabled))
+        mockMvc.perform(get("/admin/categories").with(withMockLogin(disabled)))
                 .andExpect(status().isUnauthorized());
     }
 

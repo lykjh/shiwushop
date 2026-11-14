@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,7 +52,7 @@ class AddressUpdateTests {
         AddressVO second = addressService.create(userId, dto("第二条", 0));
         AddressSaveDTO updated = dto("新地址", 1);
 
-        mockMvc.perform(put("/addresses/{id}", second.getId()).session(session(userId))
+        mockMvc.perform(put("/addresses/{id}", second.getId()).with(withMockLogin(session(userId)))
                         .contentType(MediaType.APPLICATION_JSON).content(om.writeValueAsString(updated)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.detail").value("新地址"))
@@ -72,19 +73,19 @@ class AddressUpdateTests {
         AddressVO address = addressService.create(ownerId, dto("原地址", 0));
         String body = om.writeValueAsString(dto("修改", 0));
 
-        mockMvc.perform(put("/addresses/{id}", address.getId()).session(session(otherId))
+        mockMvc.perform(put("/addresses/{id}", address.getId()).with(withMockLogin(session(otherId)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
         mockMvc.perform(put("/addresses/{id}", address.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(put("/addresses/{id}", address.getId()).session(session(ownerId))
+        mockMvc.perform(put("/addresses/{id}", address.getId()).with(withMockLogin(session(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("consignee", "张三", "phone", "13800138000",
                                 "address", "旧完整地址"))))
                 .andExpect(status().isBadRequest());
         jdbcTemplate.update("UPDATE addresses SET deleted_at = NOW() WHERE id = ?", address.getId());
-        mockMvc.perform(put("/addresses/{id}", address.getId()).session(session(ownerId))
+        mockMvc.perform(put("/addresses/{id}", address.getId()).with(withMockLogin(session(ownerId)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
     }

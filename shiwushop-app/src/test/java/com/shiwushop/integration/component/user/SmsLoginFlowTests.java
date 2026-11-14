@@ -18,7 +18,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import com.shiwushop.user.auth.JwtLogin;
+import static com.shiwushop.support.MockLogin.loginAs;
+import static com.shiwushop.support.MockBrowserFlow.withBrowserFlow;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -97,44 +99,44 @@ class SmsLoginFlowTests {
     }
 
     @Test
-    void bindThenLoginCreatesExistingSessionAndRejectsReplay() throws Exception {
+    void bindThenLoginIssuesJwtAndRejectsCodeReplay() throws Exception {
         Long userId = createUser();
         String phone = nextPhone();
-        MockHttpSession existing = (MockHttpSession) mvc.perform(post("/users/login").with(csrf())
+        String browser = UUID.randomUUID().toString();
+        var existing = mvc.perform(post("/users/login").with(csrf().asHeader()).with(withBrowserFlow(browser))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username(userId) + "\",\"password\":\"Shop123!\"}"))
-                .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+                .andExpect(status().isOk()).andReturn().getResponse().getCookie(JwtLogin.COOKIE);
 
-        mvc.perform(post("/users/phone/bind/send").with(csrf()).session(existing)
+        mvc.perform(post("/users/phone/bind/send").with(csrf().asHeader()).cookie(existing)
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String bindingCode = sentCodes.get(phone);
-        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(browser)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, bindingCode)))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post("/users/phone/bind/confirm").with(csrf()).session(existing)
+        mvc.perform(post("/users/phone/bind/confirm").with(csrf().asHeader()).cookie(existing)
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"Shop123!\",\"phone\":\"" + phone
                                 + "\",\"code\":\"" + bindingCode + "\"}"))
                 .andExpect(status().isOk());
-        assertThat(existing.isInvalid()).isTrue();
+        mvc.perform(get("/users/me").cookie(existing)).andExpect(status().isUnauthorized());
         assertThat(jdbc.queryForObject("SELECT auth_version FROM user_accounts WHERE user_id=?", Integer.class, userId))
                 .isEqualTo(1);
 
         redis.delete("shiwushop:sms:{" + lookup.digest(phone) + "}:cooldown");
-        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String loginCode = sentCodes.get(phone);
-        var result = mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+        var result = mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(browser)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, loginCode)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(userId)).andReturn();
-        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
-        assertThat(session.getAttribute("userId")).isEqualTo(userId);
-        assertThat(session.getAttribute("authVersion")).isEqualTo(1);
-        mvc.perform(get("/users/me").session(session)).andExpect(status().isOk());
-        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+        assertThat(result.getRequest().getSession(false)).isNull();
+        mvc.perform(get("/users/me").cookie(result.getResponse().getCookie(JwtLogin.COOKIE)))
+                .andExpect(status().isOk());
+        mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(browser)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, loginCode)))
                 .andExpect(status().isUnauthorized());
     }
@@ -142,10 +144,10 @@ class SmsLoginFlowTests {
     @Test
     void retiredRoutesAreAbsentAndNeverSendSms() throws Exception {
         String phone = nextPhone();
-        mvc.perform(post("/users/sms/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/send").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, "123456")))
                 .andExpect(status().isNotFound());
-        mvc.perform(post("/users/sms/login").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/login").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, "123456")))
                 .andExpect(status().isNotFound());
         verify(sender, never()).send(anyString(), anyString());
@@ -158,28 +160,28 @@ class SmsLoginFlowTests {
         String phone = nextPhone();
         bind(first, phone);
         redis.delete("shiwushop:sms:{" + lookup.digest(phone) + "}:cooldown");
-        mvc.perform(post("/users/phone/bind/send").with(csrf()).session(session(second))
+        mvc.perform(post("/users/phone/bind/send").with(csrf().asHeader()).with(loginAs(second))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/users/phone/bind/confirm").with(csrf()).session(session(second))
+        mvc.perform(post("/users/phone/bind/confirm").with(csrf().asHeader()).with(loginAs(second))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"Shop123!\",\"phone\":\"" + phone
                                 + "\",\"code\":\"" + sentCodes.get(phone) + "\"}"))
                 .andExpect(status().isConflict());
 
         redis.delete("shiwushop:sms:{" + lookup.digest(phone) + "}:cooldown");
-        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         String correct = sentCodes.get(phone);
         for (int i = 0; i < 5; i++) {
-            mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+            mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(remoteAddress)).remoteAddress(remoteAddress)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(codeBody(phone, "000000".equals(correct) ? "000001" : "000000")))
                     .andExpect(status().isUnauthorized());
         }
-        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(remoteAddress)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, correct)))
                 .andExpect(status().isUnauthorized());
     }
@@ -192,7 +194,7 @@ class SmsLoginFlowTests {
             sentCodes.put(call.getArgument(0), call.getArgument(1));
             throw new BusinessException(503, "短信渠道暂时不可用");
         }).when(sender).send(anyString(), anyString());
-        mvc.perform(post("/users/phone/bind/send").with(csrf()).session(session(userId))
+        mvc.perform(post("/users/phone/bind/send").with(csrf().asHeader()).with(loginAs(userId))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isServiceUnavailable());
@@ -209,29 +211,29 @@ class SmsLoginFlowTests {
         clearInvocations(sender);
         jdbc.update("UPDATE user_accounts SET status='DISABLED' WHERE user_id=?", userId);
         redis.delete("shiwushop:sms:{" + digest + "}:cooldown");
-        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         verify(sender).send(eq(phone), anyString());
-        mvc.perform(post("/users/sms/entry/verify").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/verify").with(csrf().asHeader()).with(withBrowserFlow(remoteAddress)).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void invalidPhoneNeverCallsSmsProvider() throws Exception {
-        mvc.perform(post("/users/sms/entry/send").with(csrf()).remoteAddress(remoteAddress)
+        mvc.perform(post("/users/sms/entry/send").with(csrf().asHeader()).remoteAddress(remoteAddress)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"bad\"}"))
                 .andExpect(status().isBadRequest());
         verify(sender, never()).send(anyString(), anyString());
     }
 
     private void bind(Long userId, String phone) throws Exception {
-        mvc.perform(post("/users/phone/bind/send").with(csrf()).session(session(userId))
+        mvc.perform(post("/users/phone/bind/send").with(csrf().asHeader()).with(loginAs(userId))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/users/phone/bind/confirm").with(csrf()).session(session(userId))
+        mvc.perform(post("/users/phone/bind/confirm").with(csrf().asHeader()).with(loginAs(userId))
                         .remoteAddress(remoteAddress).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"Shop123!\",\"phone\":\"" + phone
                                 + "\",\"code\":\"" + sentCodes.get(phone) + "\"}"))
@@ -250,14 +252,6 @@ class SmsLoginFlowTests {
         accounts.insert(account);
         userIds.add(profile.getId());
         return profile.getId();
-    }
-
-    private MockHttpSession session(Long userId) {
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("userId", userId);
-        session.setAttribute("authVersion", jdbc.queryForObject(
-                "SELECT auth_version FROM user_accounts WHERE user_id=?", Integer.class, userId));
-        return session;
     }
 
     private String nextPhone() {

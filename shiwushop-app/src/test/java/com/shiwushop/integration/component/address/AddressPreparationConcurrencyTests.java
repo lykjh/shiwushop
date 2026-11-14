@@ -20,6 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -54,7 +55,7 @@ class AddressPreparationConcurrencyTests {
                     start.await();
                     MockHttpSession session = new MockHttpSession();
                     session.setAttribute("userId", id);
-                    return mvc.perform(post("/addresses").session(session)
+                    return mvc.perform(post("/addresses").with(withMockLogin(session))
                             .contentType("application/json").content(body)).andReturn().getResponse().getStatus();
                 })).toList();
                 start.countDown();

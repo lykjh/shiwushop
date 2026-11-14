@@ -11,10 +11,10 @@ import com.shiwushop.user.mapper.user.UserAccountMapper;
 import com.shiwushop.user.mapper.user.UserProfileMapper;
 import com.shiwushop.user.service.RegisterService;
 import com.shiwushop.common.BusinessException;
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.captcha.CaptchaService;
 import com.shiwushop.common.logging.BusinessEventLog;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -41,14 +41,14 @@ public class RegisterServiceImpl implements RegisterService {
     @Transactional
     public void register(RegisterDTO dto, HttpServletRequest request) {
         registerRateLimiter.check(request.getRemoteAddr());
-        HttpSession session = request.getSession(true);
+        String browserId = BrowserFlow.requireId(request);
         authRiskLimiter.registerRequiresCaptcha(request);
         String proof = dto.getCaptchaProof();
         if (proof == null || proof.isBlank()) {
             throw new BusinessException(403, "请先完成滑块验证", Map.of("state", "CAPTCHA_REQUIRED"), null);
         }
         try {
-            captchaService.consumeLoginProof(proof, session.getId());
+            captchaService.consumeLoginProof(proof, browserId);
         } catch (BusinessException e) {
             if (e.getCode() == 400)
                 authRiskLimiter.recordRegisterFailure(request);

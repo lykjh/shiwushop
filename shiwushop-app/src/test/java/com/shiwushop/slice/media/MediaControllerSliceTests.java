@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import com.shiwushop.common.GlobalExceptionHandler;
@@ -40,7 +41,7 @@ class MediaControllerSliceTests {
         var file = new MockMultipartFile("file", "毛巾.png", "image/png", new byte[]{1});
         when(uploads.upload(3L, file)).thenThrow(new com.shiwushop.common.BusinessException(
                 429, "图片处理繁忙，请稍后重试", java.util.Map.of("retryAfterSeconds", 1), null));
-        mvc.perform(multipart("/media").file(file).with(csrf()).session(session))
+        mvc.perform(multipart("/media").file(file).with(csrf().asHeader()).with(withMockLogin(session)))
                 .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "1"));
     }
 
@@ -58,7 +59,7 @@ class MediaControllerSliceTests {
         MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
         when(uploads.upload(3L, file)).thenReturn(8L);
 
-        mvc.perform(multipart("/media").file(file).with(csrf()).session(session))
+        mvc.perform(multipart("/media").file(file).with(csrf().asHeader()).with(withMockLogin(session)))
                 .andExpect(status().isOk());
     }
 

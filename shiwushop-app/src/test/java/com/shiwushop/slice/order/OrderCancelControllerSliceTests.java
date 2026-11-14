@@ -13,6 +13,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,7 +35,7 @@ class OrderCancelControllerSliceTests {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
         when(payments.cancelOrder(7L, 10L)).thenReturn("CANCELLED");
-        mvc.perform(post("/orders/10/cancel").session(session).with(csrf()))
+        mvc.perform(post("/orders/10/cancel").with(withMockLogin(session)).with(csrf().asHeader()))
                 .andExpect(status().isOk());
     }
 
@@ -43,7 +44,7 @@ class OrderCancelControllerSliceTests {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
         when(payments.cancelOrder(7L, 10L)).thenReturn("CANCEL_PENDING");
-        mvc.perform(post("/orders/10/cancel").session(session).with(csrf()))
+        mvc.perform(post("/orders/10/cancel").with(withMockLogin(session)).with(csrf().asHeader()))
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.status").value("CANCEL_PENDING"));
     }
 
@@ -52,7 +53,7 @@ class OrderCancelControllerSliceTests {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
         for (String id : new String[]{"0", "-1", "abc", "9999999999999999999999"}) {
-            mvc.perform(post("/orders/" + id + "/cancel").session(session).with(csrf()))
+            mvc.perform(post("/orders/" + id + "/cancel").with(withMockLogin(session)).with(csrf().asHeader()))
                     .andExpect(status().isBadRequest());
         }
         verifyNoInteractions(payments);
@@ -60,10 +61,10 @@ class OrderCancelControllerSliceTests {
 
     @Test
     void authenticationAndCsrfAreRequired() throws Exception {
-        mvc.perform(post("/orders/10/cancel").with(csrf())).andExpect(status().isUnauthorized());
+        mvc.perform(post("/orders/10/cancel").with(csrf().asHeader())).andExpect(status().isUnauthorized());
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userId", 7L);
-        mvc.perform(post("/orders/10/cancel").session(session)).andExpect(status().isForbidden());
+        mvc.perform(post("/orders/10/cancel").with(withMockLogin(session))).andExpect(status().isForbidden());
         verifyNoInteractions(payments);
     }
 }

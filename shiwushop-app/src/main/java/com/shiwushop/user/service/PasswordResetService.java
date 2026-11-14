@@ -8,7 +8,7 @@ public interface PasswordResetService {
     /** 仅向已绑定且启用的账号发送找回码；未绑定号码对外仍返回成功。 */
     void sendCode(String phone, HttpServletRequest request);
 
-    /** 消费找回码并签发绑定当前 Session 的五分钟重设票据。 */
+    /** 消费找回码并签发绑定当前浏览器的五分钟重设票据。 */
     PasswordResetVerifyVO verify(String phone, String code, HttpServletRequest request);
 
     /** 在事务中重设票据指定账号的密码、提升鉴权版本，撤销全部旧登录态。 */

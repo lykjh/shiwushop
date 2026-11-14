@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,7 +52,7 @@ class AdminShopListTests {
         shop.setEnabled(0);
         shopMapper.insert(shop);
 
-        mockMvc.perform(get("/admin/shops").session(sessionFor(adminId)))
+        mockMvc.perform(get("/admin/shops").with(withMockLogin(sessionFor(adminId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == " + shop.getId() + ")].enabled").value(hasItem(0)))
                 .andExpect(jsonPath("$.data[?(@.id == " + shop.getId() + ")].ownerUserId")
@@ -64,7 +65,7 @@ class AdminShopListTests {
     void listRequiresAdmin() throws Exception {
         mockMvc.perform(get("/admin/shops"))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/admin/shops").session(sessionFor(insertUser("MERCHANT"))))
+        mockMvc.perform(get("/admin/shops").with(withMockLogin(sessionFor(insertUser("MERCHANT")))))
                 .andExpect(status().isForbidden());
     }
 

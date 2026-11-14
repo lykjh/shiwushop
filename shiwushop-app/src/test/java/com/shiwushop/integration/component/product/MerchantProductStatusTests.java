@@ -47,6 +47,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -176,7 +177,7 @@ class MerchantProductStatusTests {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request(
             Long productId, String nextStatus, MockHttpSession session) {
         return put("/merchant/products/{id}/status", productId)
-                .session(session)
+                .with(withMockLogin(session))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"" + nextStatus + "\"}");
     }

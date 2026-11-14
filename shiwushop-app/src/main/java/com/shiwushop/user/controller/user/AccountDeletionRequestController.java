@@ -57,22 +57,18 @@ public class AccountDeletionRequestController {
 
     @PostMapping
     public Result<RequestView> create(@Valid @RequestBody AccountProofDTO body, HttpServletRequest request) {
-        Long userId = SessionUser.requireId(request);
-        proof.verify(userId, PURPOSE, body.currentPassword(), body.smsVerification());
-        return Result.success(view(requests.request(userId, sessionVersion(request))));
+        var identity = SessionUser.require(request);
+        proof.verify(identity.userId(), PURPOSE, body.currentPassword(), body.smsVerification());
+        return Result.success(view(requests.request(identity.userId(), identity.authVersion())));
     }
 
     @PostMapping("/withdraw")
     public Result<RequestView> withdraw(@Valid @RequestBody AccountProofDTO body, HttpServletRequest request) {
-        Long userId = SessionUser.requireId(request);
-        proof.verify(userId, PURPOSE, body.currentPassword(), body.smsVerification());
-        return Result.success(view(requests.withdraw(userId, sessionVersion(request))));
+        var identity = SessionUser.require(request);
+        proof.verify(identity.userId(), PURPOSE, body.currentPassword(), body.smsVerification());
+        return Result.success(view(requests.withdraw(identity.userId(), identity.authVersion())));
     }
 
-    private static int sessionVersion(HttpServletRequest request) {
-        Object value = request.getSession(false).getAttribute("authVersion");
-        return value instanceof Integer version ? version : 0;
-    }
 
     private static RequestView view(AccountDeletionRequestMapper.Request request) {
         return new RequestView(request.status(), request.requestedAt(), request.deadlineAt(), request.withdrawnAt());

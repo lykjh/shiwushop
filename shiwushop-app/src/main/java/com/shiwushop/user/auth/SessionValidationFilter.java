@@ -1,19 +1,16 @@
 package com.shiwushop.user.auth;
 
-import com.shiwushop.user.auth.AccountAuthCache;
-
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.Result;
-
-import com.shiwushop.user.entity.status.AccountStatus;
+import com.shiwushop.common.auth.BrowserFlow;
+import com.shiwushop.common.auth.SessionUser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.core.Ordered;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,43 +18,30 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
-/** 每次使用会话前核对共享的账号状态和版本；缓存暂不可用时拒绝请求但保留会话。 */
-
+/** 只将 JWT 和共享登录记录均已验证的身份交给控制器。 */
 @Component
-@Order(Ordered.LOWEST_PRECEDENCE - 10)
+@Order(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1)
 @RequiredArgsConstructor
 public class SessionValidationFilter extends OncePerRequestFilter {
-    private final AccountAuthCache authCache;
+    private final JwtLogin login;
+    private final BrowserFlow browserFlow;
+    /** 将业务对象与 JSON 相互转换。 */
     private final ObjectMapper objectMapper;
 
-    /** 每个携带登录 Session 的请求都校验账号状态和鉴权版本；异常时保留 Session。 */
     @Override
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
-        HttpSession session = request.getSession(false);
-        Object principal = session == null ? null : session.getAttribute("userId");
-        if (principal instanceof Long userId) {
-            AccountAuthCache.State state;
-            try {
-                state = authCache.current(userId);
-            } catch (BusinessException e) {
-                response.setStatus(e.getCode());       // Redis 故障或账号变更中：503
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write(objectMapper.writeValueAsString(
-                        Result.error(e.getCode(), e.getMessage())));
-                return;                                 // 不注销会话，也不放行
-            }
-
-            int sessionVersion = session.getAttribute("authVersion") instanceof Integer v ? v : 0;
-            if (state == null || state.status() != AccountStatus.ACTIVE
-                    || sessionVersion != state.version()) {
-                session.invalidate();
-                response.setStatus(401);
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write(objectMapper.writeValueAsString(
-                        Result.error(401, "请重新登录")));
-                return;
-            }
+        try {
+            browserFlow.identify(request);
+            var identity = login.authenticate(request);
+            if (identity != null)
+                SessionUser.identify(request, identity);
+        } catch (BusinessException e) {
+            response.setStatus(e.getCode());
+            response.setHeader("Cache-Control", "no-store");
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(objectMapper.writeValueAsString(Result.error(e.getCode(), e.getMessage())));
+            return;
         }
         chain.doFilter(request, response);
     }

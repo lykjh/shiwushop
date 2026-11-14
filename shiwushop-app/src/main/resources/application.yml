@@ -19,11 +19,6 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-  session:
-    data:
-      redis:
-        namespace: shiwushop:session
-        repository-type: indexed
   lifecycle:
     timeout-per-shutdown-phase: 30s
 mybatis-plus:
@@ -43,6 +38,15 @@ logging:
       total-size-cap: 1GB
 
 shop:
+  auth:
+    flow:
+      secret: ${SHOP_AUTH_FLOW_SECRET:${shop.auth.jwt.secret}}
+      cookie-secure: ${SHOP_AUTH_FLOW_COOKIE_SECURE:${shop.auth.jwt.cookie-secure}}
+    jwt:
+      secret: ${SHOP_AUTH_JWT_SECRET:}
+      lifetime: ${SHOP_AUTH_JWT_LIFETIME:8h}
+      cookie-path: ${SHOP_AUTH_JWT_COOKIE_PATH:/api}
+      cookie-secure: ${SHOP_AUTH_JWT_COOKIE_SECURE:true}
   account:
     deletion-request-enabled: false
   marketing:
@@ -168,17 +172,6 @@ server:
   shutdown: graceful
   tomcat:
     max-swallow-size: 16MB
-  servlet:
-    session:
-      timeout: 30m
-      persistent: false
-      tracking-modes: cookie
-      cookie:
-        name: MALLSESSION
-        path: /
-        http-only: true
-        same-site: lax
-        secure: ${SHOP_SESSION_COOKIE_SECURE:false}
 management:
   endpoint:
     health:

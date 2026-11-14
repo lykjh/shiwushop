@@ -5,9 +5,9 @@ import com.shiwushop.user.dto.user.AccountProofDTO;
 import com.shiwushop.user.mapper.user.AccountDeletionRequestMapper;
 import com.shiwushop.user.service.impl.AccountDeletionRequestService;
 import com.shiwushop.user.service.impl.AccountProofService;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import com.shiwushop.common.auth.SessionUser;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.time.LocalDateTime;
 
@@ -21,12 +21,9 @@ class AccountDeletionRequestControllerTest {
 
     @Test
     void smsProofUsesDeletionPurposeAndCurrentSessionVersion() {
-        var request = mock(HttpServletRequest.class);
-        var session = mock(HttpSession.class);
-        when(request.getSession(false)).thenReturn(session);
-        when(session.getAttribute("userId")).thenReturn(2L);
-        when(session.getAttribute("authVersion")).thenReturn(4);
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        var request = new MockHttpServletRequest();
+        SessionUser.identify(request, new SessionUser.Identity(2L, 4, "verified"));
+        request.setRemoteAddr("127.0.0.1");
         var pending = new AccountDeletionRequestMapper.Request(1L, 2L, "PENDING",
                 LocalDateTime.parse("2026-11-06T10:00:00"), LocalDateTime.parse("2026-11-13T10:00:00"), null);
         when(requests.request(2L, 4)).thenReturn(pending);

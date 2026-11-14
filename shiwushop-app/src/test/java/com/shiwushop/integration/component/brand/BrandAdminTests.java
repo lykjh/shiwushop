@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,7 +52,7 @@ class BrandAdminTests {
         MockHttpSession admin = sessionForRole("ADMIN");
         String name = "测试品牌-" + UUID.randomUUID();
         Long logoMediaId = mediaId(admin, "READY");
-        MvcResult created = mockMvc.perform(post("/admin/brands").session(admin)
+        MvcResult created = mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", name, "logoMediaId", logoMediaId, "enabled", 0))))
@@ -70,7 +71,7 @@ class BrandAdminTests {
                 "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?",
                 Long.class, id));
 
-        mockMvc.perform(get("/admin/brands").session(admin))
+        mockMvc.perform(get("/admin/brands").with(withMockLogin(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == " + id + ")].enabled").value(hasItem(0)));
     }
@@ -81,18 +82,18 @@ class BrandAdminTests {
         String name = "测试品牌-" + UUID.randomUUID();
         String valid = om.writeValueAsString(Map.of("name", name, "enabled", 1));
 
-        mockMvc.perform(post("/admin/brands").session(admin)
+        mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/admin/brands").session(admin)
+        mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(valid))
                 .andExpect(status().isConflict());
-        mockMvc.perform(post("/admin/brands").session(admin)
+        mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", " ", "enabled", 2))))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(post("/admin/brands").session(admin)
+        mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("name", "旧图片地址", "logoUrl",
                                 "https://example.com/logo.png", "enabled", 1))))
@@ -100,7 +101,7 @@ class BrandAdminTests {
 
         for (Long mediaId : new Long[]{mediaId(admin, "STAGED"),
                 mediaId(sessionForRole("USER"), "READY"), Long.MAX_VALUE}) {
-            mockMvc.perform(post("/admin/brands").session(admin)
+            mockMvc.perform(post("/admin/brands").with(withMockLogin(admin))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(om.writeValueAsString(Map.of("name", "不可用图片-" + UUID.randomUUID(),
                                     "logoMediaId", mediaId, "enabled", 1))))
@@ -115,7 +116,7 @@ class BrandAdminTests {
         mockMvc.perform(post("/admin/brands")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/admin/brands").session(sessionForRole("USER"))
+        mockMvc.perform(post("/admin/brands").with(withMockLogin(sessionForRole("USER")))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/admin/brands"))

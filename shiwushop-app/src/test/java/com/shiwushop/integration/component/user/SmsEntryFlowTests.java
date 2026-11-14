@@ -14,7 +14,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import com.shiwushop.user.auth.JwtLogin;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -35,6 +36,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static com.shiwushop.support.MockBrowserFlow.withBrowserFlow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -97,9 +99,9 @@ class SmsEntryFlowTests {
         java.util.Set<String> usernames = new java.util.HashSet<>();
         for (int n = 0; n < 100; n++) {
             String phone = nextPhone();
-            MockHttpSession session = new MockHttpSession();
-            String ticket = tickets.issue(lookup.digest(phone), session.getId());
-            var registered = mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+            String session = UUID.randomUUID().toString();
+            String ticket = tickets.issue(lookup.digest(phone), session);
+            var registered = mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                             .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "Shop123!")))
                     .andExpect(status().isOk()).andReturn();
             String username = json.readTree(registered.getResponse().getContentAsString()).path("data").path("username")
@@ -111,15 +113,15 @@ class SmsEntryFlowTests {
     }
 
     @Test
-    void firstUseRequiresPasswordThenCreatesAccountBindingAndLoginSession() throws Exception {
+    void firstUseRequiresPasswordThenCreatesAccountBindingAndJwt() throws Exception {
         String phone = nextPhone();
-        MockHttpSession session = new MockHttpSession();
-        mvc.perform(post("/users/sms/entry/send").session(session).with(csrf())
+        String session = UUID.randomUUID().toString();
+        mvc.perform(post("/users/sms/entry/send").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(phoneBody(phone)))
                 .andExpect(status().isOk());
         String code = sentCodes.get(phone);
         assertThat(code).matches("[0-9]{6}");
-        var verify = mvc.perform(post("/users/sms/entry/verify").session(session).with(csrf())
+        var verify = mvc.perform(post("/users/sms/entry/verify").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, code)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.state").value("SET_PASSWORD_REQUIRED"))
@@ -127,32 +129,31 @@ class SmsEntryFlowTests {
         String ticket = json.readTree(verify.getResponse().getContentAsString())
                 .path("data").path("registrationTicket").asString();
         assertThat(ticket).hasSize(43);
-        assertThat(session.getAttribute("userId")).isNull();
-        String originalSessionId = session.getId();
-        mvc.perform(post("/users/sms/entry/verify").session(session).with(csrf())
+        assertThat(verify.getRequest().getSession(false)).isNull();
+        mvc.perform(post("/users/sms/entry/verify").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, code)))
                 .andExpect(status().isUnauthorized());
 
-        mvc.perform(post("/users/sms/entry/register").session(new MockHttpSession()).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(UUID.randomUUID().toString())).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "Shop123!")))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody("13800000000", ticket, "Shop123!")))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "short")))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(phone, ticket, "中".repeat(30))))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(phone, ticket, "asdfg密123456")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.fields.password[0]").value("密码只能包含字母、数字和特定符号"));
-        var registered = mvc.perform(post("/users/sms/entry/register").session(session).with(csrf())
+        var registered = mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "Shop123!")))
                 .andExpect(status().isOk()).andReturn();
         long userId = json.readTree(registered.getResponse().getContentAsString()).path("data").path("id").asLong();
@@ -162,42 +163,46 @@ class SmsEntryFlowTests {
         assertThat(bindings.findUserId(lookup.digest(phone))).isEqualTo(userId);
         assertThat(new BCryptPasswordEncoder().matches("Shop123!", jdbc.queryForObject(
                 "SELECT password_hash FROM user_accounts WHERE user_id=?", String.class, userId))).isTrue();
-        assertThat(session.getAttribute("userId")).isEqualTo(userId);
-        mvc.perform(get("/users/me").session(session))
+        assertThat(registered.getRequest().getSession(false)).isNull();
+        var loginCookie = registered.getResponse().getCookie(JwtLogin.COOKIE);
+        assertThat(loginCookie).isNotNull();
+        mvc.perform(get("/users/me").cookie(loginCookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.phoneMasked")
                         .value(phone.substring(0, 3) + "****" + phone.substring(7)));
-        assertThatThrownBy(() -> tickets.consume(ticket, lookup.digest(phone), originalSessionId))
+        assertThatThrownBy(() -> tickets.consume(ticket, lookup.digest(phone), session))
                 .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void boundNumberLogsInAndDisabledAccountCannotBeRecreated() throws Exception {
         String phone = nextPhone();
-        MockHttpSession first = new MockHttpSession();
+        String first = UUID.randomUUID().toString();
         String ticket = verifyUnbound(phone, first);
-        mvc.perform(post("/users/sms/entry/register").session(first).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(first)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(registerBody(phone, ticket, "Shop123!")))
                 .andExpect(status().isOk());
         Long userId = bindings.findUserId(lookup.digest(phone));
         clearCooldown(phone);
-        MockHttpSession second = new MockHttpSession();
+        String second = UUID.randomUUID().toString();
         send(phone, second);
-        String anonymousSessionId = second.getId();
-        mvc.perform(post("/users/sms/entry/verify").session(second).with(csrf())
+        var loggedIn = mvc.perform(post("/users/sms/entry/verify").with(withBrowserFlow(second)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.state").value("LOGGED_IN"))
-                .andExpect(jsonPath("$.data.id").value(userId));
-        assertThat(second.getAttribute("userId")).isEqualTo(userId);
-        assertThat(second.getId()).isNotEqualTo(anonymousSessionId);
-        assertThat(second.getAttribute("authVersion")).isEqualTo(jdbc.queryForObject(
-                "SELECT auth_version FROM user_accounts WHERE user_id=?", Integer.class, userId));
+                .andExpect(jsonPath("$.data.id").value(userId)).andReturn();
+        assertThat(loggedIn.getRequest().getSession(false)).isNull();
+        assertThat(loggedIn.getResponse().getHeaders("Set-Cookie"))
+                .anyMatch(header -> header.startsWith("MALLBROWSER=") || header.startsWith("__Host-MALLBROWSER="));
+        var loginCookie = loggedIn.getResponse().getCookie(JwtLogin.COOKIE);
+        assertThat(loginCookie).isNotNull();
+        mvc.perform(get("/users/me").cookie(loginCookie)).andExpect(status().isOk());
 
         jdbc.update("UPDATE user_accounts SET status='DISABLED' WHERE user_id=?", userId);
         redis.delete("shiwushop:auth:state:" + userId);
+        mvc.perform(get("/users/me").cookie(loginCookie)).andExpect(status().isUnauthorized());
         clearCooldown(phone);
-        MockHttpSession third = new MockHttpSession();
+        String third = UUID.randomUUID().toString();
         send(phone, third);
-        mvc.perform(post("/users/sms/entry/verify").session(third).with(csrf())
+        mvc.perform(post("/users/sms/entry/verify").with(withBrowserFlow(third)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
                 .andExpect(status().isUnauthorized());
         assertThat(bindings.findUserId(lookup.digest(phone))).isEqualTo(userId);
@@ -229,7 +234,7 @@ class SmsEntryFlowTests {
     void unavailableSmsProviderReturns503WithoutIssuingCode() throws Exception {
         String phone = nextPhone();
         when(sender.configured()).thenReturn(false);
-        mvc.perform(post("/users/sms/entry/send").session(new MockHttpSession()).with(csrf())
+        mvc.perform(post("/users/sms/entry/send").with(withBrowserFlow(UUID.randomUUID().toString())).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(phoneBody(phone)))
                 .andExpect(status().isServiceUnavailable());
         assertThat(sentCodes).doesNotContainKey(phone);
@@ -241,7 +246,7 @@ class SmsEntryFlowTests {
         String phone = nextPhone();
         redis.opsForHash().putAll("shiwushop:sms:entry:global", Map.of(
                 "tokens", "0", "updated", Long.toString(System.currentTimeMillis() + 60_000)));
-        mvc.perform(post("/users/sms/entry/send").session(new MockHttpSession()).with(csrf())
+        mvc.perform(post("/users/sms/entry/send").with(withBrowserFlow(UUID.randomUUID().toString())).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(phoneBody(phone)))
                 .andExpect(status().isTooManyRequests());
         String prefix = "shiwushop:sms:{" + lookup.digest(phone) + "}";
@@ -254,17 +259,17 @@ class SmsEntryFlowTests {
     @Test
     void twoVerifiedTicketsForOnePhoneCreateOnlyOneAccount() throws Exception {
         String phone = nextPhone();
-        MockHttpSession first = new MockHttpSession();
+        String first = UUID.randomUUID().toString();
         String firstTicket = verifyUnbound(phone, first);
         clearCooldown(phone);
-        MockHttpSession second = new MockHttpSession();
+        String second = UUID.randomUUID().toString();
         String secondTicket = verifyUnbound(phone, second);
         int usersBefore = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
-        mvc.perform(post("/users/sms/entry/register").session(first).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(first)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(phone, firstTicket, "Shop123!")))
                 .andExpect(status().isOk());
-        mvc.perform(post("/users/sms/entry/register").session(second).with(csrf())
+        mvc.perform(post("/users/sms/entry/register").with(withBrowserFlow(second)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(phone, secondTicket, "Shop123!")))
                 .andExpect(status().isConflict());
@@ -273,9 +278,9 @@ class SmsEntryFlowTests {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class)).isEqualTo(usersBefore + 1);
     }
 
-    private String verifyUnbound(String phone, MockHttpSession session) throws Exception {
+    private String verifyUnbound(String phone, String session) throws Exception {
         send(phone, session);
-        var result = mvc.perform(post("/users/sms/entry/verify").session(session).with(csrf())
+        var result = mvc.perform(post("/users/sms/entry/verify").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(codeBody(phone, sentCodes.get(phone))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.state").value("SET_PASSWORD_REQUIRED"))
                 .andReturn();
@@ -283,8 +288,8 @@ class SmsEntryFlowTests {
                 .path("data").path("registrationTicket").asString();
     }
 
-    private void send(String phone, MockHttpSession session) throws Exception {
-        mvc.perform(post("/users/sms/entry/send").session(session).with(csrf())
+    private void send(String phone, String session) throws Exception {
+        mvc.perform(post("/users/sms/entry/send").with(withBrowserFlow(session)).with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON).content(phoneBody(phone)))
                 .andExpect(status().isOk());
     }

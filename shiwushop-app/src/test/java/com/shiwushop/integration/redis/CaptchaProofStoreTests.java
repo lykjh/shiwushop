@@ -67,9 +67,10 @@ class CaptchaProofStoreTests {
     }
 
     @Test
-    void otherSessionIsRejectedAndOneTimeProofRemainsConsumed() {
+    void wrongBrowserDoesNotConsumeProofButOwnerCanOnlyUseItOnce() {
         String proof = issue();
         assertThrows(BusinessException.class, () -> store.consume(proof, "other"));
+        assertDoesNotThrow(() -> store.consume(proof, "owner"));
         assertThrows(BusinessException.class, () -> store.consume(proof, "owner"));
     }
 

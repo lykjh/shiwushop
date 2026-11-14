@@ -15,6 +15,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.shiwushop.support.MockLogin.loginAs;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -37,10 +38,10 @@ class ShipmentCorrectionControllerTest {
     @Test
     void rejectsInvalidRequestAndMissingCsrfBeforeService() throws Exception {
         String path = "/merchant/shops/1/orders/2/shipment/corrections";
-        mvc.perform(post(path).sessionAttr("userId", 3L).with(csrf()).contentType("application/json")
+        mvc.perform(post(path).with(loginAs(3L)).with(csrf().asHeader()).contentType("application/json")
                         .content("{\"originalVersion\":-1,\"carrierName\":\"\",\"trackingNo\":\"x\",\"reason\":\"x\"}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post(path).sessionAttr("userId", 3L).contentType("application/json")
+        mvc.perform(post(path).with(loginAs(3L)).contentType("application/json")
                         .content("{\"originalVersion\":0,\"carrierName\":\"x\",\"trackingNo\":\"x\",\"reason\":\"x\"}"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(service);
@@ -49,9 +50,9 @@ class ShipmentCorrectionControllerTest {
     @Test
     void rejectsAnonymousAndInvalidAdminFilters() throws Exception {
         mvc.perform(get("/admin/shipment-corrections")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/admin/shipment-corrections").sessionAttr("userId", 3L).param("status", "BAD"))
+        mvc.perform(get("/admin/shipment-corrections").with(loginAs(3L)).param("status", "BAD"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/admin/shipment-corrections").sessionAttr("userId", 3L).param("size", "101"))
+        mvc.perform(get("/admin/shipment-corrections").with(loginAs(3L)).param("size", "101"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
@@ -60,7 +61,7 @@ class ShipmentCorrectionControllerTest {
     void merchantReadsOnlyApplicationStatusWithSession() throws Exception {
         String path = "/merchant/shops/2/orders/3/shipment/corrections/5";
         when(service.merchantRequest(1L, 2L, 3L, 5L)).thenReturn(new ShipmentCorrectionRequestVO(5L, "PENDING"));
-        mvc.perform(get(path).sessionAttr("userId", 1L)).andExpect(status().isOk())
+        mvc.perform(get(path).with(loginAs(1L))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(5)).andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.remark").doesNotExist());
         verify(service).merchantRequest(1L, 2L, 3L, 5L);

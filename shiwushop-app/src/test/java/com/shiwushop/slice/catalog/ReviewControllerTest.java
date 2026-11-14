@@ -34,7 +34,7 @@ class ReviewControllerTest {
             "{\"rating\":5,\"content\":\"正常评价\",\"imageMediaIds\":[null]}",
             "{\"rating\":5,\"content\":\"正常评价\",\"imageMediaIds\":[-1]}"})
     void rejectsBodyBeforeBusinessService(String body) throws Exception {
-        mvc.perform(post("/orders/1/items/1/review").with(csrf()).contentType("application/json").content(body))
+        mvc.perform(post("/orders/1/items/1/review").with(csrf().asHeader()).contentType("application/json").content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

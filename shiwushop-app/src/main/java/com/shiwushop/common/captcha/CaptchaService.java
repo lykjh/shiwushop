@@ -8,9 +8,9 @@ public interface CaptchaService {
     /** 生成滑块图像，供客户端展示及后续轨迹验证。 */
     ApiResponse<ImageCaptchaVO> generateCaptcha();
 
-    /** 验证滑块轨迹并签发绑定 Session 的一次性凭证。 */
-    String verifyAndIssueProof(String id, ImageCaptchaTrack track, String sessionId);
+    /** 验证滑块轨迹并签发绑定浏览器 的一次性凭证。 */
+    String verifyAndIssueProof(String id, ImageCaptchaTrack track, String browserId);
 
     /** 在登录或注册时消费一次性凭证。 */
-    void consumeLoginProof(String proof, String sessionId);
+    void consumeLoginProof(String proof, String browserId);
 }

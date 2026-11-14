@@ -10,23 +10,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "spring.session.data.redis.namespace=shiwushop:session:account-http"})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AccountManagementHttpTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired StringRedisTemplate redis;
-    @Autowired FindByIndexNameSessionRepository<? extends Session> sessions;
     final ObjectMapper json = new ObjectMapper();
     TestAccounts fixtures;
     TestAccounts.Account admin;
@@ -42,9 +39,7 @@ class AccountManagementHttpTest {
     @AfterEach
     void cleanup() {
         for (long id : new long[] {admin.id(), user.id()}) {
-            for (String sessionId : sessions.findByPrincipalName(Long.toString(id)).keySet())
-                sessions.deleteById(sessionId);
-            redis.delete("shiwushop:auth:state:" + id);
+            redis.delete(List.of("shiwushop:auth:state:" + id, "shiwushop:auth:logins:" + id));
         }
         jdbc.update("DELETE FROM account_action_items WHERE target_user_id=?", user.id());
         jdbc.update("DELETE FROM audit_events WHERE target_type='USER_ACCOUNT' AND target_id=?", user.id());
@@ -60,7 +55,7 @@ class AccountManagementHttpTest {
     }
 
     @Test
-    void adminDisableIsIdempotentAuditedAndInvalidatesOldSession() throws Exception {
+    void adminDisableIsIdempotentAuditedAndInvalidatesOldJwt() throws Exception {
         try (var manager = client(); var buyer = client()) {
             login(manager, admin);
             login(buyer, user);
@@ -91,15 +86,18 @@ class AccountManagementHttpTest {
     }
 
     @Test
-    void indexedSessionsRevokeOtherAndPreserveCurrent() throws Exception {
+    void jwtLoginsCanRevokeOtherDevicesAndPreserveCurrent() throws Exception {
         try (var current = client(); var other = client(); var stranger = client()) {
             login(current, user);
             login(other, user);
             login(stranger, admin);
+            String otherJwt = other.authToken();
+            assertNotNull(otherJwt);
             var listed = json.readTree(current.get("/users/sessions").body()).path("data");
             assertEquals(2, listed.size());
-            assertFalse(listed.toString().contains(current.sessionId()));
-            assertFalse(listed.toString().contains(other.sessionId()));
+            assertFalse(listed.toString().contains(current.browserId()));
+            assertFalse(listed.toString().contains(other.browserId()));
+            assertFalse(listed.toString().contains(otherJwt));
             String otherRef = null;
             for (var row : listed) {
                 if (!row.path("current").asBoolean()) otherRef = row.path("sessionRef").asString();
@@ -116,9 +114,18 @@ class AccountManagementHttpTest {
             assertEquals(200, current.post("/users/sessions/" + otherRef + "/revoke",
                     Map.of("currentPassword", user.password())).statusCode());
             assertEquals(401, other.get("/users/me").statusCode());
+            assertEquals(401, other.replayAuthToken("/users/me", otherJwt).statusCode());
             assertEquals(200, current.get("/users/me").statusCode());
             assertEquals(404, current.post("/users/sessions/" + otherRef + "/revoke",
                     Map.of("currentPassword", user.password())).statusCode());
+            login(other, user);
+            String replacement = other.authToken();
+            assertNotNull(replacement);
+            assertEquals(200, current.post("/users/sessions/revoke-others",
+                    Map.of("currentPassword", user.password())).statusCode());
+            assertEquals(401, other.replayAuthToken("/users/me", replacement).statusCode());
+            assertEquals(200, current.get("/users/me").statusCode());
+            assertEquals(200, stranger.get("/users/me").statusCode());
         }
     }
 

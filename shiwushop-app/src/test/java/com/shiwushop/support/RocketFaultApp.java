@@ -59,6 +59,8 @@ public final class RocketFaultApp implements AutoCloseable {
                         "--spring.datasource.url=jdbc:mysql://127.0.0.1:23306/shiwushop_rocket?serverTimezone=Asia/Shanghai",
                         "--spring.datasource.username=shiwushop", "--spring.datasource.password=test-shiwushop",
                         "--spring.datasource.hikari.maximum-pool-size=4", "--spring.data.redis.port=26379",
+                        "--shop.auth.jwt.secret=" + System.getProperty("shop.auth.jwt.secret"),
+                        "--shop.auth.jwt.cookie-path=/", "--shop.auth.jwt.cookie-secure=false",
                         "--shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                         "--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                         "--shop.search.url=http://127.0.0.1:29200", "--shop.search.discovery-enabled=false",

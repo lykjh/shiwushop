@@ -33,7 +33,7 @@ class AfterSaleControllerTest {
             "{\"type\":\"REFUND_ONLY\",\"reason\":\"商品损坏\",\"items\":[{\"orderItemId\":1,\"quantity\":0}]}"})
     void rejectsInvalidItemsBeforeBusinessService(String body) throws Exception {
         mvc.perform(post("/orders/1/after-sales").header("Idempotency-Key", "after-sale-zhang")
-                        .with(csrf()).contentType("application/json").content(body))
+                        .with(csrf().asHeader()).contentType("application/json").content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
@@ -41,7 +41,7 @@ class AfterSaleControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"{\"approved\":false}", "{\"approved\":false,\"reason\":\" \"}", "{\"reason\":\"商品损坏\"}"})
     void rejectionMustIncludeAReason(String body) throws Exception {
-        mvc.perform(post("/merchant/shops/1/after-sales/1/review").with(csrf())
+        mvc.perform(post("/merchant/shops/1/after-sales/1/review").with(csrf().asHeader())
                         .contentType("application/json").content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
@@ -50,7 +50,7 @@ class AfterSaleControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"0", "-1", "not-a-number", "9223372036854775808"})
     void rejectsInvalidWithdrawalId(String id) throws Exception {
-        mvc.perform(post("/after-sales/" + id + "/withdraw").with(csrf()))
+        mvc.perform(post("/after-sales/" + id + "/withdraw").with(csrf().asHeader()))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

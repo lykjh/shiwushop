@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -81,19 +82,19 @@ class CategoryHierarchyTests {
         long third = create(admin, Map.of(
                 "name", "智能手机-" + suffix, "parentId", child));
 
-        mockMvc.perform(post("/admin/categories").session(admin)
+        mockMvc.perform(post("/admin/categories").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", "第四级", "parentId", third))))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(post("/admin/categories").session(admin)
+        mockMvc.perform(post("/admin/categories").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", "手机-" + suffix, "parentId", root))))
                 .andExpect(status().isConflict());
 
-        mockMvc.perform(post("/admin/categories").session(admin)
+        mockMvc.perform(post("/admin/categories").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "name", "错误", "visible", 2))))
@@ -112,7 +113,7 @@ class CategoryHierarchyTests {
     }
 
     private long create(MockHttpSession admin, Map<String, ?> body) throws Exception {
-        MvcResult result = mockMvc.perform(post("/admin/categories").session(admin)
+        MvcResult result = mockMvc.perform(post("/admin/categories").with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(body)))
                 .andExpect(status().isOk())

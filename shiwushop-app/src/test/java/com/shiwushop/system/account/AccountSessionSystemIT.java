@@ -61,10 +61,12 @@ class AccountSessionSystemIT {
     void loginMeChangePasswordAndLogoutAcrossRealRequests() throws Exception {
         try (var client = new HttpAccountClient(base)) {
             client.csrf();
-            String anonymous = client.sessionId();
+            String anonymous = client.browserId();
             var login = client.post("/users/login", Map.of("username", username, "password", "Shop123!"));
             assertEquals(200, login.statusCode(), login.body());
-            assertNotEquals(anonymous, client.sessionId());
+            assertNotEquals(anonymous, client.browserId());
+            assertTrue(login.headers().allValues("Set-Cookie").stream()
+                    .noneMatch(cookie -> cookie.startsWith("MALLFLOW=") || cookie.startsWith("JSESSIONID=")));
             var me = client.get("/users/me");
             assertEquals(200, me.statusCode());
             assertEquals(id, json.readTree(me.body()).path("data").path("id").asLong());
@@ -78,7 +80,9 @@ class AccountSessionSystemIT {
             var relogin = client.post("/users/login", Map.of("username", username, "password", "Shop456!"));
             assertEquals(200, relogin.statusCode(), relogin.body());
             client.csrf();
+            String priorLogout = client.browserId();
             assertEquals(200, client.post("/users/logout", Map.of()).statusCode());
+            assertNotEquals(priorLogout, client.browserId());
             assertEquals(401, client.get("/users/me").statusCode());
         }
     }

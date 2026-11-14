@@ -3,9 +3,12 @@ package com.shiwushop.user.controller.user;
 import com.shiwushop.user.dto.user.PhoneBindDTO;
 import com.shiwushop.user.dto.user.SmsPhoneDTO;
 import com.shiwushop.user.service.PhoneBindingService;
+import com.shiwushop.user.auth.JwtLogin;
 import com.shiwushop.common.Result;
+import com.shiwushop.common.auth.BrowserFlow;
 import com.shiwushop.common.auth.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PhoneBindingController {
     private final PhoneBindingService binding;
+    private final JwtLogin jwt;
+    private final BrowserFlow browserFlow;
 
     /** 发送验证码前确认当前账号有效，验证码不出现在响应里。 */
     @PostMapping("/send")
@@ -29,9 +34,11 @@ public class PhoneBindingController {
 
     /** 当前密码和一次性验证码均通过后换绑手机号，并注销旧会话。 */
     @PostMapping("/confirm")
-    public Result<Void> confirm(@Valid @RequestBody PhoneBindDTO body, HttpServletRequest request) {
+    public Result<Void> confirm(@Valid @RequestBody PhoneBindDTO body, HttpServletRequest request,
+                                HttpServletResponse response) {
         binding.bind(SessionUser.requireId(request), body.currentPassword(), body.phone(), body.code());
-        request.getSession(false).invalidate();
+        jwt.clearCookie(response);
+        browserFlow.rotate(response);
         return Result.success();
     }
 }

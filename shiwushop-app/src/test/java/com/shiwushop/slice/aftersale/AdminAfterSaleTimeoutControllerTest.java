@@ -33,8 +33,8 @@ class AdminAfterSaleTimeoutControllerTest {
     void rejectsInvalidId(String id) throws Exception {
         String path = "/admin/after-sale-timeouts/" + id;
         mvc.perform(get(path)).andExpect(status().isBadRequest());
-        mvc.perform(post(path + "/claim").with(csrf())).andExpect(status().isBadRequest());
-        mvc.perform(post(path + "/close").with(csrf()).contentType("application/json")
+        mvc.perform(post(path + "/claim").with(csrf().asHeader())).andExpect(status().isBadRequest());
+        mvc.perform(post(path + "/close").with(csrf().asHeader()).contentType("application/json")
                         .content("{\"evidence\":\"记录\",\"conclusion\":\"完成\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
@@ -51,7 +51,7 @@ class AdminAfterSaleTimeoutControllerTest {
     @ValueSource(strings = {"{}", "{\"evidence\":\"\",\"conclusion\":\"完成\"}",
             "{\"evidence\":\"记录\",\"conclusion\":\" \"}"})
     void rejectsIncompleteClose(String body) throws Exception {
-        mvc.perform(post("/admin/after-sale-timeouts/1/close").with(csrf())
+        mvc.perform(post("/admin/after-sale-timeouts/1/close").with(csrf().asHeader())
                 .contentType("application/json").content(body)).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

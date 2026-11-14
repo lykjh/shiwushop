@@ -25,7 +25,7 @@ $env:SHOP_PRIVACY_KEY_V1_BASE64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 mvn -B '-Dspring.profiles.active=test' '-Dspring.config.import=optional:file:./target/no-local.yml' verify
 ```
 
-测试结束后可用 `docker compose -p shiwushop-trial -f compose.test.yml down -v` 清理该隔离环境及测试数据。若要从空库运行应用，重新启动测试容器，再设置 `$env:SPRING_PROFILES_ACTIVE='test'`、`$env:SERVER_ADDRESS='127.0.0.1'`、`$env:SERVER_PORT='18080'`，执行 `java -jar shiwushop-app/target/shiwushop-app-1.0-SNAPSHOT.jar`。健康检查地址为 `http://127.0.0.1:18080/actuator/health`。
+测试结束后可用 `docker compose -p shiwushop-trial -f compose.test.yml down -v` 清理该隔离环境及测试数据。若要从空库运行应用，重新启动测试容器，再设置 `$env:SPRING_PROFILES_ACTIVE='test'`、`$env:SERVER_ADDRESS='127.0.0.1'`、`$env:SERVER_PORT='18080'`，按[部署说明](docs/DEPLOYMENT.md#jwt-configuration)设置独立测试密钥。使用本地 HTTP 时，再设置 `SHOP_AUTH_JWT_COOKIE_PATH=/` 和 `SHOP_AUTH_JWT_COOKIE_SECURE=false`，然后执行 `java -jar shiwushop-app/target/shiwushop-app-1.0-SNAPSHOT.jar`。健康检查地址为 `http://127.0.0.1:18080/actuator/health`。
 
 MySQL 容器自动创建测试库。手工安装数据库时先执行 [`create_database.sql`](deploy/sql/create_database.sql)；应用启动后 Flyway 执行 V1—V42，不导入业务数据。生产环境的依赖、凭据和启动步骤见[部署说明](docs/DEPLOYMENT.md)。
 

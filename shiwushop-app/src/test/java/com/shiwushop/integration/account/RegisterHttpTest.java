@@ -23,8 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 隔离 MySQL/Redis + 真 Tomcat 端口；滑块 proof 用真实存储签发，不伪造业务服务。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "spring.datasource.hikari.maximum-pool-size=2",
-        "spring.session.data.redis.namespace=shiwushop:session:register-http"})
+        "spring.datasource.hikari.maximum-pool-size=2"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RegisterHttpTest {
     private static final AtomicLong SEQUENCE = new AtomicLong(System.currentTimeMillis());
@@ -50,7 +49,7 @@ class RegisterHttpTest {
     }
 
     private HttpResponse<String> register(HttpAccountClient client, String username, String password) throws Exception {
-        String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), client.sessionId());
+        String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), client.browserId());
         Map<String, Object> body = new HashMap<>();
         body.put("username", username);
         body.put("password", password);
@@ -147,7 +146,7 @@ class RegisterHttpTest {
     @Test
     void proofCannotBeReplayedAfterRegistration() throws Exception {
         try (var client = client()) {
-            String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), client.sessionId());
+            String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), client.browserId());
             assertEquals(200, client.post("/users/register",
                     Map.of("username", buyer(), "password", "Shop123!", "captchaProof", proof)).statusCode());
             assertEquals(400, client.post("/users/register",
@@ -213,7 +212,7 @@ class RegisterHttpTest {
     }
 
     @Test
-    void independentSessionsCanRegisterBehindTheSameExit() throws Exception {
+    void independentBrowsersCanRegisterBehindTheSameExit() throws Exception {
         for (int index = 0; index < 6; index++) {
             try (var client = client()) {
                 var response = register(client, buyer(), "Shop123!");
@@ -223,15 +222,18 @@ class RegisterHttpTest {
     }
 
     @Test
-    void anotherSessionCannotUseTheProof() throws Exception {
+    void anotherBrowserCannotUseOrSpendTheProof() throws Exception {
         try (var owner = client(); var stranger = client()) {
-            String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), owner.sessionId());
+            String proof = proofs.issue("boundary" + SEQUENCE.incrementAndGet(), owner.browserId());
             String name = buyer();
             var response = stranger.post("/users/register",
                     Map.of("username", name, "password", "Shop123!", "captchaProof", proof));
             assertEquals(400, response.statusCode(), response.body());
             assertEquals(0,
                     jdbc.queryForObject("SELECT COUNT(*) FROM user_accounts WHERE username=?", Integer.class, name));
+            var registered = owner.post("/users/register",
+                    Map.of("username", name, "password", "Shop123!", "captchaProof", proof));
+            assertEquals(200, registered.statusCode(), registered.body());
         }
     }
 

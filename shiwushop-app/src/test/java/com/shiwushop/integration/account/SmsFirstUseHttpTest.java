@@ -21,9 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-/** 仅替换收费短信发送适配器；HTTP、验证码消费、票据、事务和 Redis Session 均真实执行。 */
+/** 仅替换收费短信发送适配器；HTTP、浏览器 Cookie、Redis 票据和事务均真实执行。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=", "spring.session.data.redis.namespace=shiwushop:session:first-use-http",
         "shop.sms.lookup-key-base64=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
         "shop.privacy.key-v1-base64=QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -67,7 +66,7 @@ class SmsFirstUseHttpTest {
     }
 
     @Test
-    void firstUseThenRepeatLoginKeepsOneAccountAndRejectsCrossSessionAndReplay() throws Exception {
+    void firstUseThenRepeatLoginKeepsOneAccountAndRejectsCrossBrowserAndReplay() throws Exception {
         String base = "http://127.0.0.1:" + port;
         try (var client = new HttpAccountClient(base); var other = new HttpAccountClient(base)) {
             client.csrf();
@@ -87,11 +86,11 @@ class SmsFirstUseHttpTest {
             assertEquals(401, other.post("/users/sms/entry/register", registration).statusCode());
             assertEquals(401,
                     client.post("/users/sms/entry/verify", Map.of("phone", phone, "code", code.get())).statusCode());
-            String oldSession = client.sessionId();
+            String oldBrowser = client.browserId();
             var created = client.post("/users/sms/entry/register", registration);
             assertEquals(200, created.statusCode(), created.body());
             long id = json.readTree(created.body()).path("data").path("id").asLong();
-            assertNotEquals(oldSession, client.sessionId());
+            assertNotEquals(oldBrowser, client.browserId());
             assertTrue(new BCryptPasswordEncoder().matches("Shop123!",
                     jdbc.queryForObject("SELECT password_hash FROM user_accounts WHERE user_id=?", String.class, id)));
             var me = client.get("/users/me");

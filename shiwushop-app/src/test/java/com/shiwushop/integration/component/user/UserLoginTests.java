@@ -7,20 +7,22 @@ import com.shiwushop.support.TestRegistration;
 import com.shiwushop.common.captcha.CaptchaProofStore;
 import com.shiwushop.user.dto.user.RegisterDTO;
 import com.shiwushop.user.service.RegisterService;
+import com.shiwushop.user.auth.JwtLogin;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static com.shiwushop.support.MockBrowserFlow.withBrowserFlow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,7 +41,7 @@ class UserLoginTests {
     private CaptchaProofStore proofs;
 
     @Test
-    void activeAccountLogsInWithNewSchemaAndCreatesSession() throws Exception {
+    void activeAccountReceivesJwtWithoutCreatingSession() throws Exception {
         String username = newUsername();
         TestRegistration.register(userService, proofs, new RegisterDTO(username, "Shop123!", null));
 
@@ -47,11 +49,13 @@ class UserLoginTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value(username))
                 .andReturn();
-        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
-        assertNotNull(session);
+        assertNull(result.getRequest().getSession(false));
         Long userId = jdbcTemplate.queryForObject(
                 "SELECT user_id FROM user_accounts WHERE username = ?", Long.class, username);
-        assertEquals(userId, session.getAttribute("userId"));
+        var jwt = result.getResponse().getCookie(JwtLogin.COOKIE);
+        assertNotNull(jwt);
+        mockMvc.perform(get("/users/me").cookie(jwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(userId));
     }
 
     @Test
@@ -89,23 +93,22 @@ class UserLoginTests {
     void lowRiskLoginNeedsNoProofButSubmittedProofMustBeValidAndOneTime() throws Exception {
         String username = newUsername();
         TestRegistration.register(userService, proofs, new RegisterDTO(username, "Shop123!", null));
-        mockMvc.perform(post("/users/login").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/users/login").with(withBrowserFlow(UUID.randomUUID().toString())).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"Shop123!\"}"))
                 .andExpect(status().isOk());
 
-        MockHttpSession session = new MockHttpSession();
-        String wrongSessionProof = proofs.issue("test-" + UUID.randomUUID(), session.getId());
+        String owner = UUID.randomUUID().toString();
+        String ownerProof = proofs.issue("test-" + UUID.randomUUID(), owner);
         String body = "{\"username\":\"" + username + "\",\"password\":\"Shop123!\",\"captchaProof\":\"";
-        mockMvc.perform(post("/users/login").session(new MockHttpSession())
-                        .contentType(MediaType.APPLICATION_JSON).content(body + wrongSessionProof + "\"}"))
+        mockMvc.perform(post("/users/login").with(withBrowserFlow(UUID.randomUUID().toString()))
+                        .contentType(MediaType.APPLICATION_JSON).content(body + ownerProof + "\"}"))
                 .andExpect(status().isBadRequest());
 
-        String validProof = proofs.issue("test-" + UUID.randomUUID(), session.getId());
-        mockMvc.perform(post("/users/login").session(session)
-                        .contentType(MediaType.APPLICATION_JSON).content(body + validProof + "\"}"))
+        mockMvc.perform(post("/users/login").with(withBrowserFlow(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content(body + ownerProof + "\"}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/users/login").session(session)
-                        .contentType(MediaType.APPLICATION_JSON).content(body + validProof + "\"}"))
+        mockMvc.perform(post("/users/login").with(withBrowserFlow(owner))
+                        .contentType(MediaType.APPLICATION_JSON).content(body + ownerProof + "\"}"))
                 .andExpect(status().isBadRequest());
     }
 

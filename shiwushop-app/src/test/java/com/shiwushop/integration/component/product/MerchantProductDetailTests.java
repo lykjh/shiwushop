@@ -38,6 +38,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -91,7 +92,7 @@ class MerchantProductDetailTests {
         linkMapper.insertLink(sku.getId(), small.getId());
         linkMapper.insertLink(sku.getId(), white.getId());
 
-        mockMvc.perform(get("/merchant/products/{id}", product.getId()).session(session(owner)))
+        mockMvc.perform(get("/merchant/products/{id}", product.getId()).with(withMockLogin(session(owner))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(product.getId()))
                 .andExpect(jsonPath("$.data.shopId").value(product.getShopId()))
@@ -122,16 +123,16 @@ class MerchantProductDetailTests {
         mockMvc.perform(get("/merchant/products/{id}", product.getId()))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/merchant/products/{id}", product.getId())
-                        .session(session(user("MERCHANT"))))
+                        .with(withMockLogin(session(user("MERCHANT")))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/merchant/products/{id}", product.getId())
-                        .session(session(user("USER"))))
+                        .with(withMockLogin(session(user("USER")))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/merchant/products/{id}", Long.MAX_VALUE)
-                        .session(session(owner)))
+                        .with(withMockLogin(session(owner))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/merchant/products/{id}", 0)
-                        .session(session(owner)))
+                        .with(withMockLogin(session(owner))))
                 .andExpect(status().isBadRequest());
     }
 

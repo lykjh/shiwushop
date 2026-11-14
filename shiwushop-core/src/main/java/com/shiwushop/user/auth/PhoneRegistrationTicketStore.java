@@ -14,12 +14,12 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 
-/** 验码后签发一次性注册票据，票据只绑定原手机号和匿名 Session。 */
+/** 验码后签发一次性注册票据，票据只绑定原手机号和匿名浏览器。 */
 @Component
 public class PhoneRegistrationTicketStore {
-    /** 手机号注册票据的有效期，票据与原手机号及匿名 Session 绑定。 */
+    /** 手机号注册票据的有效期。 */
     private static final Duration TTL = Duration.ofMinutes(5);
-    /** 仅在手机号及 Session 摘要匹配时原子删除注册票据，保证一次性消费。 */
+    /** 仅在手机号及浏览器标识摘要匹配时原子删除注册票据。 */
     private static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>(
             "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end; " +
                     "return redis.call('DEL', KEYS[1])", Long.class);
@@ -31,21 +31,21 @@ public class PhoneRegistrationTicketStore {
     }
 
     /** Redis 键只存票据摘要；原始票据仅交给当前请求的客户端。 */
-    public String issue(String phoneDigest, String sessionId) {
+    public String issue(String phoneDigest, String browserId) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        Boolean created = redis.opsForValue().setIfAbsent(key(ticket), value(phoneDigest, sessionId), TTL);
+        Boolean created = redis.opsForValue().setIfAbsent(key(ticket), value(phoneDigest, browserId), TTL);
         if (!Boolean.TRUE.equals(created))
             throw new BusinessException(503, "注册凭证服务暂时不可用");
         return ticket;
     }
 
-    /** 核对手机号和 Session 后原子删除，错误会话不会消耗合法票据。 */
-    public void consume(String ticket, String phoneDigest, String sessionId) {
+    /** 核对手机号和浏览器后原子删除，错误浏览器不会消耗合法票据。 */
+    public void consume(String ticket, String phoneDigest, String browserId) {
         if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{43}"))
             throw new BusinessException(401, "注册凭证无效或已过期");
-        Long consumed = redis.execute(CONSUME, List.of(key(ticket)), value(phoneDigest, sessionId));
+        Long consumed = redis.execute(CONSUME, List.of(key(ticket)), value(phoneDigest, browserId));
         if (consumed == null)
             throw new BusinessException(503, "注册凭证服务暂时不可用");
         if (consumed != 1)
@@ -56,8 +56,8 @@ public class PhoneRegistrationTicketStore {
         return "shiwushop:sms:registration:" + sha256(ticket);
     }
 
-    private String value(String phoneDigest, String sessionId) {
-        return phoneDigest + ":" + sha256(sessionId);
+    private String value(String phoneDigest, String browserId) {
+        return phoneDigest + ":" + sha256(browserId);
     }
 
     private String sha256(String input) {

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -77,7 +78,7 @@ class MerchantProductOptionsTests {
         value(old, "旧值", 0);
 
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session(owner))).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("options", List.of(
                                 Map.of("name", "颜色", "values", List.of("白色", "黑色")),
                                 Map.of("name", "容量", "values", List.of("128GB", "256GB")))))))
@@ -115,7 +116,7 @@ class MerchantProductOptionsTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session(user("MERCHANT")))
+                        .with(withMockLogin(session(user("MERCHANT"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
 
@@ -126,7 +127,7 @@ class MerchantProductOptionsTests {
         sku.setStock(1);
         skuMapper.insert(sku);
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session(owner))
+                        .with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict());
         assertEquals(1, optionMapper.selectCount(new LambdaQueryWrapper<ProductOption>()
@@ -141,21 +142,21 @@ class MerchantProductOptionsTests {
         MockHttpSession session = session(owner);
 
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("options", List.of(
                                 Map.of("name", "颜色", "values", List.of("白色")),
                                 Map.of("name", " 颜色 ", "values", List.of("黑色")))))))
                 .andExpect(status().isConflict());
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(oneOption("颜色", List.of("白色", " 白色 "))))
                 .andExpect(status().isConflict());
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(oneOption("颜色", List.of())))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(put("/merchant/products/{id}/options", product.getId())
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of("options", List.of()))))
                 .andExpect(status().isBadRequest());
         assertEquals("旧规格", optionMapper.selectById(existing.getId()).getName());

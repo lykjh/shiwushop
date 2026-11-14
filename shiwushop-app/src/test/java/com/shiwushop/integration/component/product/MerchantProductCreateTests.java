@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -85,7 +86,7 @@ class MerchantProductCreateTests {
         String name = "商品-" + UUID.randomUUID();
 
         mockMvc.perform(post("/merchant/products")
-                        .session(session(owner))
+                        .with(withMockLogin(session(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "shopId", shop.getId(),
@@ -138,14 +139,14 @@ class MerchantProductCreateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/merchant/products")
-                        .session(session(user("MERCHANT")))
+                        .with(withMockLogin(session(user("MERCHANT"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
 
         Long ordinaryOwner = user("USER");
         Shop ordinaryShop = shop(ordinaryOwner);
         mockMvc.perform(post("/merchant/products")
-                        .session(session(ordinaryOwner))
+                        .with(withMockLogin(session(ordinaryOwner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(ordinaryShop.getId(), child.getId(), "普通用户商品")))
                 .andExpect(status().isForbidden());
@@ -161,34 +162,34 @@ class MerchantProductCreateTests {
         MockHttpSession session = session(owner);
 
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(shop.getId(), root.getId(), "一级分类商品")))
                 .andExpect(status().isConflict());
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "shopId", shop.getId(), "categoryId", child.getId(),
                                 "brandId", disabled.getId(), "name", "停用品牌商品"))))
                 .andExpect(status().isConflict());
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(shop.getId(), child.getId(), " ")))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "shopId", shop.getId(), "categoryId", child.getId(),
                                 "name", "图片非法", "imageUrls", List.of("https://example.com/a.jpg")))))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "shopId", shop.getId(), "categoryId", child.getId(),
                                 "name", "其他用户图片", "imageMediaIds", List.of(mediaId(user("MERCHANT"), "READY"))))))
                 .andExpect(status().isBadRequest());
         Long duplicateMediaId = mediaId(owner, "READY");
         mockMvc.perform(post("/merchant/products")
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(om.writeValueAsString(Map.of(
                                 "shopId", shop.getId(), "categoryId", child.getId(),
                                 "name", "重复图片", "imageMediaIds", List.of(duplicateMediaId, duplicateMediaId)))))

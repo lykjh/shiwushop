@@ -157,6 +157,8 @@ class MarketingBudgetSystemTest {
                     "--spring.datasource.password=" + PASSWORD,
                     "--spring.datasource.hikari.maximum-pool-size=4", "--spring.data.redis.port=" + REDIS_PORT,
                     "--spring.data.redis.database=" + REDIS_DATABASE,
+                    "--shop.auth.jwt.secret=" + System.getProperty("shop.auth.jwt.secret"),
+                    "--shop.auth.jwt.cookie-path=/", "--shop.auth.jwt.cookie-secure=false",
                     "--shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "--shop.member.enabled=false", "--shop.marketing.enabled=true",

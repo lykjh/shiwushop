@@ -16,8 +16,6 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.session.Session;
-import org.springframework.session.SessionRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,21 +26,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.autoconfigure.exclude=",
-        "spring.session.data.redis.namespace=shiwushop:session:sms-live-test",
         "shop.sms.lookup-key-base64=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
         "shop.privacy.key-v1-base64=QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="
 })
@@ -59,8 +56,6 @@ class SmsHttpSessionLiveTests {
     private JdbcTemplate jdbc;
     @Autowired
     private StringRedisTemplate redis;
-    @Autowired
-    private SessionRepository<? extends Session> sessions;
     @MockitoBean
     private SmsSender sender;
     @LocalServerPort
@@ -68,7 +63,7 @@ class SmsHttpSessionLiveTests {
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
-    void csrfAndRealRedisSessionProtectSmsLogin() throws Exception {
+    void csrfAndRedisSmsChallengeProtectLoginWithoutHttpSession() throws Exception {
         String phone = "138" + String.format("%08d", Math.abs(UUID.randomUUID().hashCode()) % 100_000_000);
         UserProfile profile = new UserProfile();
         profiles.insertEmpty(profile);
@@ -102,6 +97,7 @@ class SmsHttpSessionLiveTests {
             HttpResponse<String> csrf = client.send(HttpRequest.newBuilder(uri("/users/csrf")).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, csrf.statusCode());
+            String browserBefore = browserCookie(csrf);
             String token = json.readTree(csrf.body()).path("data").asString();
             assertEquals(200,
                     client.send(post(sendUri, body, token), HttpResponse.BodyHandlers.ofString()).statusCode());
@@ -112,30 +108,34 @@ class SmsHttpSessionLiveTests {
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, login.statusCode());
             assertEquals(userId.longValue(), json.readTree(login.body()).path("data").path("id").asLong());
-            String cookieValue = HttpCookie.parse(login.headers().firstValue("Set-Cookie").orElseThrow()).stream()
-                    .filter(cookie -> "MALLSESSION".equals(cookie.getName()))
-                    .map(HttpCookie::getValue).findFirst().orElseThrow();
-            String sessionId = new String(Base64.getDecoder().decode(cookieValue), StandardCharsets.UTF_8);
+            assertNotEquals(browserBefore, browserCookie(login));
+            assertTrue(cookies.getCookieStore().getCookies().stream()
+                    .anyMatch(cookie -> "MALLAUTH".equals(cookie.getName()) && cookie.isHttpOnly()));
             assertEquals(userId, jdbc.queryForObject("SELECT user_id FROM user_private WHERE phone_lookup_hash=?",
                     Long.class, lookup.digest(phone)));
             assertEquals(200, client.send(HttpRequest.newBuilder(uri("/users/me")).GET().build(),
                     HttpResponse.BodyHandlers.ofString()).statusCode());
-            assertEquals(409, client.send(post(uri("/users/sms/entry/verify"),
+            assertEquals(403, client.send(post(uri("/users/sms/entry/verify"),
                             "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", token),
                     HttpResponse.BodyHandlers.ofString()).statusCode());
-            assertEquals(userId, sessions.findById(sessionId).getAttribute("userId"));
+            String signedInCsrf = json.readTree(client.send(HttpRequest.newBuilder(uri("/users/csrf")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).body()).path("data").asString();
+            assertEquals(409, client.send(post(uri("/users/sms/entry/verify"),
+                            "{\"phone\":\"" + phone + "\",\"code\":\"" + code.get() + "\"}", signedInCsrf),
+                    HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertNoSessionCookies(cookies);
         } finally {
             jdbc.update("DELETE FROM user_private WHERE user_id=?", userId);
             jdbc.update("DELETE FROM user_accounts WHERE user_id=?", userId);
             jdbc.update("DELETE FROM users WHERE id=?", userId);
-            redis.delete("shiwushop:auth:state:" + userId);
+            redis.delete(List.of("shiwushop:auth:state:" + userId, "shiwushop:auth:logins:" + userId));
             String prefix = "shiwushop:sms:{" + lookup.digest(phone) + "}";
             redis.delete(List.of(prefix + ":sends", prefix + ":cooldown", prefix + ":entry:code"));
         }
     }
 
     @Test
-    void firstUseCreatesRedisSessionOnlyAfterPasswordIsSet() throws Exception {
+    void firstUseCreatesJwtOnlyAfterPasswordIsSet() throws Exception {
         String phone = "139" + String.format("%08d", java.util.concurrent.ThreadLocalRandom.current()
                 .nextInt(100_000_000));
         AtomicReference<String> code = new AtomicReference<>();
@@ -173,12 +173,13 @@ class SmsHttpSessionLiveTests {
             assertEquals(200, me.statusCode());
             assertEquals(phone.substring(0, 3) + "****" + phone.substring(7),
                     json.readTree(me.body()).path("data").path("phoneMasked").asString());
+            assertNoSessionCookies(cookies);
         } finally {
             if (userId != null) {
                 jdbc.update("DELETE FROM user_private WHERE user_id=?", userId);
                 jdbc.update("DELETE FROM user_accounts WHERE user_id=?", userId);
                 jdbc.update("DELETE FROM users WHERE id=?", userId);
-                redis.delete("shiwushop:auth:state:" + userId);
+                redis.delete(List.of("shiwushop:auth:state:" + userId, "shiwushop:auth:logins:" + userId));
             }
             String prefix = "shiwushop:sms:{" + lookup.digest(phone) + "}";
             redis.delete(List.of(prefix + ":sends", prefix + ":cooldown", prefix + ":entry:code"));
@@ -188,6 +189,18 @@ class SmsHttpSessionLiveTests {
 
     private URI uri(String path) {
         return URI.create("http://127.0.0.1:" + port + path);
+    }
+
+    private static String browserCookie(HttpResponse<?> response) {
+        return response.headers().allValues("Set-Cookie").stream()
+                .flatMap(header -> HttpCookie.parse(header).stream())
+                .filter(cookie -> List.of("MALLBROWSER", "__Host-MALLBROWSER").contains(cookie.getName()))
+                .map(HttpCookie::getValue).findFirst().orElseThrow();
+    }
+
+    private static void assertNoSessionCookies(CookieManager manager) {
+        assertFalse(manager.getCookieStore().getCookies().stream()
+                .anyMatch(cookie -> List.of("MALLFLOW", "JSESSIONID").contains(cookie.getName())));
     }
 
     private HttpRequest post(URI uri, String body, String csrf) {

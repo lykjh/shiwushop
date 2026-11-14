@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static com.shiwushop.support.MockBrowserFlow.withBrowserFlow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,14 +35,15 @@ class UserAuthRiskTests {
     private final String registerIp = "risk-test-" + UUID.randomUUID();
 
     @Test
-    void lowRiskLoginNeedsNoProofAndSessionSurvivesIpChange() throws Exception {
+    void lowRiskLoginNeedsNoProofAndJwtSurvivesIpChange() throws Exception {
         String username = username();
         TestRegistration.register(users, proofs, new RegisterDTO(username, "Shop123!", null));
-        MockHttpSession session = new MockHttpSession();
+        String session = UUID.randomUUID().toString();
 
-        login(session, username, "Shop123!", null, "198.51.100.10")
-                .andExpect(status().isOk());
-        mockMvc.perform(get("/users/me").session(session)
+        var jwt = login(session, username, "Shop123!", null, "198.51.100.10")
+                .andExpect(status().isOk()).andReturn().getResponse()
+                .getCookie(com.shiwushop.user.auth.JwtLogin.COOKIE);
+        mockMvc.perform(get("/users/me").cookie(jwt)
                         .with(request -> {
                             request.setRemoteAddr("198.51.100.11");
                             return request;
@@ -56,30 +57,30 @@ class UserAuthRiskTests {
         String username = username();
         TestRegistration.register(users, proofs, new RegisterDTO(username, "Shop123!", null));
         for (int i = 0; i < 11; i++) {
-            login(new MockHttpSession(), username, "Shop123!", null, "198.51.100.30")
+            login(UUID.randomUUID().toString(), username, "Shop123!", null, "198.51.100.30")
                     .andExpect(status().isOk());
         }
     }
 
     @Test
-    void accountFailuresAcrossSessionsRequireBoundOneTimeProof() throws Exception {
+    void accountFailuresAcrossBrowsersRequireBoundOneTimeProof() throws Exception {
         String username = username();
         TestRegistration.register(users, proofs, new RegisterDTO(username, "Shop123!", null));
         for (int i = 0; i < 5; i++) {
-            login(new MockHttpSession(), username, "wrong", null, "198.51.100.20")
+            login(UUID.randomUUID().toString(), username, "wrong", null, "198.51.100.20")
                     .andExpect(status().isUnauthorized());
         }
 
-        MockHttpSession session = new MockHttpSession();
+        String session = UUID.randomUUID().toString();
         login(session, username, "Shop123!", null, "198.51.100.20")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.data.state").value("CAPTCHA_REQUIRED"));
 
-        String otherSessionProof = proofs.issue("risk-" + UUID.randomUUID(), new MockHttpSession().getId());
+        String otherSessionProof = proofs.issue("risk-" + UUID.randomUUID(), UUID.randomUUID().toString());
         login(session, username, "Shop123!", otherSessionProof, "198.51.100.20")
                 .andExpect(status().isBadRequest());
 
-        String proof = proofs.issue("risk-" + UUID.randomUUID(), session.getId());
+        String proof = proofs.issue("risk-" + UUID.randomUUID(), session);
         login(session, username, "Shop123!", proof, "198.51.100.20")
                 .andExpect(status().isOk());
         login(session, username, "Shop123!", proof, "198.51.100.20")
@@ -88,7 +89,7 @@ class UserAuthRiskTests {
 
     @Test
     void everyRegistrationInOneSessionRequiresFreshProof() throws Exception {
-        MockHttpSession session = new MockHttpSession();
+        String session = UUID.randomUUID().toString();
         for (int i = 0; i < 5; i++) {
             register(session, username(), proofFor(session))
                     .andExpect(status().isOk());
@@ -98,7 +99,7 @@ class UserAuthRiskTests {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.data.state").value("CAPTCHA_REQUIRED"));
 
-        String proof = proofs.issue("risk-" + UUID.randomUUID(), session.getId());
+        String proof = proofs.issue("risk-" + UUID.randomUUID(), session);
         register(session, sixth, proof)
                 .andExpect(status().isOk());
     }
@@ -107,22 +108,22 @@ class UserAuthRiskTests {
     void repeatedRegistrationAcrossSessionsDoesNotBlockAnotherDeviceWithProof() throws Exception {
         String fingerprint = "same-browser-device-" + UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
-            MockHttpSession session = new MockHttpSession();
+            String session = UUID.randomUUID().toString();
             register(session, username(), proofFor(session), fingerprint)
                     .andExpect(status().isOk());
         }
 
-        MockHttpSession nextSession = new MockHttpSession();
+        String nextSession = UUID.randomUUID().toString();
         String nextUsername = username();
         register(nextSession, nextUsername, null, fingerprint)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.data.state").value("CAPTCHA_REQUIRED"));
 
-        MockHttpSession otherSession = new MockHttpSession();
+        String otherSession = UUID.randomUUID().toString();
         register(otherSession, username(), proofFor(otherSession), "other-browser-device-" + UUID.randomUUID())
                 .andExpect(status().isOk());
 
-        String proof = proofs.issue("risk-" + UUID.randomUUID(), nextSession.getId());
+        String proof = proofs.issue("risk-" + UUID.randomUUID(), nextSession);
         register(nextSession, nextUsername, proof, fingerprint)
                 .andExpect(status().isOk());
     }
@@ -131,22 +132,22 @@ class UserAuthRiskTests {
     void invalidProofsAcrossSessionsDoNotBlockAnotherDeviceWithProof() throws Exception {
         String fingerprint = "invalid-proof-device-" + UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
-            register(new MockHttpSession(), username(), "invalid", fingerprint)
+            register(UUID.randomUUID().toString(), username(), "invalid", fingerprint)
                     .andExpect(status().isBadRequest());
         }
-        register(new MockHttpSession(), username(), null, fingerprint)
+        register(UUID.randomUUID().toString(), username(), null, fingerprint)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.data.state").value("CAPTCHA_REQUIRED"));
-        MockHttpSession otherSession = new MockHttpSession();
+        String otherSession = UUID.randomUUID().toString();
         register(otherSession, username(), proofFor(otherSession), "unrelated-device-" + UUID.randomUUID())
                 .andExpect(status().isOk());
     }
 
-    private ResultActions login(MockHttpSession session, String username, String password,
+    private ResultActions login(String session, String username, String password,
                                 String proof, String ip) throws Exception {
         String body = "{\"username\":\"" + username + "\",\"password\":\"" + password + "\""
                 + (proof == null ? "" : ",\"captchaProof\":\"" + proof + "\"") + "}";
-        return mockMvc.perform(post("/users/login").session(session)
+        return mockMvc.perform(post("/users/login").with(withBrowserFlow(session))
                 .with(request -> {
                     request.setRemoteAddr(ip);
                     return request;
@@ -155,15 +156,15 @@ class UserAuthRiskTests {
                 .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
-    private ResultActions register(MockHttpSession session, String username, String proof) throws Exception {
-        return register(session, username, proof, "session-device-" + session.getId());
+    private ResultActions register(String session, String username, String proof) throws Exception {
+        return register(session, username, proof, "session-device-" + session);
     }
 
-    private ResultActions register(MockHttpSession session, String username, String proof,
+    private ResultActions register(String session, String username, String proof,
                                    String fingerprint) throws Exception {
         String body = "{\"username\":\"" + username + "\",\"password\":\"Shop123!\""
                 + (proof == null ? "" : ",\"captchaProof\":\"" + proof + "\"") + "}";
-        return mockMvc.perform(post("/users/register").session(session)
+        return mockMvc.perform(post("/users/register").with(withBrowserFlow(session))
                 .with(request -> {
                     request.setRemoteAddr(registerIp);
                     return request;
@@ -177,7 +178,7 @@ class UserAuthRiskTests {
         return "risk_" + UUID.randomUUID().toString().replace("-", "");
     }
 
-    private String proofFor(MockHttpSession session) {
-        return proofs.issue("risk-" + UUID.randomUUID(), session.getId());
+    private String proofFor(String session) {
+        return proofs.issue("risk-" + UUID.randomUUID(), session);
     }
 }

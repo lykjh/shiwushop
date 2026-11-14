@@ -13,6 +13,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.shiwushop.support.MockLogin.loginAs;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -32,9 +33,9 @@ class UserProfileControllerTest {
     void readsAndUpdatesOnlySessionUser() throws Exception {
         when(service.get(7L)).thenReturn(new UserProfileVO("旧", null, null));
         when(service.update(eq(7L), any())).thenReturn(new UserProfileVO("新", 5L, null));
-        mvc.perform(get("/users/profile").sessionAttr("userId", 7L)).andExpect(status().isOk())
+        mvc.perform(get("/users/profile").with(loginAs(7L))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.nickname").value("旧"));
-        mvc.perform(put("/users/profile").sessionAttr("userId", 7L).with(csrf()).contentType("application/json")
+        mvc.perform(put("/users/profile").with(loginAs(7L)).with(csrf().asHeader()).contentType("application/json")
                         .content("{\"nickname\":\" 新 \",\"avatarMediaId\":5,\"email\":\"a@qq.com\",\"userId\":99}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.avatarMediaId").value(5))
                 .andExpect(jsonPath("$.data.role").doesNotExist());
@@ -45,9 +46,9 @@ class UserProfileControllerTest {
     @Test
     void rejectsAnonymousInvalidAndMissingCsrf() throws Exception {
         mvc.perform(get("/users/profile")).andExpect(status().isUnauthorized());
-        mvc.perform(put("/users/profile").sessionAttr("userId", 7L).contentType("application/json")
+        mvc.perform(put("/users/profile").with(loginAs(7L)).contentType("application/json")
                 .content("{\"nickname\":\"x\"}")).andExpect(status().isForbidden());
-        mvc.perform(put("/users/profile").sessionAttr("userId", 7L).with(csrf()).contentType("application/json")
+        mvc.perform(put("/users/profile").with(loginAs(7L)).with(csrf().asHeader()).contentType("application/json")
                 .content("{\"nickname\":\"　\"}")).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

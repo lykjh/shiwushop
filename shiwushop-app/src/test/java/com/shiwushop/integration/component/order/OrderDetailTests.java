@@ -38,6 +38,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -119,9 +120,9 @@ class OrderDetailTests {
         MockHttpSession own = session(buyer);
 
         mockMvc.perform(get("/orders/{id}", order.getId())).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/orders/{id}", order.getId()).session(session(other)))
+        mockMvc.perform(get("/orders/{id}", order.getId()).with(withMockLogin(session(other))))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get("/orders/{id}", order.getId()).session(own))
+        mockMvc.perform(get("/orders/{id}", order.getId()).with(withMockLogin(own)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.shopName").value(shop.getName()))
                 .andExpect(jsonPath("$.data.addressSnapshot.consignee").value("张三"))
@@ -136,7 +137,7 @@ class OrderDetailTests {
         accountMapper.updateById(account);
         // Fixture SQL bypasses the service's cache invalidation.
         redis.delete("shiwushop:auth:state:" + buyer);
-        mockMvc.perform(get("/orders/{id}", order.getId()).session(own))
+        mockMvc.perform(get("/orders/{id}", order.getId()).with(withMockLogin(own)))
                 .andExpect(status().isUnauthorized());
     }
 

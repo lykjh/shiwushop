@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.shiwushop.support.MockLogin.withMockLogin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -88,7 +89,7 @@ class MerchantSkuCreateTests {
         String body = body(List.of(small.getId(), white.getId()), "3999.00", 0);
 
         mockMvc.perform(post("/merchant/products/{id}/skus", product.getId())
-                        .session(session(owner)).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .with(withMockLogin(session(owner))).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").isNumber())
                 .andExpect(jsonPath("$.data.productId").value(product.getId()))
@@ -108,7 +109,7 @@ class MerchantSkuCreateTests {
                 linkMapper.selectValueIds(saved.getId()));
 
         mockMvc.perform(post("/merchant/products/{id}/skus", product.getId())
-                        .session(session(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session(owner))).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(white.getId(), small.getId()), "3999.00", 1)))
                 .andExpect(status().isConflict());
         assertEquals(1, skuMapper.selectCount(new LambdaQueryWrapper<Sku>()
@@ -138,12 +139,12 @@ class MerchantSkuCreateTests {
                 List.of(white.getId(), foreign.getId()),
                 List.of(white.getId(), white.getId()))) {
             mockMvc.perform(post("/merchant/products/{id}/skus", product.getId())
-                            .session(session).contentType(MediaType.APPLICATION_JSON)
+                            .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                             .content(body(ids, "19.90", 1)))
                     .andExpect(status().isBadRequest());
         }
         mockMvc.perform(post("/merchant/products/{id}/skus", product.getId())
-                        .session(session).contentType(MediaType.APPLICATION_JSON)
+                        .with(withMockLogin(session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(white.getId(), small.getId()), "0", 1)))
                 .andExpect(status().isBadRequest());
         assertEquals(0, skuMapper.selectCount(new LambdaQueryWrapper<Sku>()
@@ -162,7 +163,7 @@ class MerchantSkuCreateTests {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/merchant/products/{id}/skus", product.getId())
-                        .session(session(user("MERCHANT")))
+                        .with(withMockLogin(session(user("MERCHANT"))))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
     }
