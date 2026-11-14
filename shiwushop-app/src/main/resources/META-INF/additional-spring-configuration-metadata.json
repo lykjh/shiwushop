@@ -1,11 +1,11 @@
 {
   "properties": [
     {
-      "name": "shop.shipment.rabbit-enabled",
+      "name": "shop.shipment.rocket-preflight-verified",
       "type": "java.lang.Boolean",
-      "description": "Enable RabbitMQ shipment messaging."
+      "defaultValue": false,
+      "description": "Deployment entrypoint attestation after live timer and Broker limit checks; never persist true in application configuration."
     },
-
     {
       "name": "shop.sms.access-key-id",
       "type": "java.lang.String",
@@ -25,6 +25,29 @@
       "name": "shop.sms.template-code",
       "type": "java.lang.String",
       "description": "阿里云短信模板 Code."
+    },
+    {
+      "name": "shop.shipment.rocket-enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Enable RocketMQTemplate shipment transport."
+    },
+    {
+      "name": "shop.shipment.rocket-name-server",
+      "type": "java.lang.String",
+      "description": "Remoting NameServer addresses separated by semicolons; local deployment uses localhost:29876."
+    },
+    {
+      "name": "shop.shipment.rocket-publisher-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Stop Rocket publishing while draining accepted deliveries."
+    },
+    {
+      "name": "shop.shipment.expiry-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Keep true outside isolated MQ trigger tests."
     }
   ]
 }
+
+

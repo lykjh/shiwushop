@@ -16,6 +16,7 @@ public interface ShipmentMapper extends BaseMapper<Shipment> {
                 @Param("now") LocalDateTime now);
     List<Long> selectDueIds(@Param("now") LocalDateTime now, @Param("limit") int limit);
     Long oldestDueSeconds(@Param("now") LocalDateTime now);
+    long dueCount(@Param("now") LocalDateTime now);
     BigDecimal refundedAmount(@Param("orderId") Long orderId);
     int unresolvedAfterSaleCount(@Param("orderId") Long orderId);
 }

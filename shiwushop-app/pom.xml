@@ -10,6 +10,14 @@
     <artifactId>shiwushop-app</artifactId>
     <description>统一启动、HTTP 入口、安全和会话适配、渠道 SDK 装配及四层测试宿主。</description>
     <dependencies>
+        <!-- 旧 gRPC 探针仅用于验证同一 Broker 的协议互通，不进入运行包。 -->
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-client-java-noshade</artifactId><version>5.2.2</version><scope>test</scope>
+            <exclusions>
+                <exclusion><groupId>org.lz4</groupId><artifactId>lz4-java</artifactId></exclusion>
+                <exclusion><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-exporter-otlp-metrics</artifactId></exclusion>
+            </exclusions>
+        </dependency>
         <dependency><groupId>com</groupId><artifactId>shiwushop-common</artifactId></dependency>
         <dependency><groupId>com</groupId><artifactId>shiwushop-core</artifactId></dependency>
         <dependency><groupId>com</groupId><artifactId>shiwushop-search</artifactId></dependency>
@@ -50,3 +58,4 @@
         </plugins>
     </build>
 </project>
+

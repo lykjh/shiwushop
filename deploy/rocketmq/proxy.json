@@ -1,0 +1,6 @@
+{
+  "rocketMQClusterName": "shiwushop-rocket-test",
+  "grpcServerPort": 28081,
+  "maxDelayTimeMills": 86400000,
+  "grpcClientProducerMaxAttempts": 1
+}

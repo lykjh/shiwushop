@@ -1,6 +1,6 @@
 # shiwushop
 
-基于 Java 21、Spring Boot 4、MyBatis-Plus 和 MySQL 8 的电商后端项目。提供账号与会话、商品与搜索、购物车和订单、支付宝支付与退款、物流、评价及商家管理接口。Redis 用于会话、风控和公开商品缓存；RabbitMQ 用于物流消息；OpenSearch 发现功能默认关闭。本仓库不包含前端。
+基于 Java 21、Spring Boot 4、MyBatis-Plus 和 MySQL 8 的电商后端项目。提供账号与会话、商品与搜索、购物车和订单、支付宝支付与退款、物流、评价及商家管理接口。Redis 用于会话、风控和公开商品缓存；RocketMQ 用于物流消息；OpenSearch 发现功能默认关闭。本仓库不包含前端。
 
 ## 项目结构
 
@@ -43,3 +43,9 @@ MySQL 容器自动创建测试库。手工安装数据库时先执行 [`create_d
 ## 许可证
 
 本项目采用 [MIT 许可证](LICENSE)。
+
+### 物流消息切换
+
+使用 RocketMQ 前，核对 Broker 定时投递已开启、上限至少 24 小时，主题为 DELAY 且消费组存在。应用连接 NameServer，设置本次启动的 SHOP_SHIPMENT_ROCKET_PREFLIGHT_VERIFIED=true。应用部署模板直接要求核验值。
+
+切换时停止旧 RabbitMQ 发布器及旧应用，保留已有 Outbox 和包裹。待发布事件由新版在截止前 23 小时内发送，旧版已发布且尚未确认的包裹继续由数据库到期扫描处理。上线后核对消费组连接、待发布事件和到期积压。

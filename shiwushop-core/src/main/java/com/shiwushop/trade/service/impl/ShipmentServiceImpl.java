@@ -80,7 +80,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setAutoConfirmAt(now.plusDays(AUTO_CONFIRM_DAYS));
         shipmentMapper.insert(shipment);
         // 发货和待投递事件同事务提交，MQ 暂不可用时仍可稍后补投。
-        outboxEventMapper.insertShipmentAutoConfirm(shipment.getId(), now);
+        outboxEventMapper.insertShipmentAutoConfirm(shipment.getId(), shipment.getAutoConfirmAt().minusHours(23));
         auditMapper.record(userId, "SHIPMENT_CREATED", shipment.getId(), "商家发货", now);
         BusinessEventLog.committed("trade", "shipment_created", "shipment", shipment.getId());
         return toVO(shipment);
@@ -138,21 +138,22 @@ public class ShipmentServiceImpl implements ShipmentService {
     /** 到期自动确认未退款的已发货订单；与买家确认使用相同锁顺序防重复。 */
     @Override
     @Transactional
-    public void confirmDue(Long shipmentId) {
+    public boolean confirmDue(Long shipmentId) {
         // 与买家手动确认使用相同的订单锁和状态条件，避免重复确认。
         Shipment found = shipmentMapper.selectById(shipmentId);
-        if (found == null) return;
+        if (found == null) return true;
         Order order = orderMapper.selectForUpdate(found.getOrderId());
-        if (order == null) return;
+        if (order == null) return true;
         Shipment shipment = shipmentMapper.selectByOrderIdForUpdate(order.getId());
         LocalDateTime now = LocalDateTime.now(businessClock);
-        if (shipment == null || shipment.getStatus() != ShipmentStatus.SHIPPED
-                || shipment.getAutoConfirmAt().isAfter(now)) return;
-        if (shipmentMapper.refundedAmount(order.getId()).compareTo(order.getTotalAmount()) >= 0) return;
+        if (shipment == null || shipment.getStatus() != ShipmentStatus.SHIPPED) return true;
+        if (shipmentMapper.refundedAmount(order.getId()).compareTo(order.getTotalAmount()) >= 0) return true;
+        if (shipment.getAutoConfirmAt().isAfter(now)) return false;
         if (shipmentMapper.confirm(shipment.getId(), ConfirmSource.SYSTEM, now) == 1) {
             auditMapper.record(null, "SHIPMENT_CONFIRMED_BY_SYSTEM", shipment.getId(), "到期自动确认收货", now);
             BusinessEventLog.committed("trade", "shipment_confirmed_by_system", "shipment", shipment.getId());
         }
+        return true;
     }
 
     /** 每轮最多取 50 个达到自动确认时间的运单 ID，交给后台逐个处理。 */

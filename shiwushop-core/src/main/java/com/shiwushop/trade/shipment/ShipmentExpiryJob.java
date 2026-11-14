@@ -2,8 +2,10 @@ package com.shiwushop.trade.shipment;
 
 import com.shiwushop.trade.service.ShipmentService;
 import com.shiwushop.trade.mapper.shipment.ShipmentMapper;
+
 import java.time.Clock;
 import java.time.LocalDateTime;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "shop.shipment.expiry-enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class ShipmentExpiryJob {
     private final ShipmentService shipmentService;
@@ -30,7 +33,8 @@ public class ShipmentExpiryJob {
         int processed = 0;
         int failed = 0;
         for (Long shipmentId : shipmentService.dueShipmentIds()) {
-            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis) break;
+            if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) >= scanBudgetMillis)
+                break;
             processed++;
             try {
                 shipmentService.confirmDue(shipmentId);
@@ -39,8 +43,10 @@ public class ShipmentExpiryJob {
                 log.warn("自动确认收货失败，shipmentId={}", shipmentId, failure);
             }
         }
-        log.info("物流到期扫描 processed={} failed={} durationMs={} oldestPendingSeconds={}", processed, failed,
+        log.info("物流到期扫描 processed={} failed={} durationMs={} overdueSeconds={} overdueCount={}", processed,
+                failed,
                 TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started),
-                shipmentMapper.oldestDueSeconds(LocalDateTime.now(clock)));
+                shipmentMapper.oldestDueSeconds(LocalDateTime.now(clock)),
+                shipmentMapper.dueCount(LocalDateTime.now(clock)));
     }
 }
