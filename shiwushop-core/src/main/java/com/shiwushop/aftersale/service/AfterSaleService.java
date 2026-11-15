@@ -1,6 +1,7 @@
 package com.shiwushop.aftersale.service;
 
 import com.shiwushop.aftersale.dto.AfterSaleCreateDTO;
+import com.shiwushop.aftersale.dto.AdminRefundReconcileDTO;
 import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
 import com.shiwushop.aftersale.dto.ReturnReceiptDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
@@ -9,6 +10,8 @@ import com.shiwushop.aftersale.vo.AfterSaleSliceVO;
 import com.shiwushop.aftersale.vo.AfterSaleTimelineVO;
 
 import com.shiwushop.trade.service.OrderRefundOperations;
+
+import java.util.List;
 
 public interface AfterSaleService extends OrderRefundOperations {
     /** 买家凭幂等键对已购订单项创建售后申请。 */
@@ -25,6 +28,12 @@ public interface AfterSaleService extends OrderRefundOperations {
 
     /** 管理员查看售后申请详情。 */
     AfterSaleVO adminDetail(Long adminId, Long caseId);
+
+    FailedRefundPage failedRefunds(Long adminId, Long beforeCaseId, int size);
+
+    AfterSaleVO reconcileRefund(Long adminId, Long caseId, AdminRefundReconcileDTO request);
+
+    record FailedRefundPage(List<Long> caseIds, boolean hasMore, Long nextBeforeCaseId) {}
 
     /** 商家查看所属店铺售后申请详情。 */
     AfterSaleVO merchantDetail(Long merchantId, Long shopId, Long caseId);

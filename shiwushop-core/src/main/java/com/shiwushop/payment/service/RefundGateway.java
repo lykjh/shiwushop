@@ -12,7 +12,16 @@ public interface RefundGateway {
     /** 按原交易及退款请求号核对渠道退款结果。 */
     Result query(String outTradeNo, String tradeNo, String outRequestNo);
 
-    record Result(boolean succeeded, String outTradeNo, String tradeNo,
+    enum Outcome { SUCCESS, UNKNOWN, FAILED }
+
+    record Result(Outcome outcome, String outTradeNo, String tradeNo,
                   String outRequestNo, BigDecimal amount) {
+        public Result(boolean succeeded, String outTradeNo, String tradeNo, String outRequestNo, BigDecimal amount) {
+            this(succeeded ? Outcome.SUCCESS : Outcome.UNKNOWN, outTradeNo, tradeNo, outRequestNo, amount);
+        }
+
+        public boolean succeeded() {
+            return outcome == Outcome.SUCCESS;
+        }
     }
 }

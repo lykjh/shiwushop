@@ -15,6 +15,16 @@ public interface RefundAttemptMapper extends BaseMapper<RefundAttempt> {
     @Select("SELECT * FROM refund_attempts WHERE case_id=#{caseId} ORDER BY id DESC LIMIT 1")
     RefundAttempt selectLatest(@Param("caseId") Long caseId);
 
+    @Select("""
+            SELECT r.case_id
+            FROM refund_attempts r JOIN after_sale_cases c ON c.id=r.case_id
+            WHERE r.status='FAILED' AND c.status='REFUNDING' AND r.case_id < #{beforeCaseId}
+              AND NOT EXISTS (SELECT 1 FROM refund_attempts newer WHERE newer.case_id=r.case_id AND newer.id>r.id)
+            ORDER BY r.case_id DESC LIMIT #{limit}
+            """)
+    List<Long> failedCaseIds(@Param("beforeCaseId") long beforeCaseId, @Param("limit") int limit);
+
+    /** 汇总订单已成功的退款金额。 */
     BigDecimal successfulAmount(@Param("orderId") Long orderId);
 
     List<Long> unresolvedIds(@Param("before") LocalDateTime before, @Param("limit") int limit);
@@ -69,6 +79,18 @@ public interface RefundAttemptMapper extends BaseMapper<RefundAttempt> {
                 @Param("resolvedAt") LocalDateTime resolvedAt,
                 @Param("providerRefundNo") String providerRefundNo);
 
+    @Update("UPDATE refund_attempts SET status='SUCCESS', resolved_at=#{now} WHERE id=#{id} AND status='FAILED'")
+    int resolveVerifiedFailure(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+    @Update("""
+            UPDATE refund_attempts SET status='PENDING', requested_at=#{now}, updated_at=#{now},
+                resolved_at=NULL, reconcile_claim_token=NULL, reconcile_claim_until=NULL
+            WHERE id=#{id} AND status='FAILED' AND requested_at=#{previousRequestedAt}
+            """)
+    int reopenFailed(@Param("id") Long id, @Param("previousRequestedAt") LocalDateTime previousRequestedAt,
+                     @Param("now") LocalDateTime now);
+
+    /** 将仍待定的退款标记为渠道结果未知。 */
     @Update("""
             UPDATE refund_attempts SET status='UNKNOWN' WHERE id=#{id} AND status='PENDING'
             """)

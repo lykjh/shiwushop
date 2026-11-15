@@ -1,14 +1,20 @@
 package com.shiwushop.unit.payment;
 
 import com.alipay.api.AlipayClient;
+import com.alipay.api.AlipayApiException;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.domain.AlipayTradePrecreateModel;
 import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradePrecreateRequest;
 import com.alipay.api.request.AlipayTradeCancelRequest;
+import com.alipay.api.request.AlipayTradeRefundRequest;
+import com.alipay.api.request.AlipayTradeFastpayRefundQueryRequest;
 import com.alipay.api.response.AlipayTradePrecreateResponse;
 import com.alipay.api.response.AlipayTradeCancelResponse;
+import com.alipay.api.response.AlipayTradeRefundResponse;
+import com.alipay.api.response.AlipayTradeFastpayRefundQueryResponse;
 import com.shiwushop.payment.service.AlipayGateway;
+import com.shiwushop.payment.service.RefundGateway;
 import com.shiwushop.payment.service.impl.SdkAlipayGateway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +46,38 @@ import static org.mockito.Mockito.when;
 class SdkAlipayGatewayTests {
     @TempDir
     Path tempDir;
+
+    @Test
+    void distinguishesTerminalRefundRejectionFromAmbiguousResults() throws Exception {
+        Path keyFile = tempDir.resolve("private.pem");
+        Files.writeString(keyFile, "test-key");
+        SdkAlipayGateway gateway = new SdkAlipayGateway("app", "seller", "public-key",
+                keyFile.toString(), "https://example.com/payments/alipay/notify",
+                "https://openapi-sandbox.dl.alipaydev.com/gateway.do", Clock.systemUTC());
+        AlipayClient client = mock(AlipayClient.class);
+        ReflectionTestUtils.setField(gateway, "client", client);
+        var terminal = new AlipayTradeRefundResponse();
+        terminal.setCode("40004");
+        terminal.setSubCode("ACQ.TRADE_HAS_FINISHED");
+        var systemError = new AlipayTradeRefundResponse();
+        systemError.setCode("40004");
+        systemError.setSubCode("ACQ.SYSTEM_ERROR");
+        when(client.execute(any(AlipayTradeRefundRequest.class))).thenReturn(terminal, systemError)
+                .thenThrow(new AlipayApiException("timeout"));
+
+        var failed = gateway.refund("order", "trade", "request", BigDecimal.TEN);
+        assertEquals(RefundGateway.Outcome.FAILED, failed.outcome());
+        assertEquals("request", failed.outRequestNo());
+        assertEquals(RefundGateway.Outcome.UNKNOWN,
+                gateway.refund("order", "trade", "request", BigDecimal.TEN).outcome());
+        assertEquals(503, assertThrows(com.shiwushop.common.BusinessException.class,
+                () -> gateway.refund("order", "trade", "request", BigDecimal.TEN)).getCode());
+
+        var query = new AlipayTradeFastpayRefundQueryResponse();
+        query.setCode("10000");
+        when(client.execute(any(AlipayTradeFastpayRefundQueryRequest.class))).thenReturn(query);
+        assertEquals(RefundGateway.Outcome.UNKNOWN, gateway.query("order", "trade", "request").outcome());
+    }
 
     @Test
     void appliesBoundedNetworkTimeoutsToTheSdkClient() throws Exception {

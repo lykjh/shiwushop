@@ -10,6 +10,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.shiwushop.marketing.RefundUnits;
 import com.shiwushop.aftersale.dto.AfterSaleCreateDTO;
 import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
+import com.shiwushop.aftersale.dto.AdminRefundReconcileDTO;
 import com.shiwushop.aftersale.dto.ReturnReceiptDTO;
 import com.shiwushop.aftersale.dto.ReturnShipmentDTO;
 import com.shiwushop.aftersale.vo.AfterSaleVO;
@@ -301,6 +302,68 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         return view(caseId);
     }
 
+    @Override
+    public FailedRefundPage failedRefunds(Long adminId, Long beforeCaseId, int size) {
+        accountAccess.requireAdmin(adminId);
+        int limit = PageSpec.of(1, size).size();
+        var ids = refunds.failedCaseIds(beforeCaseId == null ? Long.MAX_VALUE : beforeCaseId, limit + 1);
+        boolean more = ids.size() > limit;
+        var page = List.copyOf(more ? ids.subList(0, limit) : ids);
+        return new FailedRefundPage(page, more, more ? page.getLast() : null);
+    }
+
+    @Override
+    public AfterSaleVO reconcileRefund(Long adminId, Long caseId, AdminRefundReconcileDTO request) {
+        accountAccess.requireAdmin(adminId);
+        RefundContext context = tx().execute(status -> {
+            AfterSaleCase sale = cases.selectForUpdate(caseId);
+            if (sale == null)
+                throw new BusinessException(404, "售后申请不存在");
+            RefundAttempt attempt = refunds.selectLatest(caseId);
+            if (sale.getStatus() == AfterSaleStatus.REFUNDED
+                    && attempt != null && attempt.getStatus() == RefundAttemptStatus.SUCCESS)
+                return null;
+            if (sale.getStatus() != AfterSaleStatus.REFUNDING
+                    || attempt == null || attempt.getStatus() != RefundAttemptStatus.FAILED)
+                throw new BusinessException(409, "售后没有待人工核查的失败退款");
+            if (!gateway.configured())
+                throw new BusinessException(503, "退款渠道未配置");
+            PaymentAttempt paid = paidAttempt(orderAccess.find(sale.getOrderId()));
+            if (!attempt.getPaymentAttemptId().equals(paid.getId())
+                    || attempt.getAmount().compareTo(sale.getRefundAmount()) != 0)
+                throw new BusinessException(409, "退款记录金额或原支付不一致");
+            return new RefundContext(attempt, paid, false);
+        });
+        if (context == null)
+            return view(caseId);
+        var attempt = context.attempt();
+        if (LocalDateTime.now(clock).isBefore(attempt.getRequestedAt().plusSeconds(10)))
+            throw new BusinessException(409, "距发起退款不足十秒，请稍后核对");
+        RefundGateway.Result result = gateway.query(context.payment().getOutTradeNo(),
+                context.payment().getAlipayTradeNo(), attempt.getOutRequestNo());
+        String reason = request.reason().strip();
+        if (result.succeeded()) {
+            settleSuccess(context, result, true, null, adminId, reason);
+            return view(caseId);
+        }
+        if (request.action() == AdminRefundReconcileDTO.Action.VERIFY)
+            throw new BusinessException(409, "渠道尚未确认该笔退款成功");
+
+        // 使用原请求号重发，同一售后只允许一个管理员把 FAILED 重新置为待定。
+        boolean reopened = Boolean.TRUE.equals(tx().execute(status -> {
+            AfterSaleCase sale = cases.selectForUpdate(caseId);
+            if (sale.getStatus() != AfterSaleStatus.REFUNDING)
+                return false;
+            LocalDateTime now = LocalDateTime.now(clock).withNano(0);
+            if (refunds.reopenFailed(attempt.getId(), attempt.getRequestedAt(), now) != 1)
+                return false;
+            attempt.setRequestedAt(now);
+            audit.record(adminId, "REFUND_ADMIN_RETRY", caseId, reason, now);
+            return true;
+        }));
+        return reopened ? submitRefund(context) : view(caseId);
+    }
+
     /** 仅允许所属店主读取对应售后详情。 */
     @Override
     public AfterSaleVO merchantDetail(Long merchantId, Long shopId, Long caseId) {
@@ -482,6 +545,11 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         } else if (!context.newAttempt()) {
             return view(caseId);
         }
+        return submitRefund(context);
+    }
+
+    private AfterSaleVO submitRefund(RefundContext context) {
+        Long caseId = context.attempt().getCaseId();
         RefundGateway.Result result;
         try {
             result = gateway.refund(context.payment().getOutTradeNo(),
@@ -494,10 +562,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             markUnknown(context.attempt().getId());
             return view(caseId);
         }
-        if (result.succeeded())
-            settleSuccess(context, result, false);
-        else
-            markUnknown(context.attempt().getId());
+        applyGatewayResult(context, result, false, null);
         return view(caseId);
     }
 
@@ -574,7 +639,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 + UUID.randomUUID().toString().replace("-", ""));
         attempt.setAmount(sale.getRefundAmount());
         attempt.setStatus(RefundAttemptStatus.PENDING);
-        attempt.setRequestedAt(LocalDateTime.now(clock));
+        attempt.setRequestedAt(LocalDateTime.now(clock).withNano(0));
         refunds.insert(attempt);
         timeouts.onStageChanged(caseId);
         audit.record(system ? null : merchantId, "REFUND_REQUESTED", caseId,
@@ -602,23 +667,41 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             markUnknown(context.attempt().getId(), reconcileToken);
             return false;
         }
-        if (!result.succeeded()) {
-            markUnknown(context.attempt().getId(), reconcileToken);
-            return false;
-        }
         // 本地校验和事务提交失败交给上层处理，不伪装成渠道超时。
-        settleSuccess(context, result, true, reconcileToken);
-        return true;
+        return applyGatewayResult(context, result, true, reconcileToken);
     }
 
-    /** 只接受与原支付及本次退款金额一致的渠道结果，并在事务内结算一次。 */
-    private void settleSuccess(RefundContext context, RefundGateway.Result result, boolean fromQuery) {
-        settleSuccess(context, result, fromQuery, null);
+    private boolean applyGatewayResult(RefundContext context, RefundGateway.Result result, boolean fromQuery,
+                                       String reconcileToken) {
+        var attempt = context.attempt();
+        if (result.succeeded()) {
+            settleSuccess(context, result, fromQuery, reconcileToken, null, null);
+            return true;
+        }
+        if (result.outcome() != RefundGateway.Outcome.FAILED
+                || !context.payment().getOutTradeNo().equals(result.outTradeNo())
+                || !context.payment().getAlipayTradeNo().equals(result.tradeNo())
+                || !attempt.getOutRequestNo().equals(result.outRequestNo())) {
+            markUnknown(attempt.getId(), reconcileToken);
+            return false;
+        }
+        tx().executeWithoutResult(status -> {
+            AfterSaleCase sale = cases.selectForUpdate(attempt.getCaseId());
+            RefundAttempt current = refunds.selectForUpdate(attempt.getId());
+            if (sale.getStatus() != AfterSaleStatus.REFUNDING
+                    || !attempt.getRequestedAt().equals(current.getRequestedAt())
+                    || (reconcileToken != null && refunds.ownsReconciliation(attempt.getId(), reconcileToken) != 1))
+                return;
+            LocalDateTime now = LocalDateTime.now(clock);
+            if (refunds.resolve(attempt.getId(), RefundAttemptStatus.FAILED, now, null) == 1)
+                audit.record(null, "REFUND_FAILED", sale.getId(), "渠道明确拒绝本次退款", now);
+        });
+        return true;
     }
 
     /** 核对原支付与退款金额后，在订单锁下只结算一次并同步评价、库存和搜索。 */
     private void settleSuccess(RefundContext context, RefundGateway.Result result, boolean fromQuery,
-                               String reconcileToken) {
+                               String reconcileToken, Long verifiedByAdmin, String verificationReason) {
         if (!context.payment().getOutTradeNo().equals(result.outTradeNo())
                 || !context.payment().getAlipayTradeNo().equals(result.tradeNo())
                 || result.amount() == null
@@ -640,10 +723,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
             if (sale.getStatus() != AfterSaleStatus.REFUNDING || current.getStatus() == RefundAttemptStatus.SUCCESS)
                 throw new BusinessException(409, "退款状态冲突");
             LocalDateTime now = LocalDateTime.now(clock);
-            if (refunds.resolve(current.getId(), RefundAttemptStatus.SUCCESS, now, null) != 1
-                    || cases.markRefunded(sale.getId(), now) != 1)
+            int resolved = verifiedByAdmin != null && current.getStatus() == RefundAttemptStatus.FAILED
+                    ? refunds.resolveVerifiedFailure(current.getId(), now)
+                    : refunds.resolve(current.getId(), RefundAttemptStatus.SUCCESS, now, null);
+            if (resolved != 1 || cases.markRefunded(sale.getId(), now) != 1)
                 throw new BusinessException(409, "退款状态冲突");
             completeReturn(sale);
+            if (verifiedByAdmin != null)
+                audit.record(verifiedByAdmin, "REFUND_ADMIN_VERIFIED", sale.getId(), verificationReason, now);
             audit.record(null, "REFUND_SUCCEEDED", sale.getId(),
                     "LOCAL_SIMULATION".equals(context.payment().getChannel())
                             ? "模拟退款成功（不退真实资金）" : "支付宝退款成功", now);

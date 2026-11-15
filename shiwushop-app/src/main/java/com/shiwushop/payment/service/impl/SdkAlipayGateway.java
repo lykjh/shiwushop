@@ -238,6 +238,8 @@ public class SdkAlipayGateway implements AlipayGateway, RefundGateway, BillDownl
             AlipayTradeRefundRequest request = new AlipayTradeRefundRequest();
             request.setBizModel(model);
             AlipayTradeRefundResponse response = client().execute(request);
+            if ("40004".equals(response.getCode()) && "ACQ.TRADE_HAS_FINISHED".equals(response.getSubCode()))
+                return new RefundGateway.Result(RefundGateway.Outcome.FAILED, outTradeNo, tradeNo, outRequestNo, null);
             BigDecimal refunded = response.getRefundFee() == null ? null : new BigDecimal(response.getRefundFee());
             return new RefundGateway.Result(response.isSuccess() && "Y".equals(response.getFundChange()),
                     response.getOutTradeNo(), response.getTradeNo(), null, refunded);
