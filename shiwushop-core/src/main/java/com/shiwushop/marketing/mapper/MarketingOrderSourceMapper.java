@@ -158,9 +158,17 @@ public interface MarketingOrderSourceMapper {
             "WHERE id=#{id} AND status='QUALIFIED' AND purchase_expires_at>#{now}")
     int orderBargain(@Param("id") long id, @Param("now") LocalDateTime now);
 
-    @Update("UPDATE marketing_bargains SET status='CLOSED',version=version+1 " +
-            "WHERE participation_id=#{participation} AND status='ORDERED'")
-    int closeBargain(long participation);
+    @Update("""
+            UPDATE marketing_bargains b
+            JOIN marketing_activity_skus s ON s.id=b.activity_sku_id
+            JOIN marketing_activities a ON a.id=s.activity_id
+            JOIN marketing_user_quotas q ON q.activity_code=a.activity_code AND q.user_id=b.user_id
+                AND q.quota_kind='OPEN_BARGAIN' AND q.period_key='ALL'
+            SET b.status='CLOSED', b.version=b.version+1,
+                q.reserved_count=q.reserved_count-1, q.version=q.version+1
+            WHERE b.participation_id=#{participation} AND b.status='ORDERED' AND q.reserved_count>0
+            """)
+    int closeBargainAndReleaseQuota(long participation);
 
     @Update("UPDATE marketing_participations SET status=#{state},paid_at=IF(#{state}='PAID',#{now},paid_at) " +
             "WHERE id=#{id} AND status='RESERVED' AND order_id=#{order}")

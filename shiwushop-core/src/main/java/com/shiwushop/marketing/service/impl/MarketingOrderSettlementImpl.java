@@ -134,6 +134,13 @@ public class MarketingOrderSettlementImpl implements MarketingOrderSettlement {
     }
 
     @Override
+    public OrderParticipation orderParticipation(long orderId) {
+        var association = sources.association(orderId);
+        return association == null ? null
+                : new OrderParticipation(association.groupId(), association.participationId(), association.bargainId());
+    }
+
+    @Override
     public MarketingOrderSource lockSource(Long orderId) {
         var association = sources.association(orderId);
         if (association == null) return null;
@@ -354,8 +361,9 @@ public class MarketingOrderSettlementImpl implements MarketingOrderSettlement {
             if (sources.finishParticipation(participation.id(), order,
                     lateGroup ? "REFUND_PENDING" : paid ? "PAID" : "RELEASED", LocalDateTime.now(clock)) != 1)
                 throw new IllegalStateException("活动参与结算失败");
-            if (association.bargainId() != null && !paid)
-                sources.closeBargain(participation.id());
+            if (association.bargainId() != null && !paid
+                    && sources.closeBargainAndReleaseQuota(participation.id()) == 0)
+                throw new IllegalStateException("砍价取消与发起额度状态不一致");
             if ("POINTS".equals(scope.businessType())) {
                 if (paid) {
                     if (sources.redemptionState(order, "CREATED", "FULFILLING") != 1)

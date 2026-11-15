@@ -5,6 +5,8 @@ import com.shiwushop.common.privacy.PrivacyCipher;
 import com.shiwushop.aftersale.dto.AfterSaleCreateDTO;
 import com.shiwushop.aftersale.dto.AfterSaleReviewDTO;
 import com.shiwushop.aftersale.service.AfterSaleService;
+import com.shiwushop.marketing.service.MarketingBargainHelpService;
+import com.shiwushop.marketing.service.MarketingBargainStartService;
 import com.shiwushop.member.service.MemberAccountService;
 import com.shiwushop.payment.service.RefundGateway;
 import com.shiwushop.trade.payment.LocalSimulationGateway;
@@ -27,12 +29,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,9 +66,12 @@ class ActivityTradeCheckoutTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired TransactionTemplate transactions;
+    @Autowired Clock businessClock;
     @Autowired CheckoutService checkout;
     @Autowired OrderPaymentService payments;
     @Autowired AfterSaleService afterSales;
+    @Autowired MarketingBargainStartService bargainStarts;
+    @Autowired MarketingBargainHelpService bargainHelps;
     @Autowired MemberAccountService memberAccounts;
     @Autowired ShipmentService shipments;
     @Autowired PrivacyCipher privacyCipher;
@@ -90,8 +99,12 @@ class ActivityTradeCheckoutTest {
             long scope = activity("FLASH");
             var request = direct("FLASH", scope, "flash-first");
             int normalStock = jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.sku);
-            long order = checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst().id();
-            assertEquals(order, checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst().id());
+            var placed = checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst();
+            long order = placed.id();
+            assertEquals(jdbc.queryForObject("SELECT id FROM marketing_participations WHERE order_id=?",
+                    Long.class, order), placed.participationId());
+            assertNull(placed.groupId());
+            assertEquals(placed, checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst());
             assertEquals(1, count("SELECT COUNT(*) FROM orders WHERE id=?", order));
             assertEquals(1, count("SELECT COUNT(*) FROM marketing_participations WHERE order_id=?", order));
             assertEquals(1, count("SELECT held_qty FROM marketing_stock_pools WHERE activity_sku_id=?", scope));
@@ -103,11 +116,55 @@ class ActivityTradeCheckoutTest {
     }
 
     @Test
+    void bargainCheckoutReplaysAndCancellationReleasesOpeningQuotaOnce() {
+        transactions.executeWithoutResult(status -> {
+            long scope = activity("BARGAIN");
+            jdbc.update("""
+                    UPDATE marketing_activity_skus
+                    SET bargain_start_price=6, bargain_target_price=5, required_helpers=1,
+                        participation_seconds=900, daily_help_limit=2, max_open_sessions=4
+                    WHERE id=?
+                    """, scope);
+            var helper = new TestAccounts(jdbc).create("USER", "Shop123!");
+            var bargain = bargainStarts.start(fixture.buyer.id(), scope, "bargain-start");
+            bargainHelps.help(helper.id(), bargain.id(), "bargain-help");
+            var purchaseDeadline = LocalDateTime.now(businessClock).plusMinutes(5).withNano(950_000_000);
+            jdbc.update("UPDATE marketing_bargains SET purchase_expires_at=? WHERE id=?", purchaseDeadline, bargain.id());
+            var request = direct("BARGAIN", scope, "bargain-checkout");
+            request.setBargainId(bargain.id());
+            var checkoutResult = checkout.checkoutDirect(fixture.buyer.id(), request);
+            var order = checkoutResult.orders().getFirst();
+            assertEquals(bargain.id(), order.bargainId());
+            assertEquals(bargain.participationId(), order.participationId());
+            assertEquals(purchaseDeadline.withNano(0), order.payExpiresAt().toLocalDateTime());
+            assertEquals(jdbc.queryForObject("SELECT pay_expires_at FROM orders WHERE id=?",
+                    LocalDateTime.class, order.id()), order.payExpiresAt().toLocalDateTime());
+            assertEquals(checkoutResult, checkout.checkoutDirect(fixture.buyer.id(), request));
+
+            assertEquals("CANCELLED", payments.cancelOrder(fixture.buyer.id(), order.id()));
+            assertEquals(2, count("SELECT available_qty FROM marketing_stock_pools WHERE activity_sku_id=?", scope));
+            var reopened = bargainStarts.start(fixture.buyer.id(), scope, "bargain-new-start");
+            assertNotEquals(bargain.id(), reopened.id());
+            assertEquals("CANCELLED", payments.cancelOrder(fixture.buyer.id(), order.id()));
+            assertEquals(1, count("SELECT available_qty FROM marketing_stock_pools WHERE activity_sku_id=?", scope));
+            assertEquals(409, assertThrows(BusinessException.class,
+                    () -> bargainStarts.start(fixture.buyer.id(), scope, "bargain-too-many")).getCode());
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void firstGroupOrderWaitsForGroupBeforeShipment() {
         transactions.executeWithoutResult(status -> {
             long scope = activity("GROUP");
-            long order = checkout.checkoutDirect(fixture.buyer.id(), direct("GROUP", scope, "group-first"))
-                    .orders().getFirst().id();
+            var request = direct("GROUP", scope, "group-first");
+            var placed = checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst();
+            long order = placed.id();
+            assertEquals(jdbc.queryForObject("SELECT group_id FROM marketing_participations WHERE order_id=?",
+                    Long.class, order), placed.groupId());
+            assertEquals(jdbc.queryForObject("SELECT id FROM marketing_participations WHERE order_id=?",
+                    Long.class, order), placed.participationId());
+            assertEquals(placed, checkout.checkoutDirect(fixture.buyer.id(), request).orders().getFirst());
             assertEquals("WAIT_GROUP", jdbc.queryForObject("SELECT fulfillment_state FROM orders WHERE id=?",
                     String.class, order));
             assertEquals(1, count("SELECT COUNT(*) FROM marketing_groups WHERE activity_sku_id=?", scope));

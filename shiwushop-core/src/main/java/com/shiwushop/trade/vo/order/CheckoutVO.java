@@ -43,9 +43,13 @@ public record CheckoutVO(
         OffsetDateTime payExpiresAt
     ) {
         public static PlacedOrder from(Order order) {
+            return from(order, null, null, null);
+        }
+
+        public static PlacedOrder from(Order order, Long groupId, Long participationId, Long bargainId) {
             return new PlacedOrder(order.getId(), order.getShopId(), order.getTotalAmount(), order.getStatus().name(),
-                    order.getBusinessType(), order.getSettlementKind(), order.getFulfillmentState(), null, null, null,
-                    0,
+                    order.getBusinessType(), order.getSettlementKind(), order.getFulfillmentState(),
+                    participationId, groupId, bargainId, 0,
                     "CASH".equals(order.getSettlementKind()) ? order.getPayExpiresAt()
                             .atOffset(ZoneOffset.ofHours(8)) : null);
         }

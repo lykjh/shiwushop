@@ -13,6 +13,11 @@ public interface MarketingOrderSettlement {
     /** 在订单锁之前先锁团/砍价根，再锁参与根；普通订单返回 null。 */
     MarketingOrderSource lockSource(Long orderId);
 
+    /** 按订单读取已保存的活动参与关系。 */
+    OrderParticipation orderParticipation(long orderId);
+
+    record OrderParticipation(Long groupId, long participationId, Long bargainId) {}
+
     /** items 映射 SKU 与已创建的订单明细；discounts 必须来自服务端重新确认的报价。 */
     void reserve(long order, long shop, long user, LocalDateTime deadline, Long coupon,
                  Map<Long, Long> items, List<MarketingPricingService.Allocation> discounts, Long participationId);

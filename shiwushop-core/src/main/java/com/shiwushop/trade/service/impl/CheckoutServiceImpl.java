@@ -199,7 +199,9 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (source.expiresAt() == null || !now.isBefore(source.expiresAt()))
             throw new BusinessException(409, "活动已结束");
         if (source.expiresAt().isBefore(deadline))
-            deadline = source.expiresAt();
+            deadline = source.expiresAt().withNano(0);
+        if (!internallyPaid && !now.isBefore(deadline))
+            throw new BusinessException(409, "活动已结束");
         Order order = new Order();
         order.setUserId(userId);
         order.setShopId(shopId);
@@ -256,7 +258,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         checkoutRequestMapper.linkOrder(requestId, order.getId());
         checkoutRequestMapper.markCompleted(requestId);
         BusinessEventLog.committed("trade", "order_created", "order", order.getId());
-        return new CheckoutVO(List.of(CheckoutVO.PlacedOrder.from(order)), source.cashTotal(), 0);
+        // 付款期限以落库精度为准，首次和重试共用响应读取路径。
+        return completedCheckout(requestId);
     }
 
     /**
@@ -473,10 +476,21 @@ public class CheckoutServiceImpl implements CheckoutService {
     /** 从已完成的幂等请求关联订单重建响应，重复提交不再扣库存或创建订单。 */
     private CheckoutVO completedCheckout(Long requestId) {
         List<CheckoutVO.PlacedOrder> orders = checkoutRequestMapper.selectOrders(requestId).stream()
-                .map(CheckoutVO.PlacedOrder::from).toList();
+                .map(this::placedOrder).toList();
         BigDecimal total = orders.stream().map(CheckoutVO.PlacedOrder::totalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new CheckoutVO(orders, total, 0);
+    }
+
+    private CheckoutVO.PlacedOrder placedOrder(Order order) {
+        String type = order.getBusinessType();
+        if ("GROUP".equals(type) || "FLASH".equals(type) || "BARGAIN".equals(type)) {
+            var participation = settlement.orderParticipation(order.getId());
+            if (participation != null)
+                return CheckoutVO.PlacedOrder.from(order, participation.groupId(), participation.participationId(),
+                        participation.bargainId());
+        }
+        return CheckoutVO.PlacedOrder.from(order);
     }
 
     private void lockCheckoutShops(List<Long> skuIds) {
