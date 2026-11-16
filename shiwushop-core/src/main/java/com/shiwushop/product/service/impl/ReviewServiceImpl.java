@@ -12,7 +12,6 @@ import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.product.entity.review.ProductReview;
 import com.shiwushop.product.mapper.review.ProductReviewMapper;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.vo.query.review.ReviewEligibility;
 import com.shiwushop.product.vo.query.review.ReviewReportRow;
 import com.shiwushop.product.service.ReviewService;
@@ -43,11 +42,10 @@ public class ReviewServiceImpl implements ReviewService {
     private final AccountAccess accounts;
     private final ProductReviewMapper reviews;
     private final MediaAssetAccess media;
-    private final OutboxEventMapper outbox;
 
     /**
      * 先锁订单再锁订单项，确认买家已付款且该项剩余有效件数已全部收货。
-     * 写入评价、图片和评分汇总后，在同一事务加入商品搜索刷新事件。
+     * 同一事务内写入评价、图片和评分汇总。
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Long create(Long buyerId, Long orderId, Long orderItemId, ReviewCreateDTO request) {
@@ -86,7 +84,7 @@ public class ReviewServiceImpl implements ReviewService {
             throw new IllegalStateException("评价汇总写入失败");
         for (int i = 0; i < images.size(); i++)
             reviews.insertImage(review.getId(), images.get(i), "ORIGINAL", i);
-        refreshSearch(eligibility.getProductId());
+
         BusinessEventLog.committed("product", "review_created", "review", review.getId());
         return review.getId();
     }
@@ -129,7 +127,7 @@ public class ReviewServiceImpl implements ReviewService {
                 throw new IllegalStateException("评价删除失败");
             if (Boolean.TRUE.equals(review.getCountedInSummary()))
                 removeFromSummary(review);
-            refreshSearch(review.getProductId());
+
             BusinessEventLog.committed("product", "review_deleted", "review", reviewId);
         }
     }
@@ -179,7 +177,7 @@ public class ReviewServiceImpl implements ReviewService {
                 throw new IllegalStateException("评价隐藏失败");
             if (Boolean.TRUE.equals(review.getCountedInSummary()))
                 removeFromSummary(review);
-            refreshSearch(review.getProductId());
+
         }
         if (reviews.resolveReport(reportId, adminId, decision) != 1)
             throw new BusinessException(409, "举报已处理");
@@ -201,12 +199,6 @@ public class ReviewServiceImpl implements ReviewService {
         if (new HashSet<>(images).size() != images.size())
             throw new BusinessException(400, "评价图片不能超过9张或重复");
         return images;
-    }
-
-    /** 把评价变化写入商品搜索刷新发件箱；失败时让当前事务回滚。 */
-    private void refreshSearch(Long productId) {
-        if (outbox.insertSearchProductRefresh(productId) != 1)
-            throw new IllegalStateException("评价商品搜索事件写入失败");
     }
 
     /** 从商品评分汇总扣除一条评价；更新不到汇总时报告数据不一致。 */

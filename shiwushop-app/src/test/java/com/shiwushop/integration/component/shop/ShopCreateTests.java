@@ -73,9 +73,6 @@ class ShopCreateTests {
         assertEquals(name, shop.getName());
         assertEquals(logoMediaId, shop.getLogoMediaId());
         assertEquals("MERCHANT", role(ownerId));
-        assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_SHOP_REFRESH' AND aggregate_id = ?",
-                Integer.class, shopId));
     }
 
     @Test

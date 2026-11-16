@@ -76,9 +76,6 @@ class ShopProfileUpdateTests {
                         .content(om.writeValueAsString(Map.of("name", newName))))
                 .andExpect(status().isOk());
         assertNull(shopMapper.selectById(shop.getId()).getLogoMediaId());
-        assertEquals(2, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_SHOP_REFRESH' AND aggregate_id = ?",
-                Integer.class, shop.getId()));
     }
 
     @Test

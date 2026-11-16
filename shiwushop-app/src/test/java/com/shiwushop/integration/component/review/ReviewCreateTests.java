@@ -157,7 +157,6 @@ class ReviewCreateTests {
         mvc.perform(get("/products/{productId}/review-summary", product.getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewCount").value(1));
         assertEquals(0, reviews.selectSummary(product.getId()).averageRating().compareTo(new BigDecimal("5")));
-        assertEquals(1, searchEvents(product.getId()));
         Long followMediaId = media(buyer);
         Long foreignMediaId = media(other);
         String followPath = "/reviews/{reviewId}/follow-up";
@@ -244,7 +243,6 @@ class ReviewCreateTests {
         mvc.perform(post(resolvePath, secondReportId).with(csrf().asHeader()).with(withMockLogin(session(admin)))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"HIDE\",\"reason\":\"核实隐藏\"}"))
                 .andExpect(status().isOk());
-        assertEquals(2, searchEvents(product.getId()));
         assertEquals(false, mediaAssets.isPubliclyReferenced(mediaId));
         mvc.perform(get("/media/{id}", mediaId).header("If-None-Match", mediaEtag))
                 .andExpect(status().isNotFound());
@@ -329,7 +327,6 @@ class ReviewCreateTests {
                 .andExpect(status().isNotFound());
         mvc.perform(delete("/reviews/{reviewId}", reviewId).with(csrf().asHeader()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk());
-        assertEquals(3, searchEvents(product.getId()));
         mvc.perform(delete("/reviews/{reviewId}", reviewId).with(csrf().asHeader()).with(withMockLogin(session(buyer))))
                 .andExpect(status().isOk());
         assertEquals(false, mediaAssets.isPubliclyReferenced(mediaId));
@@ -410,11 +407,6 @@ class ReviewCreateTests {
         String username = "review-" + UUID.randomUUID().toString().replace("-", "");
         TestRegistration.register(users, registrationProofs, new RegisterDTO(username, "Shop123!", null));
         return jdbc.queryForObject("SELECT user_id FROM user_accounts WHERE username=?", Long.class, username);
-    }
-
-    private int searchEvents(Long productId) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_PRODUCT_REFRESH' "
-                + "AND aggregate_id=?", Integer.class, productId);
     }
 
     private Long media(Long userId) throws Exception {

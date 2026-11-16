@@ -59,9 +59,6 @@ class CatalogHttpAccessTests {
             assertEquals(200, stopped.statusCode(), stopped.body());
             assertEquals("OFF_SALE", jdbc.queryForObject(
                     "SELECT status FROM products WHERE id=?", String.class, productId));
-            assertEquals(1, jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_PRODUCT_REFRESH' AND aggregate_id=?",
-                    Integer.class, productId));
         }
     }
 
@@ -197,7 +194,6 @@ class CatalogHttpAccessTests {
     void cleanup() throws Exception {
         for (long id : skus) jdbc.update("DELETE FROM skus WHERE id=?", id);
         for (long id : products) {
-            jdbc.update("DELETE FROM outbox_events WHERE event_type='SEARCH_PRODUCT_REFRESH' AND aggregate_id=?", id);
             jdbc.update("DELETE FROM products WHERE id=?", id);
         }
         for (long id : shops) jdbc.update("DELETE FROM shop_staff_grants WHERE shop_id=?", id);
@@ -207,7 +203,6 @@ class CatalogHttpAccessTests {
             jdbc.update("DELETE FROM merchant_applications WHERE id=?", id);
         }
         for (long id : shops) {
-            jdbc.update("DELETE FROM outbox_events WHERE event_type='SEARCH_SHOP_REFRESH' AND aggregate_id=?", id);
             jdbc.update("DELETE FROM shops WHERE id=?", id);
         }
         for (long id : categories) jdbc.update("DELETE FROM categories WHERE id=?", id);

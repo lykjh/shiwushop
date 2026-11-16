@@ -63,9 +63,6 @@ class ShopStatusUpdateTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.enabled").value(1));
         assertEquals(1, shopMapper.selectById(shop.getId()).getEnabled());
-        assertEquals(2, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_SHOP_REFRESH' AND aggregate_id = ?",
-                Integer.class, shop.getId()));
     }
 
     @Test
@@ -82,9 +79,6 @@ class ShopStatusUpdateTests {
                         .content(om.writeValueAsString(Map.of("enabled", 2))))
                 .andExpect(status().isBadRequest());
         assertEquals(1, shopMapper.selectById(shop.getId()).getEnabled());
-        assertEquals(0, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_SHOP_REFRESH' AND aggregate_id = ?",
-                Integer.class, shop.getId()));
     }
 
     @Test

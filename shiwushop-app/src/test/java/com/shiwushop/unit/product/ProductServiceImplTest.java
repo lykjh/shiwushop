@@ -2,7 +2,6 @@ package com.shiwushop.unit.product;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.merchant.entity.shop.Shop;
 import com.shiwushop.merchant.service.MerchantShopAccess;
@@ -44,7 +43,7 @@ class ProductServiceImplTest {
     @Mock InventoryMovementMapper movements;
     @Mock MerchantShopAccess shops;
     @Mock SkuOptionValueMapper values;
-    @Mock OutboxEventMapper outbox;
+
     @Mock ProductListingSubmissionMapper submissions;
     @Mock ProductArchiveConstraint marketing;
     @InjectMocks ProductServiceImpl service;
@@ -68,7 +67,6 @@ class ProductServiceImplTest {
         when(skus.selectForUpdate(7L)).thenReturn(sku);
         when(skus.update(any(), any())).thenReturn(1);
         when(movements.insertMerchantAdjust(eq(7L), eq(3), eq(8), any())).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(8L)).thenReturn(1);
         when(values.selectValueIds(7L)).thenReturn(List.of());
 
         var result = service.updateSkuStock(4L, 8L, 7L, 8);
@@ -77,7 +75,6 @@ class ProductServiceImplTest {
         assertEquals(8, result.getStock());
         verify(shops, never()).requireRoleForUpdate(4L, 9L, "CATALOG", "商品不存在");
         verify(movements).insertMerchantAdjust(eq(7L), eq(3), eq(8), any());
-        verify(outbox).insertSearchProductRefresh(8L);
     }
 
     @Test
@@ -95,7 +92,7 @@ class ProductServiceImplTest {
 
         assertEquals(409, assertThrows(BusinessException.class,
                 () -> service.submitListing(4L, 8L, 4L)).getCode());
-        verifyNoInteractions(submissions, outbox);
+        verifyNoInteractions(submissions);
     }
 
     @Test
@@ -114,7 +111,7 @@ class ProductServiceImplTest {
 
         assertEquals(409, assertThrows(BusinessException.class,
                 () -> service.archive(4L, 8L, 5L)).getCode());
-        verifyNoInteractions(marketing, outbox);
+        verifyNoInteractions(marketing);
         verify(products, never()).update(any(), any());
     }
 }

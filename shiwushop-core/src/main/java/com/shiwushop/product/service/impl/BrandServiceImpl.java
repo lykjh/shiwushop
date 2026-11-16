@@ -11,7 +11,6 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
 import com.shiwushop.product.entity.brand.Brand;
 import com.shiwushop.product.mapper.brand.BrandMapper;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.service.BrandService;
 import com.shiwushop.product.service.CategoryService;
 import lombok.RequiredArgsConstructor;
@@ -29,10 +28,9 @@ public class BrandServiceImpl implements BrandService {
     private final BrandMapper brandMapper;
     private final MediaAssetAccess mediaAssetAccess;
     private final CategoryService categoryService;
-    private final OutboxEventMapper outboxEventMapper;
 
     /**
-     * 校验品牌标识图片属于操作人，写入品牌并在同一事务写入搜索刷新事件。
+     * 校验品牌标识图片属于操作人，写入品牌。
      * 品牌名称并发冲突由数据库唯一约束转换为业务 409。
      */
     @Override
@@ -48,8 +46,8 @@ public class BrandServiceImpl implements BrandService {
 
         try {
             brandMapper.insert(brand);
-            // 数据变更与搜索刷新事件同事务提交，避免索引同步时漏掉品牌。
-            outboxEventMapper.insertSearchBrandRefresh(brand.getId());
+
+
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "品牌名称已存在", e);
         }
@@ -68,7 +66,7 @@ public class BrandServiceImpl implements BrandService {
         return brandMapper.selectAdminList();
     }
 
-    /** 修改品牌名称、图片和启用状态，并在事务内通知搜索索引刷新。 */
+    /** 修改品牌名称、图片和启用状态。 */
     @Override
     @Transactional
     public BrandVO update(Long id, BrandSaveDTO dto, Long adminId) {
@@ -88,7 +86,7 @@ public class BrandServiceImpl implements BrandService {
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "品牌名称已存在", e);
         }
-        outboxEventMapper.insertSearchBrandRefresh(id);
+
         return toVO(brandMapper.selectById(id));
     }
 

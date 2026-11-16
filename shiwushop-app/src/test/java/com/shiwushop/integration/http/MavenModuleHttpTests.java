@@ -10,8 +10,7 @@ import tools.jackson.databind.ObjectMapper;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** 真实 HTTP 检查 app 对 common/core/search 的装配，不使用 Controller 或业务替身。 */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "shop.search.discovery-enabled=false", "shop.search.worker-enabled=false"})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MavenModuleHttpTests {
     @LocalServerPort
@@ -51,11 +50,11 @@ class MavenModuleHttpTests {
     }
 
     @Test
-    void searchLibraryIsWiredAndKeepsItsDisabledResponse() throws Exception {
+    void searchLibraryUsesDatabaseWithoutAnExternalSearchService() throws Exception {
         try (var client = new HttpAccountClient("http://127.0.0.1:" + port)) {
             var response = client.get("/discovery/products?q=phone");
-            assertEquals(503, response.statusCode(), response.body());
-            assertEquals("商品发现索引尚未就绪", json.readTree(response.body()).path("message").asString());
+            assertEquals(200, response.statusCode(), response.body());
+            assertTrue(json.readTree(response.body()).path("data").path("items").isArray());
         }
     }
 }

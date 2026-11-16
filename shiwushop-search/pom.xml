@@ -8,7 +8,7 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
     <artifactId>shiwushop-search</artifactId>
-    <description>保留 OpenSearch 查询、游标和 outbox 索引消费者；由 app 提供 HTTP 入口。</description>
+    <description>基于 MySQL 的商品发现、搜索建议和查询游标。</description>
     <dependencies>
         <dependency><groupId>com</groupId><artifactId>shiwushop-common</artifactId></dependency>
         <dependency><groupId>com</groupId><artifactId>shiwushop-core</artifactId></dependency>

@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -17,7 +16,7 @@ class DiscoveryCursorTests {
 
     @Test
     void bindsQueryAndIdentityAndRejectsTampering() {
-        var state = new DiscoveryCursor.State("pit", List.of(1.0, 5), "filters", 8L,
+        var state = new DiscoveryCursor.State(3, 5, "filters", 8L,
                 Instant.now().plusSeconds(120).getEpochSecond());
         String token = codec.encode(state);
         assertEquals(state, codec.decode(token, "filters", 8L));
@@ -31,7 +30,7 @@ class DiscoveryCursorTests {
 
     @Test
     void expiredCursorRequiresRestart() {
-        var state = new DiscoveryCursor.State("pit", List.of(5), "filters", null,
+        var state = new DiscoveryCursor.State(0, 5, "filters", null,
                 Instant.now().minusSeconds(1).getEpochSecond());
         assertEquals(410, assertThrows(BusinessException.class,
                 () -> codec.decode(codec.encode(state), "filters", null)).getCode());

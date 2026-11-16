@@ -1,7 +1,6 @@
 package com.shiwushop.unit.product;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.service.ShopService;
 import com.shiwushop.product.dto.product.ProductStatusUpdateDTO;
 import com.shiwushop.product.entity.product.Product;
@@ -16,9 +15,9 @@ import static org.mockito.Mockito.*;
 
 class AdminProductStatusServiceImplTest {
     private final ProductMapper products = mock(ProductMapper.class);
-    private final OutboxEventMapper outbox = mock(OutboxEventMapper.class);
+
     private final ShopService shops = mock(ShopService.class);
-    private final AdminProductStatusServiceImpl service = new AdminProductStatusServiceImpl(products, outbox, shops);
+    private final AdminProductStatusServiceImpl service = new AdminProductStatusServiceImpl(products, shops);
 
     @Test
     void pendingReviewCannotBeTakenDownOutsideItsDecisionFlow() {
@@ -35,6 +34,5 @@ class AdminProductStatusServiceImplTest {
                 () -> service.adminTakeDown(7L, request)).getCode());
         verify(shops).lockById(9L);
         verify(products, never()).update(any(), any());
-        verifyNoInteractions(outbox);
     }
 }

@@ -77,6 +77,24 @@ public interface ProductMapper extends BaseMapper<Product> {
             @Param("minPrice") BigDecimal minPrice,
             @Param("maxPrice") BigDecimal maxPrice);
 
+    /** 从公开目录按名称检索并按匹配级别和商品 ID 翻页。 */
+    List<PublicProductRow> selectDiscoveryCards(@Param("filter") DiscoveryFilter filter,
+                                               @Param("ids") List<Long> ids,
+                                               @Param("nameOnly") boolean nameOnly,
+                                               @Param("afterRank") Integer afterRank,
+                                               @Param("afterId") Long afterId,
+                                               @Param("limit") int limit);
+
+    List<DiscoverySuggestion> suggestDiscoveryShops(@Param("filter") DiscoveryFilter filter);
+
+    List<DiscoverySuggestion> suggestDiscoveryBrands(@Param("filter") DiscoveryFilter filter);
+
+    record DiscoveryFilter(String keyword, String singleCharacterPattern, Long categoryId, Long brandId,
+                           Long shopId, BigDecimal minPrice, BigDecimal maxPrice) {}
+
+    record DiscoverySuggestion(Long id, String name) {}
+
+    /** 读取指定商品的累计销量。 */
     @Select("SELECT COALESCE(sold_count, 0) FROM product_sales_stats WHERE product_id = #{productId}")
     Long getSoldCount(@Param("productId") Long productId);
 

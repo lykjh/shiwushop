@@ -11,7 +11,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.product.entity.category.Category;
 import com.shiwushop.product.mapper.category.CategoryMapper;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,10 +34,9 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
     }
 
     private final CategoryMapper categoryMapper;
-    private final OutboxEventMapper outboxEventMapper;
 
     /**
-     * 锁住分类树后校验名称与父分类层级，创建分类并写入搜索刷新事件。
+     * 锁住分类树后校验名称与父分类层级，创建分类。
      * 树锁使并发新建或移动分类按顺序检查层级约束。
      */
     @Override
@@ -71,7 +69,7 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
         try {
             categoryMapper.insert(category);
-            outboxEventMapper.insertSearchCategoryRefresh(category.getId());
+
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "分类名称已存在", e);
         }
@@ -91,7 +89,7 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
     /**
      * 在分类树锁下移动或修改分类。检查新父分类不会形成环，且整棵子树仍不超过三级；
-     * 同步更新子孙层级并在同一事务写入搜索刷新事件。
+     * 同步更新子孙层级。
      */
     @Override
     @Transactional
@@ -150,7 +148,6 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
                     .set(Category::getLevel, newLevel + 2));
         }
 
-        outboxEventMapper.insertSearchCategoryRefresh(id);
         return toVO(categoryMapper.selectById(id));
     }
 
@@ -174,7 +171,6 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
     /**
      * 锁住分类树后删除指定分类；有子分类或被数据库关联引用时拒绝删除。
-     * 删除与搜索刷新事件在同一事务中提交。
      */
     @Override
     @Transactional
@@ -192,7 +188,7 @@ public class CategoryServiceImpl implements CategoryService, com.shiwushop.merch
 
         try {
             categoryMapper.deleteById(id);
-            outboxEventMapper.insertSearchCategoryRefresh(id);
+
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(409, "分类被引用，无法删除", e);
         }

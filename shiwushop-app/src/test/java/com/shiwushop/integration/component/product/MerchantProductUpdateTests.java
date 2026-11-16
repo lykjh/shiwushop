@@ -97,9 +97,6 @@ class MerchantProductUpdateTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandId").value(brand.getId()));
         assertEquals(brand.getId(), products.selectBrandId(product.getId()));
         assertTrue(images(product).isEmpty());
-        assertEquals(2, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, product.getId()));
     }
 
     @Test

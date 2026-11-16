@@ -58,10 +58,6 @@ shop:
   logging:
     method-enabled: ${SHOP_METHOD_LOG_ENABLED:false}
   search:
-    url: ${SHOP_SEARCH_URL:http://127.0.0.1:19200}
-    discovery-enabled: ${SHOP_SEARCH_DISCOVERY_ENABLED:false}
-    worker-enabled: ${SHOP_SEARCH_WORKER_ENABLED:false}
-    worker-scan-delay-ms: ${SHOP_SEARCH_WORKER_SCAN_DELAY_MS:2000}
     cursor-secret: ${SHOP_SEARCH_CURSOR_SECRET:}
   media:
     root: ${SHOP_MEDIA_ROOT:./local-data/media}

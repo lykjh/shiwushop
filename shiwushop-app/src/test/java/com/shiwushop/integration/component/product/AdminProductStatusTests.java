@@ -64,9 +64,6 @@ class AdminProductStatusTests {
 
         mockMvc.perform(request(product.getId(), "OFF_SALE").with(withMockLogin(admin)))
                 .andExpect(status().isOk());
-        assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, product.getId()));
     }
 
     @Test

@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.entity.application.MerchantApplication;
 import com.shiwushop.merchant.entity.application.MerchantApplicationReview;
 import com.shiwushop.merchant.dto.application.MerchantApplicationDecisionDTO;
@@ -35,10 +34,10 @@ class MerchantApplicationServiceImplTest {
     private final MerchantApplicationDocumentMapper documents = mock(MerchantApplicationDocumentMapper.class);
     private final MerchantApplicationReviewMapper reviews = mock(MerchantApplicationReviewMapper.class);
     private final ShopMapper shops = mock(ShopMapper.class);
-    private final OutboxEventMapper outbox = mock(OutboxEventMapper.class);
+
     private final MerchantApplicationServiceImpl service = new MerchantApplicationServiceImpl(
             applications, documents, reviews, shops,
-            mock(AccountAccess.class), mock(MediaAssetAccess.class), outbox);
+            mock(AccountAccess.class), mock(MediaAssetAccess.class));
 
     @Test
     void withdrawalStopsApprovedShopAndCannotInterruptPendingReview() {
@@ -57,13 +56,10 @@ class MerchantApplicationServiceImplTest {
         when(shops.selectForUpdate(9L)).thenReturn(shop);
         when(shops.selectById(9L)).thenReturn(shop);
         when(documents.selectList(any())).thenReturn(List.of());
-        when(outbox.insertSearchShopRefresh(9L)).thenReturn(1);
 
         assertEquals("WITHDRAWN", service.withdraw(4L, 3L).status());
         verify(shops).update(any(), any());
-        verify(outbox).insertSearchShopRefresh(9L);
         assertEquals("WITHDRAWN", service.withdraw(4L, 3L).status());
-        verify(outbox, times(1)).insertSearchShopRefresh(9L);
 
         application.setStatus("SUBMITTED");
         assertEquals(409, assertThrows(BusinessException.class, () -> service.withdraw(4L, 3L)).getCode());

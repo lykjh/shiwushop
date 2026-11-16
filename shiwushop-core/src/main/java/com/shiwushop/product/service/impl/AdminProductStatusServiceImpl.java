@@ -10,20 +10,18 @@ import com.shiwushop.product.service.AdminProductStatusService;
 import com.shiwushop.product.vo.product.ProductStatusVO;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 只处理管理员下架，并在同一事务中投递搜索刷新事件。 */
+/** 处理管理员下架商品。 */
 @Service
 @RequiredArgsConstructor
 public class AdminProductStatusServiceImpl implements AdminProductStatusService {
     private final ProductMapper productMapper;
-    private final OutboxEventMapper outboxEventMapper;
     private final ShopService shopService;
 
-    /** 拒绝上架指令；状态写入与搜索事件任一失败时整体回滚。 */
+    /** 拒绝上架指令；状态写入失败时回滚。 */
     @Override
     @Transactional
     public ProductStatusVO adminTakeDown(Long productId, ProductStatusUpdateDTO dto) {
@@ -48,9 +46,6 @@ public class AdminProductStatusServiceImpl implements AdminProductStatusService 
         productMapper.update(null, new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.OFF_SALE).setSql("revision = revision + 1"));
-        if (outboxEventMapper.insertSearchProductRefresh(productId) != 1) {
-            throw new IllegalStateException("商品搜索事件写入失败");
-        }
         BusinessEventLog.committed("product", "product_admin_taken_down", "product", productId);
         return new ProductStatusVO(productId, ProductStatus.OFF_SALE.name(), product.getRevision() + 1, null);
     }

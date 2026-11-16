@@ -67,9 +67,6 @@ class BrandAdminTests {
                 .path("data").path("id").asLong();
         assertEquals(name, brandMapper.selectById(id).getName());
         assertEquals(logoMediaId, brandMapper.selectById(id).getLogoMediaId());
-        assertEquals(1L, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?",
-                Long.class, id));
 
         mockMvc.perform(get("/admin/brands").with(withMockLogin(admin)))
                 .andExpect(status().isOk())

@@ -13,8 +13,6 @@ public interface ProductStockService {
 
     void recordSale(Long productId, int quantity);
 
-    void refreshProducts(Collection<Long> productIds);
-
     /** 已持有事务与店铺先序锁的活动编排调用；负数划出、正数划回。 */
     MarketingStockMovement moveNormalForMarketing(Long actorUserId, Long skuId, Long activitySkuId,
                                                    int normalDelta, String operationKey, String operationReason);

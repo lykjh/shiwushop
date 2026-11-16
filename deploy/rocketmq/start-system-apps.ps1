@@ -20,7 +20,6 @@ foreach ($instance in 1,2) {
         '--spring.datasource.hikari.maximum-pool-size=4','--spring.data.redis.port=26379',
         '--shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
         '--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-        '--shop.search.url=http://127.0.0.1:29200','--shop.search.discovery-enabled=false','--shop.search.worker-enabled=false',
         '--shop.alipay.app-id=','--shop.alipay.seller-id=','--shop.alipay.private-key-path=','--shop.alipay.public-key=',
         '--shop.auth.jwt.cookie-path=/','--shop.auth.jwt.cookie-secure=false',
         '--shop.shipment.rocket-enabled=true',

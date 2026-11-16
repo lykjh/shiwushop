@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.common.media.MediaAssetAccess;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.dto.application.MerchantApplicationDecisionDTO;
 import com.shiwushop.merchant.dto.application.MerchantApplicationSaveDTO;
 import com.shiwushop.merchant.entity.application.MerchantApplication;
@@ -43,7 +42,6 @@ public class MerchantApplicationServiceImpl implements MerchantApplicationServic
     private final ShopMapper shops;
     private final AccountAccess accounts;
     private final MediaAssetAccess media;
-    private final OutboxEventMapper outbox;
 
     /** 创建一店一申请；资质图片须由申请人以私有用途上传。 */
     @Override
@@ -120,8 +118,6 @@ public class MerchantApplicationServiceImpl implements MerchantApplicationServic
                     .eq(Shop::getId, shop.getId())
                     .set(Shop::getQualificationRevoked, 1)
                     .set(Shop::getEnabled, 0));
-            if (outbox.insertSearchShopRefresh(shop.getId()) != 1)
-                throw new IllegalStateException("店铺搜索事件写入失败");
         }
         application.setStatus("WITHDRAWN");
         applications.updateById(application);
@@ -201,8 +197,6 @@ public class MerchantApplicationServiceImpl implements MerchantApplicationServic
             }
             accounts.promoteMerchant(application.getApplicantUserId());
             application.setShopId(shop.getId());
-            if (outbox.insertSearchShopRefresh(shop.getId()) != 1)
-                throw new IllegalStateException("店铺搜索事件写入失败");
         }
         application.setStatus(decision);
         application.setRejectReason(request.approved() ? null : request.reason());

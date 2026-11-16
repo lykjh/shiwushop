@@ -26,4 +26,6 @@ public class PublicProductRow {
     private Long soldCount;
     /** 是否无可售库存。 */
     private Boolean soldOut;
+    /** 搜索游标使用的匹配级别。 */
+    private Integer discoveryRank;
 }

@@ -1,7 +1,5 @@
 package com.shiwushop.integration.catalog;
 
-import com.shiwushop.product.search.SearchGateway;
-import com.shiwushop.product.search.SearchIndexSource;
 import com.shiwushop.support.CatalogFixture;
 import com.shiwushop.support.HttpAccountClient;
 import org.junit.jupiter.api.Test;
@@ -12,31 +10,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.ObjectMapper;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 显式运行的串行目录功能基线；只使用测试专库和 SHOP_SEARCH_URL 指向的独占索引。 */
+/** 显式运行的串行目录功能基线；只使用独占的目录测试库。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.autoconfigure.exclude=", "spring.datasource.hikari.maximum-pool-size=2",
-        "shop.search.url=${SHOP_SEARCH_URL}", "shop.search.discovery-enabled=true", "shop.search.worker-enabled=false",
         "shop.search.cursor-secret=local-large-search-secret-at-least-32-bytes"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class CatalogLargeSearchIT {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
-    @Autowired SearchIndexSource source;
-    @Autowired SearchGateway search;
     @Autowired ObjectMapper json;
 
     @Test
     void tenThousandProductsHaveCompleteCursorAndSparseShopResults() throws Exception {
-        String endpoint = Objects.requireNonNull(System.getenv("SHOP_SEARCH_URL"), "独占搜索地址未设置");
+        String schema = jdbc.queryForObject("SELECT DATABASE()", String.class);
+        assertNotNull(schema);
+        assertTrue(schema.startsWith("shiwushop_catalog_"), schema);
         CatalogFixture dense = new CatalogFixture(jdbc);
         CatalogFixture sparse = new CatalogFixture(jdbc);
         try (HttpAccountClient client = new HttpAccountClient("http://127.0.0.1:" + port)) {
@@ -65,27 +57,12 @@ class CatalogLargeSearchIT {
                         Long.class, sparse.shop);
                 assertEquals(10_000, denseIds.size());
                 assertEquals(10, sparseIds.size());
-                List<Long> all = new ArrayList<>(denseIds);
-                all.addAll(sparseIds);
-                for (int start = 0; start < all.size(); start += 500) {
-                    List<Long> ids = all.subList(start, Math.min(start + 500, all.size()));
-                    Map<Long, Map<String, Object>> documents = source.productDocuments(ids);
-                    assertEquals(ids.size(), documents.size());
-                    StringBuilder bulk = new StringBuilder();
-                    for (long id : ids) {
-                        bulk.append(json.writeValueAsString(Map.of("index",
-                                Map.of("_index", "shiwushop-products-v2", "_id", id)))).append('\n');
-                        bulk.append(json.writeValueAsString(documents.get(id))).append('\n');
-                    }
-                    assertFalse(search.bulk(bulk.toString()).path("errors").asBoolean());
-                }
-
                 Set<Long> seen = new HashSet<>();
                 List<Long> millis = new ArrayList<>();
                 String cursor = null;
                 int pages = 0;
                 do {
-                    String path = "/discovery/products?shopId=" + dense.shop + "&size=50"
+                    String path = "/discovery/products?shopId=" + dense.shop + "&size=50&q=" + prefix
                             + (cursor == null ? "" : "&cursor=" + java.net.URLEncoder.encode(cursor,
                             java.nio.charset.StandardCharsets.UTF_8));
                     long start = System.nanoTime();
@@ -99,39 +76,23 @@ class CatalogLargeSearchIT {
                     pages++;
                     assertTrue(pages <= 201, "游标未收敛");
                 } while (cursor != null);
-                assertEquals(10_000, seen.size());
-                var sparseResponse = client.get("/discovery/products?shopId=" + sparse.shop + "&size=50");
+                assertEquals(new HashSet<>(denseIds), seen);
+                var sparseResponse = client.get("/discovery/products?shopId=" + sparse.shop + "&size=50&q=" + prefix);
                 assertEquals(200, sparseResponse.statusCode(), sparseResponse.body());
-                assertEquals(10, json.readTree(sparseResponse.body()).path("data").path("items").size());
+                Set<Long> sparseResults = new HashSet<>();
+                var items = json.readTree(sparseResponse.body()).path("data").path("items");
+                for (var item : items)
+                    assertTrue(sparseResults.add(item.path("id").asLong()), "游标重复商品");
+                assertEquals(new HashSet<>(sparseIds), sparseResults);
                 Collections.sort(millis);
                 System.out.printf("D2_LARGE products=%d sparse=%d pages=%d p95Ms=%d p99Ms=%d%n",
                         seen.size(), sparseIds.size(), pages, percentile(millis, 0.95), percentile(millis, 0.99));
-                for (long shop : List.of(dense.shop, sparse.shop)) {
-                    String plan = jdbc.queryForObject("EXPLAIN ANALYZE SELECT p.id FROM products p "
-                            + "FORCE INDEX (idx_products_shop_status_id) WHERE p.shop_id=? "
-                            + "AND p.status='ON_SALE' ORDER BY p.id DESC LIMIT 50", String.class, shop);
-                    System.out.println("D2_LARGE_SCAN shop=" + shop + " plan=" + plan);
-                }
             } finally {
-                try {
-                    String body = json.writeValueAsString(Map.of("query", Map.of("terms",
-                            Map.of("shopId", List.of(dense.shop, sparse.shop)))));
-                    try (HttpClient http = HttpClient.newHttpClient()) {
-                        var response = http.send(HttpRequest.newBuilder(URI.create(endpoint
-                                + "/shiwushop-products-v2/_delete_by_query?refresh=true"))
-                                .timeout(Duration.ofSeconds(60))
-                                .header("Content-Type", "application/json")
-                                .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
-                                HttpResponse.BodyHandlers.ofString());
-                        assertEquals(200, response.statusCode(), response.body());
-                    }
-                } finally {
-                    jdbc.update("DELETE FROM skus WHERE product_id IN (SELECT id FROM products WHERE shop_id=?)",
-                            dense.shop);
-                    jdbc.update("DELETE FROM products WHERE shop_id=?", dense.shop);
-                    sparse.close();
-                    dense.close();
-                }
+                jdbc.update("DELETE FROM skus WHERE product_id IN (SELECT id FROM products WHERE shop_id=?)",
+                        dense.shop);
+                jdbc.update("DELETE FROM products WHERE shop_id=?", dense.shop);
+                sparse.close();
+                dense.close();
             }
         }
     }

@@ -1,7 +1,6 @@
 package com.shiwushop.unit.product;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.product.entity.inventory.MarketingInventoryMovement;
 import com.shiwushop.product.entity.product.Product;
@@ -23,9 +22,9 @@ class ProductStockServiceImplTests {
     final SkuMapper skus = mock(SkuMapper.class);
     final ProductMapper products = mock(ProductMapper.class);
     final InventoryMovementMapper movements = mock(InventoryMovementMapper.class);
-    final OutboxEventMapper outbox = mock(OutboxEventMapper.class);
+
     final MerchantShopAccess shops = mock(MerchantShopAccess.class);
-    final ProductStockServiceImpl service = new ProductStockServiceImpl(skus, products, movements, outbox, shops);
+    final ProductStockServiceImpl service = new ProductStockServiceImpl(skus, products, movements, shops);
 
     private void marketingSku(int stock, String status) {
         Sku sku = new Sku();
@@ -46,7 +45,6 @@ class ProductStockServiceImplTests {
     void marketingAllocationWritesOneNormalMovementAndReturnsOriginalBalanceOnReplay() {
         marketingSku(5, "ACTIVE");
         when(skus.decreaseStock(7L, 2)).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(8L)).thenReturn(1);
         when(movements.insertMarketing(any())).thenAnswer(call -> {
             MarketingInventoryMovement row = call.getArgument(0);
             row.setId(31L);
@@ -66,7 +64,6 @@ class ProductStockServiceImplTests {
         assertEquals(3, replay.normalBalanceAfter());
         assertTrue(replay.replayed());
         verify(skus, times(1)).decreaseStock(7L, 2);
-        verify(outbox, times(1)).insertSearchProductRefresh(8L);
         assertEquals(409, assertThrows(BusinessException.class, () ->
                 service.moveNormalForMarketing(4L, 7L, 11L, -1, "Req:1", "MARKETING_ALLOCATE")).getCode());
         assertEquals(409, assertThrows(BusinessException.class, () ->
@@ -89,7 +86,6 @@ class ProductStockServiceImplTests {
     void marketingReleaseReturnsAvailableStockAndKeepsOperationKeysCaseSensitive() {
         marketingSku(4, "STOPPED");
         when(skus.increaseStock(7L, 3)).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(8L)).thenReturn(1);
         when(movements.insertMarketing(any())).thenAnswer(call -> {
             MarketingInventoryMovement row = call.getArgument(0);
             row.setId(32L);
@@ -116,7 +112,6 @@ class ProductStockServiceImplTests {
         assertEquals(409, assertThrows(BusinessException.class, () ->
                 service.moveNormalForMarketing(4L, 7L, 11L, -1, "shared-key", "MARKETING_ALLOCATE"))
                 .getCode());
-        verifyNoInteractions(outbox);
     }
 
     @Test
@@ -128,7 +123,6 @@ class ProductStockServiceImplTests {
             row.setId(33L);
             return 1;
         });
-        when(outbox.insertSearchProductRefresh(8L)).thenReturn(1);
 
         var result = service.moveNormalForMarketing(4L, 7L, 11L, -10_001,
                 "larger-pool", "MARKETING_ALLOCATE");
@@ -163,17 +157,9 @@ class ProductStockServiceImplTests {
     }
 
     @Test
-    void searchRefreshDeduplicatesProductsAndPropagatesPersistenceFailure() {
-        when(outbox.insertSearchProductRefresh(7L)).thenReturn(1);
-        service.refreshProducts(List.of(7L, 7L));
-        verify(outbox).insertSearchProductRefresh(7L);
-        assertThrows(IllegalStateException.class, () -> service.refreshProducts(List.of(8L)));
-    }
-
-    @Test
     void saleUpdatesOnlyTheSoldCount() {
         service.recordSale(7L, 2);
         verify(products).increaseSoldCount(7L, 2);
-        verifyNoInteractions(skus, movements, outbox);
+        verifyNoInteractions(skus, movements);
     }
 }

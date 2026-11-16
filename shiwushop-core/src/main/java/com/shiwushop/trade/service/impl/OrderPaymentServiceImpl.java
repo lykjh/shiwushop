@@ -507,7 +507,6 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
         Long failedGroupSale = source != null && source.groupId() != null
                 && "FAILED".equals(orderMapper.groupStatus(source.groupId()))
                 ? afterSales.prepareFailedGroupRefund(order, items) : null;
-        queueProductRefreshes(items);
         BusinessEventLog.committed("trade", "order_paid", "order", order.getId());
         return failedGroupSale;
     }
@@ -577,12 +576,6 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
             for (OrderItem item : items)
                 stock.returnCancelledOrder(item.getSkuId(), item.getId(), item.getQuantity(),
                         "ORDER_CANCEL_RETURN:" + order.getId() + ":" + item.getId());
-        queueProductRefreshes(items);
-    }
-
-    /** 为受库存或销量变化影响的商品各写一条搜索刷新事件。 */
-    private void queueProductRefreshes(List<OrderItem> items) {
-        stock.refreshProducts(items.stream().map(OrderItem::getProductId).toList());
     }
 
     /** 仅未支付且仍在支付截止时间内的订单允许发起支付。 */

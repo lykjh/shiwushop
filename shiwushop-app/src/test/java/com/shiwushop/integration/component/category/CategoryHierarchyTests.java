@@ -60,11 +60,6 @@ class CategoryHierarchyTests {
         assertEquals(1, categoryMapper.selectById(root).getLevel());
         assertEquals(2, categoryMapper.selectById(child).getLevel());
         assertEquals(3, categoryMapper.selectById(third).getLevel());
-        for (long id : new long[]{root, child, third}) {
-            assertEquals(1L, jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?",
-                    Long.class, id));
-        }
 
         mockMvc.perform(get("/categories").param("parentId", String.valueOf(root)))
                 .andExpect(status().isOk())

@@ -20,7 +20,6 @@ import com.shiwushop.merchant.mapper.staff.ShopStaffGrantMapper;
 import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.merchant.service.ShopCategoryAccess;
 import com.shiwushop.merchant.service.ShopService;
@@ -61,10 +60,9 @@ public class ShopServiceImpl implements ShopService {
     private final MerchantShopAccess merchantShopAccess;
     private final MediaAssetAccess mediaAssetAccess;
     private final ShopCategoryAccess categoryService;
-    private final OutboxEventMapper outboxEventMapper;
     private final ShopStaffGrantMapper staffGrants;
 
-    /** 到期后的请求会实时拒绝；定期落停业状态并刷新搜索索引。 */
+    /** 到期后的请求会实时拒绝；定期落停业状态。 */
     @Scheduled(fixedDelay = 5000)
     @Transactional
     public void closeExpiredQualifications() {
@@ -73,22 +71,15 @@ public class ShopServiceImpl implements ShopService {
             if (shop != null && Integer.valueOf(1).equals(shop.getEnabled()) && !shop.isQualificationCurrent()) {
                 shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                         .eq(Shop::getId, id).set(Shop::getEnabled, 0));
-                queueSearchRefresh(id);
+
                 BusinessEventLog.committed("merchant", "qualification_expired", "shop", id);
             }
         }
     }
 
-    /** 将店铺变化写入事务发件箱，确保搜索索引随后刷新；写入失败时中断事务。 */
-    private void queueSearchRefresh(Long shopId) {
-        if (outboxEventMapper.insertSearchShopRefresh(shopId) != 1) {
-            throw new IllegalStateException("店铺搜索事件写入失败");
-        }
-    }
-
     /**
      * 管理员创建店铺，验证经营者账号及店铺标识图片。
-     * 首次开店的普通用户在同一事务内提升为商家，并投递搜索刷新事件。
+     * 首次开店的普通用户在同一事务内提升为商家。
      */
     @Override
     @Transactional
@@ -112,7 +103,7 @@ public class ShopServiceImpl implements ShopService {
 
         // 首次开店时提升为商家；账号角色与店铺创建同事务提交。
         accountAccess.promoteMerchant(owner.getUserId());
-        queueSearchRefresh(shop.getId());
+
         BusinessEventLog.committed("merchant", "shop_created", "shop", shop.getId());
         return toVO(shop);
     }
@@ -143,7 +134,7 @@ public class ShopServiceImpl implements ShopService {
         return toVO(shop);
     }
 
-    /** 修改店铺启用状态，并在事务内写入搜索索引刷新事件。 */
+    /** 修改店铺启用状态。 */
     @Override
     @Transactional
     public ShopVO changeStatus(Long shopId, Integer enabled) {
@@ -158,7 +149,7 @@ public class ShopServiceImpl implements ShopService {
         shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                 .eq(Shop::getId, shopId)
                 .set(Shop::getEnabled, enabled));
-        queueSearchRefresh(shopId);
+
 
         Shop updatedShop = shopMapper.selectById(shopId);
         BusinessEventLog.committed("merchant", "shop_status_changed", "shop", shopId);
@@ -213,7 +204,7 @@ public class ShopServiceImpl implements ShopService {
 
     /**
      * 店主修改店铺资料；更新 SQL 再次附加店主 ID 条件，避免归属检查后转店导致旧店主写入。
-     * 店铺标识图片必须属于当前操作人，修改成功后刷新搜索索引。
+     * 店铺标识图片必须属于当前操作人。
      */
     @Override
     @Transactional
@@ -239,7 +230,7 @@ public class ShopServiceImpl implements ShopService {
         }
 
         Shop updated = shopMapper.selectById(shopId);
-        queueSearchRefresh(shopId);
+
         BusinessEventLog.committed("merchant", "shop_profile_updated", "shop", shopId);
         return toVO(updated);
     }

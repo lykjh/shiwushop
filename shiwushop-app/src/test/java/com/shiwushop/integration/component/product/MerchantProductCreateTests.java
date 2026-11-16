@@ -122,9 +122,6 @@ class MerchantProductCreateTests {
         assertEquals(1, images.get(1).getSortOrder());
         assertEquals(brand.getId(), jdbcTemplate.queryForObject(
                 "SELECT brand_id FROM product_brands WHERE product_id = ?", Long.class, saved.getId()));
-        assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, saved.getId()));
     }
 
     @Test

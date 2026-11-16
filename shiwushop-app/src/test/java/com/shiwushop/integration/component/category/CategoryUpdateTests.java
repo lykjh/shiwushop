@@ -63,7 +63,6 @@ class CategoryUpdateTests {
 
         assertNull(categoryMapper.selectById(branch.getId()).getParentId());
         assertEquals(2, categoryMapper.selectById(leaf.getId()).getLevel());
-        assertEquals(1L, searchEvents(branch.getId()));
 
         mockMvc.perform(put("/admin/categories/{id}", branch.getId())
                         .with(withMockLogin(admin)).contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +74,6 @@ class CategoryUpdateTests {
 
         assertEquals(root.getId(), categoryMapper.selectById(branch.getId()).getParentId());
         assertEquals(3, categoryMapper.selectById(leaf.getId()).getLevel());
-        assertEquals(2L, searchEvents(branch.getId()));
     }
 
     @Test
@@ -117,7 +115,6 @@ class CategoryUpdateTests {
         assertNull(categoryMapper.selectById(root.getId()).getParentId());
         assertEquals(1, categoryMapper.selectById(root.getId()).getLevel());
         assertEquals(otherRoot.getName(), categoryMapper.selectById(otherRoot.getId()).getName());
-        assertEquals(0L, searchEvents(root.getId()));
     }
 
     @Test
@@ -144,12 +141,6 @@ class CategoryUpdateTests {
         category.setSortOrder(0);
         categoryMapper.insert(category);
         return category;
-    }
-
-    private Long searchEvents(Long categoryId) {
-        return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_CATEGORY_REFRESH' AND aggregate_id=?",
-                Long.class, categoryId);
     }
 
     private MockHttpSession sessionForRole(String role) {

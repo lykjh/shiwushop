@@ -175,9 +175,6 @@ class PaymentConcurrencyTests {
             assertEquals(OrderStatus.PAID, orderMapper.selectById(orderId).getStatus());
             assertEquals(PaymentAttemptStatus.SUCCESS, paymentMapper.selectById(attempt.getId()).getStatus());
             assertEquals(2L, productMapper.getSoldCount(product.getId()));
-            assertEquals(1, jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                    Integer.class, product.getId()));
 
             // 到期扫描和支付宝通知同时确认另一张订单，不能取消并返库存。
             overdue = new Order();
@@ -225,15 +222,8 @@ class PaymentConcurrencyTests {
             assertEquals(OrderStatus.PAID, orderMapper.selectById(overdueId).getStatus());
             assertEquals(0, skuMapper.selectById(sku.getId()).getStock());
             assertEquals(3L, productMapper.getSoldCount(product.getId()));
-            assertEquals(2, jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                    Integer.class, product.getId()));
         } finally {
             workers.shutdownNow();
-            if (product != null && product.getId() != null)
-                jdbc.update(
-                        "DELETE FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                        product.getId());
             if (order != null && order.getId() != null)
                 jdbc.update(
                         "DELETE FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)",

@@ -15,7 +15,6 @@ import tools.jackson.core.JacksonException;
 
 import java.time.Instant;
 import java.util.Base64;
-import java.util.List;
 import java.nio.charset.StandardCharsets;
 
 @Component
@@ -36,8 +35,14 @@ public class DiscoveryCursor {
         this.key = new SecretKeySpec(secret, "HmacSHA256");
     }
 
-    /** 游标携带的搜索快照、排序位置、查询指纹、访问身份和到期时间。 */
-    public record State(String pit, List<Object> sort, String query, Long userId, long expiresAt) {
+    /** 游标携带数据库查询的排序位置、查询指纹、访问身份和到期时间。
+     * @param rank 上一页末尾商品的匹配级别
+     * @param afterId 上一页末尾的商品 ID
+     * @param query 当前请求使用的筛选或查询条件
+     * @param userId 用户 ID
+     * @param expiresAt 凭证、活动资格或记录的失效时间
+     */
+    public record State(int rank, long afterId, String query, Long userId, long expiresAt) {
     }
 
     /** 把游标状态编码为 URL 安全的载荷和 HMAC 签名，防止客户端改写翻页位置。 */
@@ -63,9 +68,12 @@ public class DiscoveryCursor {
                     Base64.getUrlDecoder().decode(parts[1]), sign(parts[0]))) {
                 throw new BusinessException(400, "列表游标无效");
             }
-            State state = json.readValue(Base64.getUrlDecoder().decode(parts[0]), State.class);
+            var payload = json.readTree(Base64.getUrlDecoder().decode(parts[0]));
+            if (payload.has("pit"))
+                throw new BusinessException(410, "列表游标已过期，请重新加载");
+            State state = json.treeToValue(payload, State.class);
             if (!query.equals(state.query()) || !java.util.Objects.equals(userId, state.userId())
-                    || state.pit() == null || state.pit().isBlank() || state.sort() == null) {
+                    || state.afterId() <= 0 || state.rank() < 0) {
                 throw new BusinessException(400, "列表游标无效");
             }
             if (state.expiresAt() < Instant.now().getEpochSecond()) {

@@ -10,7 +10,6 @@ import com.shiwushop.product.entity.product.ProductDisplayAttribute;
 import com.shiwushop.product.entity.product.Sku;
 import com.shiwushop.merchant.entity.shop.Shop;
 import com.shiwushop.product.mapper.brand.BrandMapper;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.mapper.product.ProductImageMapper;
 import com.shiwushop.product.mapper.product.InventoryMovementMapper;
 import com.shiwushop.product.mapper.product.ProductMapper;
@@ -88,17 +87,9 @@ public class ProductServiceImpl implements ProductService {
     private final ProductOptionMapper optionMapper;
     private final ProductOptionValueMapper valueMapper;
     private final SkuOptionValueMapper skuOptionValueMapper;
-    private final OutboxEventMapper outboxEventMapper;
     private final ProductOptionReader optionReader;
     private final List<SkuPriceConstraint> priceConstraints;
     private final ProductArchiveConstraint marketingActivities;
-
-    /** 将商品变化写入事务发件箱；事件写入失败时回滚商品变更，避免搜索索引漏更新。 */
-    private void queueSearchRefresh(Long productId) {
-        if (outboxEventMapper.insertSearchProductRefresh(productId) != 1) {
-            throw new IllegalStateException("商品搜索事件写入失败");
-        }
-    }
 
     /**
      * 确认商品所在店铺属于当前商家。写操作先锁店铺再锁商品，
@@ -127,7 +118,7 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * 在商家所属店铺创建草稿。校验分类、品牌和图片归属后保存商品、品牌关联与图片顺序，
-     * 最后写搜索刷新事件；草稿尚不对公开列表展示。
+     * 草稿不对公开列表展示。
      */
     @Override
     @Transactional
@@ -154,7 +145,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         insertProductImages(product.getId(), imageIds, dto.getCoverMediaId());
-        queueSearchRefresh(product.getId());
+
         BusinessEventLog.committed("product", "product_draft_created", "product", product.getId());
         return new MerchantProductVO(
                 product.getId(),
@@ -168,7 +159,7 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * 锁住商家商品后修改资料。图片列表未提交时保留原图；提交新列表时检查封面包含关系，
-     * 在售商品不得移除所有图片或封面，更新后通知搜索索引。
+     * 在售商品不得移除所有图片或封面。
      */
     @Override
     @Transactional
@@ -210,7 +201,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         updateProductImages(productId, dto, imageIds, coverId);
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "product_updated", "product", productId);
 
         Product updated = productMapper.selectById(productId);
@@ -391,7 +382,7 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * 锁住店铺、商品和 SKU 后修改价格与库存；库存变化同步写入调整流水。
-     * SQL 更新前确认 SKU 属于目标商品，成功后投递搜索刷新事件。
+     * SQL 更新前确认 SKU 属于目标商品。
      */
     @Override
     @Transactional
@@ -428,7 +419,7 @@ public class ProductServiceImpl implements ProductService {
         if (sku.getPrice().compareTo(dto.getPrice()) != 0)
             productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                     .set(Product::getStatus, ProductStatus.DRAFT).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "sku_updated", "sku", skuId);
 
         return new MerchantSkuVO(
@@ -439,7 +430,7 @@ public class ProductServiceImpl implements ProductService {
                 dto.getStock());
     }
 
-    /** 库存岗位沿店铺→商品→SKU锁序调整普通库存，并同步记录余额和搜索事件。 */
+    /** 库存岗位按店铺、商品、SKU 的顺序加锁并记录库存流水。 */
     @Override
     @Transactional
     public MerchantSkuVO updateSkuStock(Long userId, Long productId, Long skuId, int stock) {
@@ -464,7 +455,7 @@ public class ProductServiceImpl implements ProductService {
             if (inventoryMovementMapper.insertMerchantAdjust(skuId, delta, stock,
                     "MERCHANT_ADJUST:" + UUID.randomUUID()) != 1)
                 throw new IllegalStateException("商家库存调整流水写入失败");
-            queueSearchRefresh(productId);
+
             BusinessEventLog.committed("product", "sku_stock_adjusted", "sku", skuId);
         }
         return new MerchantSkuVO(skuId, productId, skuOptionValueMapper.selectValueIds(skuId),
@@ -473,7 +464,7 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * 验证每个规格项恰好选择一个值；按规格顺序计算组合摘要，依靠唯一约束拒绝重复 SKU。
-     * SKU、规格关联和搜索刷新事件在一个事务中提交。
+     * SKU 和规格关联在同一事务中提交。
      */
     @Override
     @Transactional
@@ -514,7 +505,7 @@ public class ProductServiceImpl implements ProductService {
         }
         productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.DRAFT).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "sku_created", "sku", sku.getId());
         return new MerchantSkuVO(
                 sku.getId(), productId, orderedIds, dto.getPrice(), dto.getStock());
@@ -533,7 +524,7 @@ public class ProductServiceImpl implements ProductService {
         if ("ACTIVE".equals(status) && owned.product().getStatus() != ProductStatus.ON_SALE)
             throw new BusinessException(409, "商品未通过当前版本审核");
         skuMapper.update(null, new LambdaUpdateWrapper<Sku>().eq(Sku::getId, skuId).set(Sku::getStatus, status));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "sku_status_changed", "sku", skuId);
         return new SkuStatusVO(skuId, status);
     }
@@ -605,7 +596,7 @@ public class ProductServiceImpl implements ProductService {
         productMapper.update(null, new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, productId)
                 .set(Product::getStatus, status).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "product_status_changed", "product", productId);
 
         return new ProductStatusVO(productId, status.name(), product.getRevision() + 1, null);
@@ -629,7 +620,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(409, "商品仍有待付款订单或活动承诺");
         productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.ARCHIVED).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "product_archived", "product", productId);
         return new ProductStatusVO(productId, ProductStatus.ARCHIVED.name(), product.getRevision() + 1, null);
     }
@@ -642,7 +633,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(409, "当前商品不可恢复");
         productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.DRAFT).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "product_restored", "product", productId);
         return new ProductStatusVO(productId, ProductStatus.DRAFT.name(), product.getRevision() + 1, null);
     }
@@ -673,7 +664,7 @@ public class ProductServiceImpl implements ProductService {
         }
         productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.PENDING_REVIEW));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "listing_submitted", "product", productId);
         return new ProductListingVO(productId, revision, ProductStatus.PENDING_REVIEW.name(), null);
     }
@@ -714,7 +705,7 @@ public class ProductServiceImpl implements ProductService {
         submission.setReviewedAt(LocalDateTime.now());
         submission.setReason(decision.reason());
         listingSubmissions.updateById(submission);
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "listing_" + result.toLowerCase(), "product", productId);
         return new ProductListingVO(productId, decision.revision(), next.name(), decision.reason());
     }
@@ -744,7 +735,7 @@ public class ProductServiceImpl implements ProductService {
         }
         productMapper.update(null, new LambdaUpdateWrapper<Product>().eq(Product::getId, productId)
                 .set(Product::getStatus, ProductStatus.DRAFT).setSql("revision = revision + 1"));
-        queueSearchRefresh(productId);
+
         BusinessEventLog.committed("product", "display_attributes_replaced", "product", productId);
         return displayAttributes.list(productId).stream()
                 .map(a -> new DisplayAttributeVO(a.getAttributeKey(), a.getAttributeValue(), a.getPosition()))

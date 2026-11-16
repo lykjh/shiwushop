@@ -6,7 +6,6 @@ import com.shiwushop.product.dto.review.ReviewCreateDTO;
 import com.shiwushop.product.dto.review.ReviewFollowUpDTO;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.product.entity.review.ProductReview;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.product.mapper.review.ProductReviewMapper;
 import com.shiwushop.product.service.impl.ReviewServiceImpl;
 import com.shiwushop.product.vo.query.review.ReviewEligibility;
@@ -49,9 +48,9 @@ class ReviewSummaryUnitTests {
 
     private final AccountAccess accounts = mock(AccountAccess.class);
     private final ProductReviewMapper reviews = mock(ProductReviewMapper.class);
-    private final OutboxEventMapper outbox = mock(OutboxEventMapper.class);
+
     private final ReviewServiceImpl service = new ReviewServiceImpl(accounts, reviews,
-            mock(MediaAssetAccess.class), outbox);
+            mock(MediaAssetAccess.class));
 
     @Test
     void creatingReviewAddsItsRatingOnce() {
@@ -74,7 +73,6 @@ class ReviewSummaryUnitTests {
             return 1;
         });
         when(reviews.addToSummary(4L, 4)).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(4L)).thenReturn(1);
 
         assertEquals(6L, service.create(3L, 2L, 5L, new ReviewCreateDTO(4, "评价", List.of())));
         verify(reviews).addToSummary(4L, 4);
@@ -99,7 +97,6 @@ class ReviewSummaryUnitTests {
         review.setCountedInSummary(false);
         when(reviews.selectForUpdate(6L)).thenReturn(review);
         when(reviews.softDelete(6L)).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(4L)).thenReturn(1);
 
         service.delete(3L, 6L);
         verify(reviews).softDelete(6L);
@@ -117,7 +114,6 @@ class ReviewSummaryUnitTests {
         when(reviews.selectForUpdate(6L)).thenReturn(review);
         when(reviews.softDelete(6L)).thenReturn(1);
         when(reviews.removeFromSummary(4L, 4)).thenReturn(1);
-        when(outbox.insertSearchProductRefresh(4L)).thenReturn(1);
 
         service.delete(3L, 6L);
         verify(reviews).removeFromSummary(4L, 4);

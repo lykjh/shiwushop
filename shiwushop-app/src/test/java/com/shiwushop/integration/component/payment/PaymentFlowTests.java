@@ -394,7 +394,6 @@ class PaymentFlowTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.orderStatus").value("PAID"));
         assertNotNull(orderMapper.selectById(fixture.order().getId()).getPaidAt());
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
-        assertEquals(1, searchEvents(fixture.product()));
         mockMvc.perform(get("/payments/checkout/{outTradeNo}", outTradeNo))
                 .andExpect(status().isNotFound());
 
@@ -405,7 +404,6 @@ class PaymentFlowTests {
                             org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("success"));
         }
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
-        assertEquals(1, searchEvents(fixture.product()));
         assertEquals(1,
                 jdbc.queryForObject("SELECT COUNT(*) FROM payment_attempts WHERE order_id=? AND status='SUCCESS'",
                         Integer.class, fixture.order().getId()));
@@ -646,7 +644,6 @@ class PaymentFlowTests {
                 Integer.class, fixture.order().getId()));
         paymentService.expireOrder(fixture.order().getId());
         assertEquals(3, skuMapper.selectById(sku.getId()).getStock());
-        assertEquals(1, searchEvents(fixture.product()));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
@@ -695,7 +692,6 @@ class PaymentFlowTests {
         assertEquals(OrderStatus.CANCELLED, orderMapper.selectById(guarded.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.CLOSED, paymentMapper.selectById(safe.getId()).getStatus());
         assertEquals(3, skuMapper.selectById(guarded.sku().getId()).getStock());
-        assertEquals(1, searchEvents(guarded.product()));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, guarded.order().getId()));
@@ -710,7 +706,6 @@ class PaymentFlowTests {
         assertEquals(OrderStatus.UNPAID, orderMapper.selectById(legacy.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.PENDING, paymentMapper.selectById(unsafe.getId()).getStatus());
         assertEquals(1, skuMapper.selectById(legacy.sku().getId()).getStock());
-        assertEquals(0, searchEvents(legacy.product()));
 
         Fixture awaitingQr = fixture(LocalDateTime.now(businessClock).minusSeconds(5));
         com.shiwushop.trade.entity.payment.PaymentAttempt qrStillValid = pendingAttempt(awaitingQr, true);
@@ -759,7 +754,6 @@ class PaymentFlowTests {
         assertEquals(OrderStatus.PAID, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertEquals(PaymentAttemptStatus.SUCCESS, paymentMapper.selectById(attempt.getId()).getStatus());
         assertEquals(2L, productMapper.getSoldCount(fixture.product().getId()));
-        assertEquals(1, searchEvents(fixture.product()));
         assertEquals(1, skuMapper.selectById(fixture.sku().getId()).getStock());
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
@@ -774,7 +768,6 @@ class PaymentFlowTests {
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
-        assertEquals(0, searchEvents(fixture.product()));
     }
 
     private com.shiwushop.trade.entity.payment.PaymentAttempt pendingAttempt(Fixture fixture, boolean guardedQr) {
@@ -803,16 +796,9 @@ class PaymentFlowTests {
         assertEquals(OrderStatus.CANCELLED, orderMapper.selectById(fixture.order().getId()).getStatus());
         assertNull(paymentMapper.selectLatest(fixture.order().getId()));
         assertEquals(3, skuMapper.selectById(fixture.sku().getId()).getStock());
-        assertEquals(1, searchEvents(fixture.product()));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?) AND reason='ORDER_CANCEL_RETURN'",
                 Integer.class, fixture.order().getId()));
-    }
-
-    private int searchEvents(Product product) {
-        return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, product.getId());
     }
 
     private org.springframework.test.web.servlet.ResultActions notifyForm(String outTradeNo,

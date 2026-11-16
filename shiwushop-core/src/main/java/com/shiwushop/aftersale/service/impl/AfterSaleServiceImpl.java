@@ -49,7 +49,6 @@ import com.shiwushop.aftersale.service.AfterSaleService;
 import com.shiwushop.aftersale.service.AfterSaleTimeoutService;
 import lombok.RequiredArgsConstructor;
 import com.shiwushop.trade.service.AfterSaleOrderService;
-import com.shiwushop.product.service.TradingProductService;
 import com.shiwushop.product.service.ProductStockService;
 import com.shiwushop.product.service.ReviewService;
 import com.shiwushop.member.service.MemberRewardService;
@@ -92,7 +91,6 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private final PlatformTransactionManager transactionManager;
     private final Clock clock;
     private final AfterSaleOrderService orderAccess;
-    private final TradingProductService products;
     private final ProductStockService stock;
     private final ReviewService reviews;
     private final MemberRewardService memberRewards;
@@ -844,13 +842,6 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         }
         if (sale.getType() == AfterSaleType.REFUND_ONLY) {
             restoreStock(sale.getId(), "REFUND_SUCCESS", true);
-        } else {
-            Set<Long> productIds = new HashSet<>();
-            for (AfterSaleItem line : items.selectForCase(sale.getId())) {
-                OrderItem original = orderAccess.item(line.getOrderItemId());
-                productIds.add(products.findSku(original.getSkuId()).getProductId());
-            }
-            stock.refreshProducts(productIds);
         }
         if (Integer.valueOf(1).equals(refundedOrder.getPricingVersion()))
             promotions.refund(refundedOrder.getId(), sale.getId());
@@ -917,7 +908,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                 refunds.oldestUnresolvedSeconds(before, LocalDateTime.now(clock)));
     }
 
-    /** 返还售后涉及的 SKU 库存并写库存流水和商品搜索刷新事件。 */
+    /** 返还售后涉及的 SKU 库存并记录库存流水。 */
     private void restoreStock(Long caseId, String operation) {
         restoreStock(caseId, operation, false);
     }
@@ -926,16 +917,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         AfterSaleCase sale = requireCase(caseId);
         if (!"NORMAL".equals(orderAccess.find(sale.getOrderId()).getBusinessType()))
             return;
-        Set<Long> changedProductIds = new HashSet<>();
         for (AfterSaleItem line : items.selectForCase(caseId)) {
             if (unshippedOnly && !"UNSHIPPED".equals(line.getSourceKind()))
                 continue;
             OrderItem original = orderAccess.item(line.getOrderItemId());
             stock.returnRefund(original.getSkuId(), original.getId(), line.getQuantity(),
                     operation + ":" + caseId + ":" + line.getOrderItemId());
-            changedProductIds.add(products.findSku(original.getSkuId()).getProductId());
         }
-        stock.refreshProducts(changedProductIds);
     }
 
     /** 组合售后申请、明细、退货运单及退款记录供接口返回。 */

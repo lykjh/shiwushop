@@ -2,7 +2,6 @@ package com.shiwushop.unit.merchant;
 
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.media.MediaAssetAccess;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.entity.shop.Shop;
 import com.shiwushop.merchant.mapper.shop.ShopMapper;
 import com.shiwushop.merchant.service.MerchantShopAccess;
@@ -20,7 +19,7 @@ class ShopServiceImplTest {
     void lockByIdReturnsLockedShopOrNotFound() {
         var mapper = mock(ShopMapper.class);
         var service = new ShopServiceImpl(mapper, mock(AccountAccess.class), mock(MerchantShopAccess.class),
-                mock(MediaAssetAccess.class), mock(ShopCategoryAccess.class), mock(OutboxEventMapper.class),
+                mock(MediaAssetAccess.class), mock(ShopCategoryAccess.class),
                 mock(ShopStaffGrantMapper.class));
         var shop = new Shop();
         shop.setId(1L);
@@ -37,7 +36,7 @@ class ShopServiceImplTest {
         var accounts = mock(AccountAccess.class);
         var grants = mock(ShopStaffGrantMapper.class);
         var service = new ShopServiceImpl(mapper, accounts, mock(MerchantShopAccess.class),
-                mock(MediaAssetAccess.class), mock(ShopCategoryAccess.class), mock(OutboxEventMapper.class), grants);
+                mock(MediaAssetAccess.class), mock(ShopCategoryAccess.class), grants);
         var shop = new Shop();
         shop.setId(9L);
         shop.setOwnerUserId(4L);

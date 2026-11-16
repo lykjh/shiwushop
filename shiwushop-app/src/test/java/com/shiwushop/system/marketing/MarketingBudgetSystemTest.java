@@ -162,7 +162,6 @@ class MarketingBudgetSystemTest {
                     "--shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                     "--shop.member.enabled=false", "--shop.marketing.enabled=true",
-                    "--shop.search.discovery-enabled=false", "--shop.search.worker-enabled=false",
                     "--shop.shipment.rocket-enabled=false", "--shop.shipment.expiry-enabled=false",
                     "--shop.payment.expiry-scan-delay-ms=86400000", "--shop.payment.refund-scan-delay-ms=86400000",
                     "--shop.aftersale.timeout-scan-delay-ms=86400000",

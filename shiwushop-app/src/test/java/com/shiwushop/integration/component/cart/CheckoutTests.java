@@ -175,9 +175,6 @@ class CheckoutTests {
                 Integer.class, f.firstSku.getId(), f.secondSku.getId(), f.thirdSku.getId()));
         assertNotNull(jdbc.queryForObject("SELECT last_used_at FROM addresses WHERE id = ?",
                 java.time.LocalDateTime.class, f.address.getId()));
-        assertEquals(3, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
-                Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId(), f.thirdSku.getProductId()));
         assertEquals(2, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM checkout_request_orders WHERE checkout_request_id = (SELECT id FROM checkout_requests WHERE user_id = ? AND idempotency_key = ?)",
                 Integer.class, f.buyer.getId(), key));
@@ -193,9 +190,6 @@ class CheckoutTests {
                 .andExpect(status().isOk()).andReturn();
         assertEquals(firstOrderId, om.readTree(retry.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong());
-        assertEquals(3, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?, ?)",
-                Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId(), f.thirdSku.getProductId()));
         mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId()), f.address.getId(), "10.00", key)))
                 .andExpect(status().isConflict());
@@ -229,9 +223,6 @@ class CheckoutTests {
         assertNotNull(cartItemMapper.selectById(second.getId()));
         assertNull(jdbc.queryForObject("SELECT last_used_at FROM addresses WHERE id = ?",
                 java.time.LocalDateTime.class, f.address.getId()));
-        assertEquals(0, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id IN (?, ?)",
-                Integer.class, f.firstSku.getProductId(), f.secondSku.getProductId()));
     }
 
     @Test
@@ -276,18 +267,12 @@ class CheckoutTests {
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE sku_id = ? AND reason = 'ORDER_DEDUCT'",
                 Integer.class, f.firstSku.getId()));
-        assertEquals(1, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.firstSku.getProductId()));
         MvcResult retry = mockMvc.perform(post("/checkouts/direct").with(withMockLogin(f.session))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn();
         assertEquals(orderId, om.readTree(retry.getResponse().getContentAsString())
                 .path("data").path("orders").get(0).path("id").asLong());
         assertEquals(1, skuMapper.selectById(f.firstSku.getId()).getStock());
-        assertEquals(1, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.firstSku.getProductId()));
     }
 
     @Test
@@ -305,9 +290,6 @@ class CheckoutTests {
         mockMvc.perform(post("/checkouts").with(withMockLogin(f.session)).contentType(MediaType.APPLICATION_JSON)
                         .content(body(List.of(first.getId(), second.getId()), f.address.getId(), "20.00")))
                 .andExpect(status().isOk());
-        assertEquals(1, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.firstSku.getProductId()));
     }
 
     @Test

@@ -63,8 +63,6 @@ public final class RocketFaultApp implements AutoCloseable {
                         "--shop.auth.jwt.cookie-path=/", "--shop.auth.jwt.cookie-secure=false",
                         "--shop.privacy.key-v1-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                         "--shop.sms.lookup-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-                        "--shop.search.url=http://127.0.0.1:29200", "--shop.search.discovery-enabled=false",
-                        "--shop.search.worker-enabled=false",
                         "--shop.alipay.app-id=", "--shop.alipay.seller-id=", "--shop.alipay.private-key-path=",
                         "--shop.alipay.public-key=",
                         "--shop.shipment.rocket-enabled=" + rocket,

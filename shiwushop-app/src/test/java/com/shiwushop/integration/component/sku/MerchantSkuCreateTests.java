@@ -114,9 +114,6 @@ class MerchantSkuCreateTests {
                 .andExpect(status().isConflict());
         assertEquals(1, skuMapper.selectCount(new LambdaQueryWrapper<Sku>()
                 .eq(Sku::getProductId, product.getId())));
-        assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, product.getId()));
     }
 
     @Test

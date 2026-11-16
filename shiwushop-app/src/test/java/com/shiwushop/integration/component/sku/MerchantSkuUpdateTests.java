@@ -97,9 +97,6 @@ class MerchantSkuUpdateTests {
         assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM inventory_movements WHERE sku_id = ? AND reason = 'MERCHANT_ADJUST' " +
                         "AND delta = 5 AND balance_after = 8", Integer.class, f.skuId));
-        assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.productId));
     }
 
     @Test

@@ -114,7 +114,6 @@ class AfterSaleFlowTests {
         assertEquals(2, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE reason='REFUND_RETURN' " +
                 "AND order_item_id=?", Integer.class, fixture.itemId()));
-        assertEquals(1, searchEvents(fixture));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM refund_attempts WHERE case_id=?",
                 Integer.class, sale.id()));
     }
@@ -144,7 +143,6 @@ class AfterSaleFlowTests {
         assertEquals(2, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
         assertEquals(409, assertThrows(BusinessException.class, () -> service.receiveReturn(
                 fixture.merchant(), fixture.shopId(), sale.id(), new ReturnReceiptDTO(true))).getCode());
-        assertEquals(1, searchEvents(fixture));
     }
 
     @Test
@@ -161,13 +159,11 @@ class AfterSaleFlowTests {
         assertEquals("REFUNDING", service.receiveReturn(fixture.merchant(), fixture.shopId(), sale.id(),
                 new ReturnReceiptDTO(false)).status());
         assertEquals(1, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
-        assertEquals(0, searchEvents(fixture));
         when(gateway.configured()).thenReturn(true);
         when(gateway.refund(eq(fixture.outTradeNo()), eq(fixture.tradeNo()), anyString(),
                 eq(new BigDecimal("10.00")))).thenReturn(new RefundGateway.Result(true,
                 fixture.outTradeNo(), fixture.tradeNo(), null, new BigDecimal("10.00")));
         assertEquals("REFUNDED", service.refund(fixture.merchant(), fixture.shopId(), sale.id()).status());
-        assertEquals(1, searchEvents(fixture));
         assertEquals(1, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
     }
 
@@ -186,7 +182,6 @@ class AfterSaleFlowTests {
         assertEquals("UNKNOWN", first.refund().status());
         AfterSaleVO second = service.refund(fixture.merchant(), fixture.shopId(), sale.id());
         assertEquals(first.refund().outRequestNo(), second.refund().outRequestNo());
-        assertEquals(0, searchEvents(fixture));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM refund_attempts WHERE case_id=?",
                 Integer.class, sale.id()));
     }
@@ -213,7 +208,6 @@ class AfterSaleFlowTests {
         assertEquals(2, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM inventory_movements WHERE reason='REFUND_RETURN' " +
                 "AND order_item_id=?", Integer.class, fixture.itemId()));
-        assertEquals(1, searchEvents(fixture));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM refund_attempts WHERE case_id=?",
                 Integer.class, sale.id()));
     }
@@ -322,12 +316,6 @@ class AfterSaleFlowTests {
                 String.class, sale.id()));
         assertEquals("REFUNDING", service.buyerDetail(fixture.buyer(), sale.id()).status());
         assertEquals(1, jdbc.queryForObject("SELECT stock FROM skus WHERE id=?", Integer.class, fixture.skuId()));
-        assertEquals(0, searchEvents(fixture));
-    }
-
-    private int searchEvents(Fixture fixture) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' " +
-                "AND aggregate_id = (SELECT product_id FROM skus WHERE id = ?)", Integer.class, fixture.skuId());
     }
 
     private Fixture fixture() {

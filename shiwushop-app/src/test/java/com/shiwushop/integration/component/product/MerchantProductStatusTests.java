@@ -116,9 +116,6 @@ class MerchantProductStatusTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("OFF_SALE"));
         assertEquals(ProductStatus.OFF_SALE, productMapper.selectById(f.product.getId()).getStatus());
-        assertEquals(3, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.product.getId()));
     }
 
     @Test
@@ -144,9 +141,6 @@ class MerchantProductStatusTests {
         mockMvc.perform(request(f.product.getId(), "ON_SALE", session))
                 .andExpect(status().isConflict());
         assertEquals(ProductStatus.DRAFT, productMapper.selectById(f.product.getId()).getStatus());
-        assertEquals(0, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'SEARCH_PRODUCT_REFRESH' AND aggregate_id = ?",
-                Integer.class, f.product.getId()));
     }
 
     @Test

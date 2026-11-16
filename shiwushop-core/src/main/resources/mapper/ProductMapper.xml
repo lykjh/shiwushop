@@ -14,16 +14,16 @@
     </sql>
 
     <sql id="pageColumns">
-        SELECT p.id, p.name, cover.media_id AS coverMediaId,
+        p.id, p.name, cover.media_id AS coverMediaId,
                b.id AS brandId, b.name AS brandName,
                s.id AS shopId, s.name AS shopName,
-               COALESCE((SELECT MIN(sku.price) FROM skus sku
+               COALESCE((SELECT MIN(sku.price) FROM skus sku FORCE INDEX (uk_skus_product_id_option_signature)
                    WHERE sku.product_id = p.id AND sku.status = 'ACTIVE' AND sku.stock > 0
                      AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
                      AND (#{maxPrice} IS NULL OR sku.price &lt;= #{maxPrice})),
-                   (SELECT MIN(sku.price) FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE')) AS startingPrice,
+                   (SELECT MIN(sku.price) FROM skus sku FORCE INDEX (uk_skus_product_id_option_signature) WHERE sku.product_id = p.id AND sku.status = 'ACTIVE')) AS startingPrice,
                COALESCE(sales.sold_count, 0) AS soldCount,
-               NOT EXISTS (SELECT 1 FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE' AND sku.stock > 0) AS soldOut
+               NOT EXISTS (SELECT 1 FROM skus sku FORCE INDEX (uk_skus_product_id_option_signature) WHERE sku.product_id = p.id AND sku.status = 'ACTIVE' AND sku.stock > 0) AS soldOut
     </sql>
 
     <sql id="pageJoins">
@@ -37,7 +37,7 @@
         WHERE p.status = 'ON_SALE'
           AND (#{brandId} IS NULL OR pb.brand_id = #{brandId})
           AND (#{shopId} IS NULL OR p.shop_id = #{shopId})
-          AND (SELECT sku.id FROM skus sku WHERE sku.product_id = p.id AND sku.status = 'ACTIVE'
+          AND (SELECT sku.id FROM skus sku FORCE INDEX (uk_skus_product_id_option_signature) WHERE sku.product_id = p.id AND sku.status = 'ACTIVE'
               AND ((#{minPrice} IS NULL AND #{maxPrice} IS NULL)
                 OR (sku.stock > 0
                   AND (#{minPrice} IS NULL OR sku.price >= #{minPrice})
@@ -54,12 +54,16 @@
         <include refid="pageWhere"/>
     </sql>
 
-    <sql id="filteredPageFrom">
+    <sql id="publicCatalogFrom">
         FROM products p
         JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
             AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
         JOIN visible_categories c ON c.id = p.category_id
         <include refid="pageJoins"/>
+    </sql>
+
+    <sql id="filteredPageFrom">
+        <include refid="publicCatalogFrom"/>
         <include refid="pageWhere"/>
     </sql>
 
@@ -75,10 +79,10 @@
         <include refid="pageWhere"/>
     </sql>
 
-    <!-- 旧公开列表按 ID 游标翻页，不使用深页 OFFSET；发现接口另走搜索索引。 -->
+    <!-- 公开列表按 ID 游标翻页，避免深页 OFFSET。 -->
     <select id="selectPublicPage" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
-        <include refid="pageColumns"/>
+        SELECT <include refid="pageColumns"/>
         <include refid="primaryPageFrom"/>
         AND (#{afterId} IS NULL OR p.id &lt; #{afterId})
         ORDER BY p.id DESC LIMIT #{limit}
@@ -87,7 +91,7 @@
     <!-- 店铺筛选先缩到该店的上架商品，再按 ID 游标倒序读取，避免扫描其他店铺。 -->
     <select id="selectPublicShopPage" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
-        <include refid="pageColumns"/>
+        SELECT <include refid="pageColumns"/>
         FROM products p FORCE INDEX (idx_products_shop_status_id)
         STRAIGHT_JOIN shops s ON s.id = p.shop_id AND s.enabled = 1 AND s.qualification_revoked = 0
             AND (s.qualification_valid_until IS NULL OR s.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
@@ -101,7 +105,7 @@
 
     <select id="selectPublicFilteredPage" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
-        <include refid="pageColumns"/>
+        SELECT <include refid="pageColumns"/>
         <include refid="filteredPageFrom"/>
         AND (#{afterId} IS NULL OR p.id &lt; #{afterId})
         ORDER BY p.id DESC LIMIT #{limit}
@@ -109,18 +113,115 @@
 
     <select id="selectPublicBrandPage" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
-        <include refid="pageColumns"/>
+        SELECT <include refid="pageColumns"/>
         <include refid="brandPageFrom"/>
         AND (#{afterId} IS NULL OR pb.product_id &lt; #{afterId})
         ORDER BY pb.product_id DESC LIMIT #{limit}
     </select>
 
-    <!-- 搜索结果展示前再次从数据库核对上下架、店铺状态、筛选条件和当前价格。 -->
+    <!-- 按商品 ID 回查当前价格、库存和可见性。 -->
     <select id="selectPublicCardsByIds" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
         <include refid="visibleCategories"/>
-        <include refid="pageColumns"/>
+        SELECT <include refid="pageColumns"/>
         <include refid="filteredPageFrom"/>
         AND p.id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <sql id="discoveryNameMatch">
+        <choose>
+            <when test="filter.singleCharacterPattern != null">
+                ${column} LIKE #{filter.singleCharacterPattern} ESCAPE '!'
+            </when>
+            <otherwise>
+                MATCH (${column}) AGAINST (#{filter.keyword} IN NATURAL LANGUAGE MODE)
+            </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="discoveryIdFilter">
+        <if test="ids != null">
+            AND ${column} IN
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </if>
+    </sql>
+
+    <select id="selectDiscoveryCards" resultType="com.shiwushop.product.vo.query.product.PublicProductRow">
+        <bind name="categoryId" value="filter.categoryId"/>
+        <bind name="brandId" value="filter.brandId"/>
+        <bind name="shopId" value="filter.shopId"/>
+        <bind name="minPrice" value="filter.minPrice"/>
+        <bind name="maxPrice" value="filter.maxPrice"/>
+        <include refid="visibleCategories"/>
+        <!-- 先用各自的全文索引找出命中 ID，再按公开目录条件核对。 -->
+        <if test="filter.keyword != null">
+            , matched_products AS (
+                SELECT product_id, MAX(discovery_rank) AS discovery_rank
+                FROM (
+                    SELECT candidate.id AS product_id,
+                           CASE WHEN candidate.name = #{filter.keyword} THEN 4 ELSE 3 END AS discovery_rank
+                    FROM products candidate
+                    WHERE <include refid="discoveryNameMatch"><property name="column" value="candidate.name"/></include>
+                    <include refid="discoveryIdFilter"><property name="column" value="candidate.id"/></include>
+                    <if test="!nameOnly">
+                        UNION ALL
+                        SELECT pb.product_id, 2
+                        FROM brands candidate JOIN product_brands pb ON pb.brand_id = candidate.id
+                        WHERE candidate.enabled = 1
+                          AND <include refid="discoveryNameMatch"><property name="column" value="candidate.name"/></include>
+                        <include refid="discoveryIdFilter"><property name="column" value="pb.product_id"/></include>
+                        UNION ALL
+                        SELECT product.id, 2
+                        FROM shops candidate JOIN products product ON product.shop_id = candidate.id
+                        WHERE candidate.enabled = 1
+                          AND <include refid="discoveryNameMatch"><property name="column" value="candidate.name"/></include>
+                        <include refid="discoveryIdFilter"><property name="column" value="product.id"/></include>
+                    </if>
+                ) hits
+                GROUP BY product_id
+            )
+        </if>
+        SELECT <include refid="pageColumns"/>,
+               <choose>
+                   <when test="filter.keyword != null">matched.discovery_rank</when>
+                   <otherwise>0</otherwise>
+               </choose> AS discoveryRank
+        <include refid="publicCatalogFrom"/>
+        <if test="filter.keyword != null">
+            JOIN matched_products matched ON matched.product_id = p.id
+        </if>
+        <include refid="pageWhere"/>
+        <include refid="discoveryIdFilter"><property name="column" value="p.id"/></include>
+        <if test="afterId != null">
+            <choose>
+                <when test="filter.keyword != null">
+                    AND (matched.discovery_rank &lt; #{afterRank}
+                         OR (matched.discovery_rank = #{afterRank} AND p.id &lt; #{afterId}))
+                </when>
+                <otherwise>AND p.id &lt; #{afterId}</otherwise>
+            </choose>
+        </if>
+        ORDER BY <if test="filter.keyword != null">matched.discovery_rank DESC,</if> p.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="suggestDiscoveryShops" resultType="com.shiwushop.product.mapper.product.ProductMapper$DiscoverySuggestion">
+        SELECT candidate.id, candidate.name
+        FROM shops candidate
+        WHERE candidate.enabled = 1 AND candidate.qualification_revoked = 0
+          AND (candidate.qualification_valid_until IS NULL
+               OR candidate.qualification_valid_until &gt;= DATE(UTC_TIMESTAMP() + INTERVAL 8 HOUR))
+          AND <include refid="discoveryNameMatch"><property name="column" value="candidate.name"/></include>
+        ORDER BY (candidate.name = #{filter.keyword}) DESC, candidate.id DESC
+        LIMIT 5
+    </select>
+
+    <select id="suggestDiscoveryBrands" resultType="com.shiwushop.product.mapper.product.ProductMapper$DiscoverySuggestion">
+        SELECT candidate.id, candidate.name
+        FROM brands candidate
+        WHERE candidate.enabled = 1
+          AND <include refid="discoveryNameMatch"><property name="column" value="candidate.name"/></include>
+        ORDER BY (candidate.name = #{filter.keyword}) DESC, candidate.id DESC
+        LIMIT 5
     </select>
 </mapper>

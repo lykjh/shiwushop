@@ -1,7 +1,6 @@
 package com.shiwushop.product.service.impl;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.common.outbox.OutboxEventMapper;
 import com.shiwushop.merchant.service.MerchantShopAccess;
 import com.shiwushop.product.entity.product.Product;
 import com.shiwushop.product.entity.product.Sku;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection;
 import java.util.Map;
 
 /** 交易和售后只提交业务动作；库存与流水一起成功或随调用方事务回滚。 */
@@ -28,7 +26,6 @@ public class ProductStockServiceImpl implements ProductStockService {
     private final SkuMapper skus;
     private final ProductMapper products;
     private final InventoryMovementMapper movements;
-    private final OutboxEventMapper outbox;
     private final MerchantShopAccess shops;
 
     /** 活动划拨只改普通池；调用方在同一事务内改活动池并写对应流水。 */
@@ -87,8 +84,6 @@ public class ProductStockServiceImpl implements ProductStockService {
         } catch (DuplicateKeyException e) {
             throw new BusinessException(409, "活动划拨操作键与原请求冲突", e);
         }
-        if (outbox.insertSearchProductRefresh(product.getId()) != 1)
-            throw new IllegalStateException("商品搜索事件写入失败");
         return new MarketingStockMovement(movement.getId(), (int) after, normalDelta, false);
     }
 
@@ -118,11 +113,4 @@ public class ProductStockServiceImpl implements ProductStockService {
         products.increaseSoldCount(productId, quantity);
     }
 
-    @Override
-    public void refreshProducts(Collection<Long> productIds) {
-        productIds.stream().distinct().forEach(id -> {
-            if (outbox.insertSearchProductRefresh(id) != 1)
-                throw new IllegalStateException("商品搜索事件写入失败");
-        });
-    }
 }

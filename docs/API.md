@@ -35,7 +35,7 @@
 | `POST`   | `/reviews/{reviewId}/follow-up`        | 原评价买家；仅可追评一次，正文 1–2000 字，图片最多 9 张                         |
 | `DELETE` | `/reviews/{reviewId}`                  | 原评价买家；软删除，重复删除返回成功且不可重新评价                                 |
 | `POST`   | `/reviews/{reviewId}/reports`          | 登录用户；公开评价可举报，每人每条一次，重复提交返回成功且不覆盖原因                        |
-| `GET`    | `/discovery/products`                  | 公开；支持搜索、筛选与不透明游标，索引未就绪时 503                               |
+| `GET`    | `/discovery/products`                  | 公开；支持搜索、筛选与不透明游标，游标过期时返回 410                               |
 | `GET`    | `/discovery/products/refresh`          | 公开；按最多 60 个 ID 刷新已加载卡片                                    |
 | `GET`    | `/search/suggestions`                  | 公开；分组返回商品、店铺、品牌入口                                         |
 
@@ -129,4 +129,4 @@
 | `POST` | `/media` | 登录及资源归属 |
 | `GET` | `/media/{mediaId}` | 按媒体授权／状态 |
 
-发现接口由 `SHOP_SEARCH_DISCOVERY_ENABLED` 控制，启用前须完成索引校验。数据库结构以 [`V1`—`V18`](../src/main/resources/db/migration) 为准。
+商品发现接口使用 MySQL 全文索引。收到 `410` 后，调用方按原条件从第一页重查。数据库结构见 [Flyway 迁移](../shiwushop-core/src/main/resources/db/migration)。

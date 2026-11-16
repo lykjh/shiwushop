@@ -253,7 +253,6 @@ public class CheckoutServiceImpl implements CheckoutService {
                 orderMapper.releaseSucceededGroup(source.groupId());
             stock.recordSale(product.getId(), source.quantity());
         }
-        stock.refreshProducts(List.of(product.getId()));
         addresses.markUsed(userId, address.getId(), now);
         checkoutRequestMapper.linkOrder(requestId, order.getId());
         checkoutRequestMapper.markCompleted(requestId);
@@ -330,8 +329,6 @@ public class CheckoutServiceImpl implements CheckoutService {
             orders.add(placeShopOrder(userId, address, group.getKey(), owners.get(group.getKey()), group.getValue(),
                     requestId, shopPrice, level, discounts));
         }
-        stock.refreshProducts(byShop.values().stream().flatMap(List::stream)
-                .map(line -> line.product().getId()).toList());
         addresses.markUsed(userId, address.getId(), LocalDateTime.now(businessClock));
         checkoutRequestMapper.markCompleted(requestId);
         return new CheckoutVO(orders, total, 0);

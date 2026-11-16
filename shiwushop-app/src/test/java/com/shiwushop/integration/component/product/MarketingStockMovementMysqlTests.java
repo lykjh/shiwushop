@@ -74,8 +74,6 @@ class MarketingStockMovementMysqlTests {
                         Integer.class, sku));
             } finally {
                 jdbc.update("DELETE FROM inventory_movements WHERE sku_id=?", sku);
-                jdbc.update("DELETE FROM outbox_events WHERE event_type='SEARCH_PRODUCT_REFRESH' AND aggregate_id=?",
-                        product);
                 jdbc.update("DELETE FROM marketing_activity_skus WHERE id=?", activitySku);
                 jdbc.update("DELETE FROM marketing_activities WHERE id=?", activity);
                 jdbc.update("DELETE FROM skus WHERE id=?", sku);

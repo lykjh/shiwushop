@@ -67,7 +67,6 @@ class BrandUpdateTests {
         assertEquals(newName, brandMapper.selectById(brand.getId()).getName());
         assertEquals(0, brandMapper.selectById(brand.getId()).getEnabled());
         assertEquals(logoMediaId, brandMapper.selectById(brand.getId()).getLogoMediaId());
-        assertEquals(1L, searchEvents(brand.getId()));
 
         mockMvc.perform(put("/admin/brands/{id}", brand.getId()).with(withMockLogin(admin))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +74,6 @@ class BrandUpdateTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.logoMediaId").value(org.hamcrest.Matchers.nullValue()));
         assertNull(brandMapper.selectById(brand.getId()).getLogoMediaId());
-        assertEquals(2L, searchEvents(brand.getId()));
     }
 
     @Test
@@ -111,7 +109,6 @@ class BrandUpdateTests {
         }
 
         assertEquals(second.getName(), brandMapper.selectById(second.getId()).getName());
-        assertEquals(0L, searchEvents(second.getId()));
     }
 
     @Test
@@ -134,12 +131,6 @@ class BrandUpdateTests {
         brand.setEnabled(1);
         brandMapper.insert(brand);
         return brand;
-    }
-
-    private Long searchEvents(Long brandId) {
-        return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE event_type='SEARCH_BRAND_REFRESH' AND aggregate_id=?",
-                Long.class, brandId);
     }
 
     private MockHttpSession sessionForRole(String role) {
