@@ -1,7 +1,7 @@
 package com.shiwushop.marketing;
 
 import com.shiwushop.common.BusinessException;
-import com.shiwushop.marketing.service.impl.MonthlyCouponService;
+import com.shiwushop.marketing.service.MonthlyCouponService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

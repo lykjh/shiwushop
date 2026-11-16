@@ -1,5 +1,6 @@
 package com.shiwushop.user.service.impl;
 
+import com.shiwushop.user.service.AccountProofService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.privacy.PrivacyCipher;
 import com.shiwushop.user.auth.PhoneLookup;
@@ -14,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
-public class AccountProofService {
+public class AccountProofServiceImpl implements AccountProofService {
     private final AccountAccess access;
     private final PhoneBindingMapper bindings;
     private final PrivacyCipher privacy;
@@ -23,11 +24,13 @@ public class AccountProofService {
     private final SmsCodeDelivery delivery;
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder();
 
+    @Override
     public long sendCode(Long userId, String purpose, String remoteAddress) {
         String phone = boundPhone(userId);
         return delivery.send(phone, purpose, remoteAddress, true);
     }
 
+    @Override
     public void verify(Long userId, String purpose, String password, String code) {
         if ((password == null || password.isBlank()) == (code == null || code.isBlank()))
             throw new BusinessException(400, "请选择一种身份验证方式");

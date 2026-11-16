@@ -4,9 +4,10 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.user.entity.status.AccountRole;
 import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
+import com.shiwushop.user.entity.user.AccountDeletionRequest;
 import com.shiwushop.user.mapper.user.AccountDeletionRequestMapper;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
-import com.shiwushop.user.service.impl.AccountDeletionRequestService;
+import com.shiwushop.user.service.impl.AccountDeletionRequestServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -23,7 +24,7 @@ class AccountDeletionRequestServiceTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-06T02:00:00Z"), ZoneId.of("Asia/Shanghai"));
     private final UserAccountMapper accounts = mock(UserAccountMapper.class);
     private final AccountDeletionRequestMapper requests = mock(AccountDeletionRequestMapper.class);
-    private final AccountDeletionRequestService service = new AccountDeletionRequestService(accounts, requests, CLOCK);
+    private final AccountDeletionRequestServiceImpl service = new AccountDeletionRequestServiceImpl(accounts, requests, CLOCK);
 
     @Test
     void repeatedPendingRequestDoesNotInsertAgain() {
@@ -49,7 +50,7 @@ class AccountDeletionRequestServiceTest {
     @Test
     void repeatedWithdrawDoesNotWriteAgain() {
         active(2L);
-        var withdrawn = new AccountDeletionRequestMapper.Request(7L, 2L, "WITHDRAWN",
+        var withdrawn = new AccountDeletionRequest(7L, 2L, "WITHDRAWN",
                 LocalDateTime.now(CLOCK).minusDays(1), LocalDateTime.now(CLOCK).plusDays(6), LocalDateTime.now(CLOCK));
         when(requests.latest(2L)).thenReturn(withdrawn);
         assertSame(withdrawn, service.withdraw(2L, 0));
@@ -60,16 +61,16 @@ class AccountDeletionRequestServiceTest {
     void deadlineIsExclusiveAndExpiredRequestRemainsPending() {
         active(2L);
         LocalDateTime deadline = LocalDateTime.now(CLOCK);
-        var pending = new AccountDeletionRequestMapper.Request(7L, 2L, "PENDING",
+        var pending = new AccountDeletionRequest(7L, 2L, "PENDING",
                 deadline.minusDays(7), deadline, null);
         when(requests.pending(2L)).thenReturn(pending);
         assertEquals(409, assertThrows(BusinessException.class,
                 () -> service.withdraw(2L, 0)).getCode());
         verify(requests, never()).withdraw(any(), any());
 
-        var justBefore = new AccountDeletionRequestService(accounts, requests,
+        var justBefore = new AccountDeletionRequestServiceImpl(accounts, requests,
                 Clock.offset(CLOCK, java.time.Duration.ofNanos(-1)));
-        when(requests.latest(2L)).thenReturn(new AccountDeletionRequestMapper.Request(7L, 2L,
+        when(requests.latest(2L)).thenReturn(new AccountDeletionRequest(7L, 2L,
                 "WITHDRAWN", pending.requestedAt(), pending.deadlineAt(), deadline.minusNanos(1)));
         when(requests.withdraw(eq(7L), any())).thenReturn(1);
         assertEquals("WITHDRAWN", justBefore.withdraw(2L, 0).status());
@@ -111,8 +112,8 @@ class AccountDeletionRequestServiceTest {
         when(accounts.lockById(id)).thenReturn(account);
     }
 
-    private static AccountDeletionRequestMapper.Request pending(Long id) {
-        return new AccountDeletionRequestMapper.Request(id, 2L, "PENDING",
+    private static AccountDeletionRequest pending(Long id) {
+        return new AccountDeletionRequest(id, 2L, "PENDING",
                 LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK).plusDays(7), null);
     }
 }

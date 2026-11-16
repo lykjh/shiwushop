@@ -2,7 +2,8 @@ package com.shiwushop.integration.account;
 
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.support.TestAccounts;
-import com.shiwushop.user.service.impl.AccountDeletionRequestService;
+import com.shiwushop.user.service.AccountDeletionRequestService;
+import com.shiwushop.user.service.AccountTradeGate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AccountDeletionRequestIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired AccountDeletionRequestService requests;
+    @Autowired AccountTradeGate tradeGate;
     @Autowired PlatformTransactionManager transactions;
     TestAccounts fixtures;
     TestAccounts.Account user;
@@ -50,10 +52,10 @@ class AccountDeletionRequestIT {
                 "SELECT COUNT(*) FROM account_deletion_requests WHERE user_id=?", Long.class, user.id()));
         var tx = new TransactionTemplate(transactions);
         assertEquals(409, assertThrows(BusinessException.class,
-                () -> tx.execute(ignored -> { requests.requireCanStartTrade(user.id()); return null; })).getCode());
+                () -> tx.execute(ignored -> { tradeGate.requireCanStartTrade(user.id()); return null; })).getCode());
         assertEquals("WITHDRAWN", requests.withdraw(user.id(), version).status());
         assertEquals("WITHDRAWN", requests.withdraw(user.id(), version).status());
-        assertDoesNotThrow(() -> tx.execute(ignored -> { requests.requireCanStartTrade(user.id()); return null; }));
+        assertDoesNotThrow(() -> tx.execute(ignored -> { tradeGate.requireCanStartTrade(user.id()); return null; }));
     }
 
     @Test

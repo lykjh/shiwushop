@@ -1,5 +1,6 @@
 package com.shiwushop.user.service.impl;
 
+import com.shiwushop.user.service.AdminAccountStatusService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.user.auth.AccountAuthCache;
@@ -17,11 +18,12 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
-public class AdminAccountStatusService {
+public class AdminAccountStatusServiceImpl implements AdminAccountStatusService {
     private final UserAccountMapper accounts;
     private final AdminAccountActionMapper actions;
     private final AccountAuthCache authCache;
 
+    @Override
     @Transactional(timeout = 30)
     public AdminAccountVO change(Long actorId, Long targetId, AccountStatus next, String reason) {
         UserAccount actor = accounts.lockById(actorId);

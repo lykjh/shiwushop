@@ -1,5 +1,6 @@
 package com.shiwushop.marketing.service.impl;
 
+import com.shiwushop.marketing.service.MonthlyCouponService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.auth.AccountSecurity;
 import com.shiwushop.marketing.MarketingSettings;
@@ -18,7 +19,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-public class MonthlyCouponService {
+public class MonthlyCouponServiceImpl implements MonthlyCouponService {
     private final MarketingSettings marketing;
     private final MemberSettings memberSettings;
     private final AccountSecurity security;
@@ -41,6 +42,7 @@ public class MonthlyCouponService {
         return value.atOffset(ZoneOffset.ofHours(8));
     }
 
+    @Override
     public boolean enabled() {
         return marketing.enabled() && memberSettings.enabled();
     }
@@ -50,20 +52,24 @@ public class MonthlyCouponService {
             throw new BusinessException(404, "月券功能未启用");
     }
 
+    @Override
     public YearMonth firstMonth() {
         var first = months.firstEligibility();
         return first == null ? null : YearMonth.from(first);
     }
 
+    @Override
     public List<Long> missing(YearMonth month, int limit) {
         return months.missing(month.atDay(1).atStartOfDay(), key(month), limit);
     }
 
+    @Override
     public List<Long> due() {
         return months.due(now());
     }
 
     /** 按月初历史等级建立唯一发放义务，补扫不会使用今天的等级重算旧月份。 */
+    @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void establish(long user, YearMonth month) {
         members.initializeAndLock(user);
@@ -93,6 +99,7 @@ public class MonthlyCouponService {
     }
 
     /** 短事务认领后再发券，进程失败时允许租约接管，不长时间占用任务锁。 */
+    @Override
     @Transactional
     public String acquire(long id) {
         var g = coupons.lockGrant(id);
@@ -111,6 +118,7 @@ public class MonthlyCouponService {
     }
 
     /** 发券前再次验证租约归属与原到期日，过期工作者不能补发权益。 */
+    @Override
     @Transactional
     public void deliver(long id, String token) {
         var g = coupons.lockGrant(id);
@@ -129,11 +137,13 @@ public class MonthlyCouponService {
         issuance.issue(g, activity, rule);
     }
 
+    @Override
     @Transactional
     public void attention(long id, String token, String error) {
         months.result(id, token, "ATTENTION", error, now().plusMinutes(5));
     }
 
+    @Override
     @Transactional(readOnly = true)
     public MonthlyBenefitVO benefit(long user, YearMonth month) {
         security.checkActive(user);
@@ -157,6 +167,7 @@ public class MonthlyCouponService {
                 List.of());
     }
 
+    @Override
     @Transactional(readOnly = true)
     public MonthlyBenefitVO.Page admin(long actor, Long user, String state, String source, Long after, int size) {
         security.requireAdmin(actor);
@@ -171,6 +182,7 @@ public class MonthlyCouponService {
     }
 
     /** 人工补发只重新排队并审计，实际发券仍走相同租约及预算事务。 */
+    @Override
     @Transactional
     public MonthlyBenefitVO.Retry retry(long actor, long id, String reason) {
         security.requireAdmin(actor);

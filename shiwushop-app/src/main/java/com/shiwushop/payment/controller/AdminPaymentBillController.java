@@ -3,7 +3,7 @@ package com.shiwushop.payment.controller;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.AdminAuth;
 import com.shiwushop.payment.dto.PaymentBillDownloadDTO;
-import com.shiwushop.payment.service.impl.PaymentBillService;
+import com.shiwushop.payment.service.PaymentBillService;
 import com.shiwushop.payment.vo.PaymentBillVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;

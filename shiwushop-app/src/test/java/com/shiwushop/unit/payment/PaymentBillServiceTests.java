@@ -5,7 +5,7 @@ import com.shiwushop.payment.entity.PaymentBill;
 import com.shiwushop.payment.mapper.PaymentBillMapper;
 import com.shiwushop.payment.service.BillDownloadGateway;
 import com.shiwushop.payment.service.impl.BillFileDownloader;
-import com.shiwushop.payment.service.impl.PaymentBillService;
+import com.shiwushop.payment.service.impl.PaymentBillServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -37,7 +37,7 @@ class PaymentBillServiceTests {
         when(gateway.billDownloadUrl(any())).thenReturn("url");
         when(downloader.download("url")).thenReturn(new byte[]{1, 2});
         when(bills.insert(any(PaymentBill.class))).thenThrow(new DataAccessResourceFailureException("offline"));
-        var service = new PaymentBillService(bills, gateway, downloader, manager, Clock.systemUTC());
+        var service = new PaymentBillServiceImpl(bills, gateway, downloader, manager, Clock.systemUTC());
         ReflectionTestUtils.setField(service, "storageRoot", root.toString());
         assertThrows(DataAccessResourceFailureException.class, () -> service.download(LocalDate.of(2026, 10, 1), 7L));
         try (var files = Files.list(root)) {
@@ -55,7 +55,7 @@ class PaymentBillServiceTests {
         bill.setSha256(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(new byte[]{1, 2, 3})));
         when(bills.selectById(7L)).thenReturn(bill);
         Files.write(root.resolve(bill.getStorageKey()), new byte[]{1, 2, 4});
-        var service = new PaymentBillService(bills, mock(BillDownloadGateway.class),
+        var service = new PaymentBillServiceImpl(bills, mock(BillDownloadGateway.class),
                 mock(BillFileDownloader.class), mock(PlatformTransactionManager.class), Clock.systemUTC());
         ReflectionTestUtils.setField(service, "storageRoot", root.toString());
         assertEquals(503, assertThrows(BusinessException.class, () -> service.file(7L)).getCode());

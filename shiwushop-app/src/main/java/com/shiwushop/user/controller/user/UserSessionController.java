@@ -5,7 +5,7 @@ import com.shiwushop.user.vo.user.SmsSendVO;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.user.dto.user.AccountProofDTO;
-import com.shiwushop.user.service.impl.UserSessionService;
+import com.shiwushop.user.service.UserSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

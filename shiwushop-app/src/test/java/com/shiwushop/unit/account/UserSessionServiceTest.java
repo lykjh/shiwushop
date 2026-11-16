@@ -4,8 +4,9 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.auth.SessionUser.Identity;
 import com.shiwushop.user.auth.LoginSessions;
 import com.shiwushop.user.dto.user.AccountProofDTO;
-import com.shiwushop.user.service.impl.AccountProofService;
-import com.shiwushop.user.service.impl.UserSessionService;
+import com.shiwushop.user.service.AccountProofService;
+import com.shiwushop.user.service.UserSessionService;
+import com.shiwushop.user.service.impl.UserSessionServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -17,7 +18,7 @@ import static org.mockito.Mockito.*;
 class UserSessionServiceTest {
     private final LoginSessions sessions = mock(LoginSessions.class);
     private final AccountProofService proof = mock(AccountProofService.class);
-    private final UserSessionService service = new UserSessionService(sessions, proof);
+    private final UserSessionService service = new UserSessionServiceImpl(sessions, proof);
     private final Identity current = new Identity(3L, 2, "current");
     private final AccountProofDTO password = new AccountProofDTO("correct", null);
 

@@ -457,7 +457,7 @@ class MarketingCouponHttpTest {
     @Autowired
     com.shiwushop.marketing.MonthlyCouponScheduler monthly;
     @Autowired
-    com.shiwushop.marketing.service.impl.MonthlyCouponService monthlyService;
+    com.shiwushop.marketing.service.MonthlyCouponService monthlyService;
 
     @org.springframework.boot.test.context.TestConfiguration
     static class ClockConfig {

@@ -1,5 +1,6 @@
 package com.shiwushop.user.service.impl;
 
+import com.shiwushop.user.service.AdminAccountQueryService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
@@ -10,11 +11,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class AdminAccountQueryService {
+public class AdminAccountQueryServiceImpl implements AdminAccountQueryService {
     private final AccountAccess accountAccess;
     private final UserAccountMapper accounts;
 
     /** 管理员只能查询账号身份与状态，不返回密码和私人资料。 */
+    @Override
     public AdminAccountVO detail(Long adminId, Long userId) {
         accountAccess.requireAdmin(adminId);
         UserAccount account = accounts.selectById(userId);

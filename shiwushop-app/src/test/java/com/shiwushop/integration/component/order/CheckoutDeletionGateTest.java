@@ -6,7 +6,7 @@ import com.shiwushop.trade.dto.cart.CheckoutDTO;
 import com.shiwushop.trade.dto.cart.DirectCheckoutDTO;
 import com.shiwushop.trade.service.CheckoutService;
 import com.shiwushop.trade.service.OrderPaymentService;
-import com.shiwushop.user.service.impl.AccountDeletionRequestService;
+import com.shiwushop.user.service.AccountDeletionRequestService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

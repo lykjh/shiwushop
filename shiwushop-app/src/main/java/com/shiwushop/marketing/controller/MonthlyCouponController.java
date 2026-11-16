@@ -3,7 +3,7 @@ package com.shiwushop.marketing.controller;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.marketing.dto.ActivityReason;
-import com.shiwushop.marketing.service.impl.MonthlyCouponService;
+import com.shiwushop.marketing.service.MonthlyCouponService;
 import com.shiwushop.marketing.vo.MonthlyBenefitVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;

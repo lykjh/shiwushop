@@ -4,7 +4,7 @@ import com.shiwushop.common.GlobalExceptionHandler;
 import com.shiwushop.support.ControllerSliceSecurity;
 import com.shiwushop.payment.controller.AdminPaymentBillController;
 import com.shiwushop.common.auth.AdminAuth;
-import com.shiwushop.payment.service.impl.PaymentBillService;
+import com.shiwushop.payment.service.PaymentBillService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;

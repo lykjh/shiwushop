@@ -2,9 +2,9 @@ package com.shiwushop.unit.account;
 
 import com.shiwushop.user.controller.user.AccountDeletionRequestController;
 import com.shiwushop.user.dto.user.AccountProofDTO;
-import com.shiwushop.user.mapper.user.AccountDeletionRequestMapper;
-import com.shiwushop.user.service.impl.AccountDeletionRequestService;
-import com.shiwushop.user.service.impl.AccountProofService;
+import com.shiwushop.user.entity.user.AccountDeletionRequest;
+import com.shiwushop.user.service.AccountDeletionRequestService;
+import com.shiwushop.user.service.AccountProofService;
 import com.shiwushop.common.auth.SessionUser;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -24,7 +24,7 @@ class AccountDeletionRequestControllerTest {
         var request = new MockHttpServletRequest();
         SessionUser.identify(request, new SessionUser.Identity(2L, 4, "verified"));
         request.setRemoteAddr("127.0.0.1");
-        var pending = new AccountDeletionRequestMapper.Request(1L, 2L, "PENDING",
+        var pending = new AccountDeletionRequest(1L, 2L, "PENDING",
                 LocalDateTime.parse("2026-11-06T10:00:00"), LocalDateTime.parse("2026-11-13T10:00:00"), null);
         when(requests.request(2L, 4)).thenReturn(pending);
 

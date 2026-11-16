@@ -7,7 +7,7 @@ import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.AdminAccountActionMapper;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
-import com.shiwushop.user.service.impl.AdminAccountStatusService;
+import com.shiwushop.user.service.impl.AdminAccountStatusServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,7 +18,7 @@ class AdminAccountStatusServiceTest {
     private final UserAccountMapper accounts = mock(UserAccountMapper.class);
     private final AdminAccountActionMapper actions = mock(AdminAccountActionMapper.class);
     private final AccountAuthCache cache = mock(AccountAuthCache.class);
-    private final AdminAccountStatusService service = new AdminAccountStatusService(accounts, actions, cache);
+    private final AdminAccountStatusServiceImpl service = new AdminAccountStatusServiceImpl(accounts, actions, cache);
 
     @Test
     void rejectsNonAdminBeforeTargetLookup() {

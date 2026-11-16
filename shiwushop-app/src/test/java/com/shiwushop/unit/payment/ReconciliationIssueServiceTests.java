@@ -4,7 +4,7 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.payment.dto.*;
 import com.shiwushop.payment.entity.*;
 import com.shiwushop.payment.mapper.*;
-import com.shiwushop.payment.service.ReconciliationIssueService;
+import com.shiwushop.payment.service.impl.ReconciliationIssueServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -16,7 +16,7 @@ class ReconciliationIssueServiceTests {
     final ReconciliationIssueMapper issues = mock(ReconciliationIssueMapper.class);
     final ReconciliationEvidenceMapper evidence = mock(ReconciliationEvidenceMapper.class);
     final ReconciliationAuditMapper audits = mock(ReconciliationAuditMapper.class);
-    final ReconciliationIssueService service = new ReconciliationIssueService(issues, evidence, audits,
+    final ReconciliationIssueServiceImpl service = new ReconciliationIssueServiceImpl(issues, evidence, audits,
             Clock.systemUTC());
 
     @Test

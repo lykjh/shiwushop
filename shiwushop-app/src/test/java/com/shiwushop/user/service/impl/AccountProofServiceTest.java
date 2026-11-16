@@ -8,6 +8,7 @@ import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.PhoneBindingMapper;
 import com.shiwushop.user.service.AccountAccess;
+import com.shiwushop.user.service.AccountProofService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
@@ -21,7 +22,7 @@ class AccountProofServiceTest {
     private final PhoneLookup phones = mock(PhoneLookup.class);
     private final SmsChallengeStore challenges = mock(SmsChallengeStore.class);
     private final SmsCodeDelivery delivery = mock(SmsCodeDelivery.class);
-    private final AccountProofService proof = new AccountProofService(access, bindings, privacy, phones, challenges, delivery);
+    private final AccountProofService proof = new AccountProofServiceImpl(access, bindings, privacy, phones, challenges, delivery);
 
     @Test
     void requiresExactlyOneProof() {

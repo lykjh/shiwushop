@@ -6,9 +6,9 @@ import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.Result;
 import com.shiwushop.common.auth.SessionUser;
 import com.shiwushop.user.dto.user.AccountProofDTO;
-import com.shiwushop.user.mapper.user.AccountDeletionRequestMapper;
-import com.shiwushop.user.service.impl.AccountDeletionRequestService;
-import com.shiwushop.user.service.impl.AccountProofService;
+import com.shiwushop.user.entity.user.AccountDeletionRequest;
+import com.shiwushop.user.service.AccountDeletionRequestService;
+import com.shiwushop.user.service.AccountProofService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +71,7 @@ public class AccountDeletionRequestController {
     }
 
 
-    private static RequestView view(AccountDeletionRequestMapper.Request request) {
+    private static RequestView view(AccountDeletionRequest request) {
         return new RequestView(request.status(), request.requestedAt(), request.deadlineAt(), request.withdrawnAt());
     }
 }

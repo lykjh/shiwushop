@@ -1,5 +1,6 @@
 package com.shiwushop.payment.service.impl;
 
+import com.shiwushop.payment.service.PaymentBillService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.common.logging.BusinessEventLog;
 import com.shiwushop.payment.entity.PaymentBill;
@@ -14,7 +15,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,9 +28,9 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
-public class PaymentBillService {
+public class PaymentBillServiceImpl implements PaymentBillService {
     /** 本类日志记录器，供业务事件或故障诊断使用。 */
-    private static final Logger log = LoggerFactory.getLogger(PaymentBillService.class);
+    private static final Logger log = LoggerFactory.getLogger(PaymentBillServiceImpl.class);
     private final PaymentBillMapper bills;
     private final BillDownloadGateway gateway;
     private final BillFileDownloader downloader;
@@ -41,8 +41,8 @@ public class PaymentBillService {
     @Value("${shop.payment.bill-max-bytes:10485760}")
     private long maxBytes = 10485760;
 
-    public PaymentBillService(PaymentBillMapper bills, BillDownloadGateway gateway, BillFileDownloader downloader,
-                              PlatformTransactionManager transactions, Clock businessClock) {
+    public PaymentBillServiceImpl(PaymentBillMapper bills, BillDownloadGateway gateway, BillFileDownloader downloader,
+                                  PlatformTransactionManager transactions, Clock businessClock) {
         this.bills = bills;
         this.gateway = gateway;
         this.downloader = downloader;
@@ -51,6 +51,7 @@ public class PaymentBillService {
     }
 
     /** 外部下载和文件写入位于事务外，数据库唯一约束仲裁并发账单。 */
+    @Override
     public PaymentBillVO download(LocalDate date, Long actor) {
         byte[] data = downloader.download(gateway.billDownloadUrl(date));
         String hash = sha256(data);
@@ -102,11 +103,13 @@ public class PaymentBillService {
     }
 
     /** 管理员凭批次查询摘要，不暴露内部存储键。 */
+    @Override
     public PaymentBillVO detail(Long id) {
         return PaymentBillVO.from(requireBill(id));
     }
 
     /** 管理员按批次读取私密原文件，验证随机键、规范路径及文件大小。 */
+    @Override
     public ByteArrayResource file(Long id) {
         PaymentBill bill = requireBill(id);
         String key = bill.getStorageKey();

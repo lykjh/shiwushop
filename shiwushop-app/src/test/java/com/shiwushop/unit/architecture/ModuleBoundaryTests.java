@@ -1,6 +1,8 @@
 package com.shiwushop.unit.architecture;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -65,6 +67,26 @@ class ModuleBoundaryTests {
                         file + " 跨业务域访问实现: " + target);
                 if (target.contains(".service."))
                     assertTrue(Class.forName(target).isInterface(), file + " 应依赖业务接口: " + target);
+            }
+        }
+    }
+
+    @Test
+    void restControllersUseServiceInterfaces() throws Exception {
+        var packageDeclaration = Pattern.compile("package ([^;]+);");
+        for (Path file : productionFiles()) {
+            String name = file.getFileName().toString();
+            if (!name.endsWith("Controller.java"))
+                continue;
+            var declaration = packageDeclaration.matcher(Files.readString(file));
+            assertTrue(declaration.find(), file.toString());
+            Class<?> type = Class.forName(declaration.group(1) + "." + name.substring(0, name.length() - 5));
+            if (!type.isAnnotationPresent(RestController.class))
+                continue;
+            for (var field : type.getDeclaredFields()) {
+                Class<?> dependency = field.getType();
+                assertTrue(dependency.isInterface() || !dependency.isAnnotationPresent(Service.class),
+                        () -> type.getSimpleName() + " 应依赖 Service 接口: " + dependency.getName());
             }
         }
     }

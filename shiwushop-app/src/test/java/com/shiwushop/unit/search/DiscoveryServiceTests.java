@@ -1,6 +1,7 @@
 package com.shiwushop.unit.search;
 
 import com.shiwushop.product.search.*;
+import com.shiwushop.product.search.impl.DiscoveryServiceImpl;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.product.mapper.brand.BrandMapper;
 import com.shiwushop.product.mapper.product.ProductMapper;
@@ -31,7 +32,7 @@ class DiscoveryServiceTests {
     private final ObjectMapper json = new ObjectMapper();
     private final SearchGateway search = mock(SearchGateway.class);
     private final ProductMapper products = mock(ProductMapper.class);
-    private final DiscoveryService service = new DiscoveryService(search,
+    private final DiscoveryService service = new DiscoveryServiceImpl(search,
             new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"), products,
             mock(BrandMapper.class), mock(ShopService.class), mock(CategoryService.class), json, true);
 
@@ -94,7 +95,7 @@ class DiscoveryServiceTests {
 
     @Test
     void disabledDiscoveryDoesNotServePilotIndex() {
-        var disabled = new DiscoveryService(search, new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"),
+        var disabled = new DiscoveryServiceImpl(search, new DiscoveryCursor(json, "test-cursor-secret-with-32-characters"),
                 products,
                 mock(BrandMapper.class), mock(ShopService.class), mock(CategoryService.class), json, false);
         assertEquals(503, assertThrows(BusinessException.class,

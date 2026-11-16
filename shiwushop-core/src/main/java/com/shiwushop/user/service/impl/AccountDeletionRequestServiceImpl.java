@@ -1,5 +1,7 @@
 package com.shiwushop.user.service.impl;
 
+import com.shiwushop.user.entity.user.AccountDeletionRequest;
+import com.shiwushop.user.service.AccountDeletionRequestService;
 import com.shiwushop.common.BusinessException;
 import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
@@ -16,25 +18,26 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class AccountDeletionRequestService implements AccountTradeGate {
+public class AccountDeletionRequestServiceImpl implements AccountDeletionRequestService, AccountTradeGate {
     private final UserAccountMapper accounts;
     private final AccountDeletionRequestMapper requests;
     private final Clock businessClock;
 
     @Transactional(timeout = 30)
-    public AccountDeletionRequestMapper.Request request(Long userId) {
+    public AccountDeletionRequest request(Long userId) {
         requireActiveLocked(userId);
         return createAfterLock(userId);
     }
 
     /** HTTP 申请在账号锁下重核已验证会话版本。 */
+    @Override
     @Transactional(timeout = 30)
-    public AccountDeletionRequestMapper.Request request(Long userId, int sessionVersion) {
+    public AccountDeletionRequest request(Long userId, int sessionVersion) {
         requireCurrentSession(userId, sessionVersion);
         return createAfterLock(userId);
     }
 
-    private AccountDeletionRequestMapper.Request createAfterLock(Long userId) {
+    private AccountDeletionRequest createAfterLock(Long userId) {
         var pending = requests.pending(userId);
         if (pending != null)
             return pending;
@@ -43,12 +46,14 @@ public class AccountDeletionRequestService implements AccountTradeGate {
         return requests.pending(userId);
     }
 
-    public AccountDeletionRequestMapper.Request latest(Long userId) {
+    @Override
+    public AccountDeletionRequest latest(Long userId) {
         return requests.latest(userId);
     }
 
+    @Override
     @Transactional(timeout = 30)
-    public AccountDeletionRequestMapper.Request withdraw(Long userId, int sessionVersion) {
+    public AccountDeletionRequest withdraw(Long userId, int sessionVersion) {
         requireCurrentSession(userId, sessionVersion);
         var pending = requests.pending(userId);
         if (pending == null) {

@@ -6,7 +6,7 @@ import com.shiwushop.user.entity.status.AccountStatus;
 import com.shiwushop.user.entity.user.UserAccount;
 import com.shiwushop.user.mapper.user.UserAccountMapper;
 import com.shiwushop.user.service.AccountAccess;
-import com.shiwushop.user.service.impl.AdminAccountQueryService;
+import com.shiwushop.user.service.impl.AdminAccountQueryServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 class AdminAccountQueryServiceTest {
     private final AccountAccess access = mock(AccountAccess.class);
     private final UserAccountMapper mapper = mock(UserAccountMapper.class);
-    private final AdminAccountQueryService service = new AdminAccountQueryService(access, mapper);
+    private final AdminAccountQueryServiceImpl service = new AdminAccountQueryServiceImpl(access, mapper);
 
     @Test
     void rejectsNonAdminBeforeReadingTarget() {
